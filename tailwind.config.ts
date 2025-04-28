@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -61,6 +62,22 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				phase: {
+					planning: '#3B82F6', // Blue
+					design: '#8B5CF6', // Purple
+					production: '#F59E0B', // Amber
+					assembly: '#10B981', // Emerald
+					testing: '#EF4444', // Red
+					deployment: '#6366F1' // Indigo
+				},
+				workstation: {
+					cutting: '#3B82F6', // Blue
+					welding: '#F59E0B', // Amber
+					painting: '#8B5CF6', // Purple
+					assembly: '#10B981', // Emerald
+					packaging: '#6366F1', // Indigo
+					shipping: '#EC4899' // Pink
 				}
 			},
 			borderRadius: {
@@ -84,11 +101,16 @@ export default {
 					to: {
 						height: '0'
 					}
+				},
+				'fade-in': {
+					from: { opacity: '0' },
+					to: { opacity: '1' }
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				'fade-in': 'fade-in 0.3s ease-out'
 			}
 		}
 	},
