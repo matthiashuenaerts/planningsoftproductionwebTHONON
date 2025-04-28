@@ -119,45 +119,6 @@ export type Database = {
         }
         Relationships: []
       }
-      Projects: {
-        Row: {
-          created_at: string | null
-          description: string | null
-          end_date: string | null
-          progress: string | null
-          ProjectId: string
-          ProjectInstallDate: string | null
-          ProjectName: string
-          start_date: string | null
-          status: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          description?: string | null
-          end_date?: string | null
-          progress?: string | null
-          ProjectId: string
-          ProjectInstallDate?: string | null
-          ProjectName: string
-          start_date?: string | null
-          status?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          description?: string | null
-          end_date?: string | null
-          progress?: string | null
-          ProjectId?: string
-          ProjectInstallDate?: string | null
-          ProjectName?: string
-          start_date?: string | null
-          status?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
       tasks: {
         Row: {
           assignee_id: string | null

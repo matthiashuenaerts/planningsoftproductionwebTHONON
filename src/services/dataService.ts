@@ -61,7 +61,7 @@ export const projectService = {
       .order('start_date', { ascending: true });
     
     if (error) throw error;
-    return data || [];
+    return data as Project[] || [];
   },
   
   async getById(id: string): Promise<Project | null> {
@@ -72,7 +72,7 @@ export const projectService = {
       .single();
     
     if (error && error.code !== 'PGRST116') throw error;
-    return data;
+    return data as Project;
   },
   
   async create(project: Omit<Project, 'id' | 'created_at' | 'updated_at'>): Promise<Project> {
@@ -83,7 +83,7 @@ export const projectService = {
       .single();
     
     if (error) throw error;
-    return data;
+    return data as Project;
   },
   
   async update(id: string, project: Partial<Project>): Promise<Project> {
@@ -95,7 +95,7 @@ export const projectService = {
       .single();
     
     if (error) throw error;
-    return data;
+    return data as Project;
   },
   
   async delete(id: string): Promise<void> {
@@ -118,7 +118,7 @@ export const phaseService = {
       .order('start_date', { ascending: true });
     
     if (error) throw error;
-    return data || [];
+    return data as Phase[] || [];
   },
   
   async create(phase: Omit<Phase, 'id' | 'created_at' | 'updated_at'>): Promise<Phase> {
@@ -129,7 +129,7 @@ export const phaseService = {
       .single();
     
     if (error) throw error;
-    return data;
+    return data as Phase;
   },
   
   async update(id: string, phase: Partial<Phase>): Promise<Phase> {
@@ -141,7 +141,7 @@ export const phaseService = {
       .single();
     
     if (error) throw error;
-    return data;
+    return data as Phase;
   }
 };
 
@@ -155,7 +155,7 @@ export const taskService = {
       .order('due_date', { ascending: true });
     
     if (error) throw error;
-    return data || [];
+    return data as Task[] || [];
   },
   
   async getByWorkstation(workstation: string): Promise<Task[]> {
@@ -166,7 +166,7 @@ export const taskService = {
       .order('due_date', { ascending: true });
     
     if (error) throw error;
-    return data || [];
+    return data as Task[] || [];
   },
   
   async getTodaysTasks(): Promise<Task[]> {
@@ -179,7 +179,7 @@ export const taskService = {
       .order('priority', { ascending: false });
     
     if (error) throw error;
-    return data || [];
+    return data as Task[] || [];
   },
   
   async create(task: Omit<Task, 'id' | 'created_at' | 'updated_at'>): Promise<Task> {
@@ -190,7 +190,7 @@ export const taskService = {
       .single();
     
     if (error) throw error;
-    return data;
+    return data as Task;
   },
   
   async update(id: string, task: Partial<Task>): Promise<Task> {
@@ -202,7 +202,7 @@ export const taskService = {
       .single();
     
     if (error) throw error;
-    return data;
+    return data as Task;
   },
   
   async delete(id: string): Promise<void> {
@@ -224,7 +224,7 @@ export const employeeService = {
       .order('name');
     
     if (error) throw error;
-    return data || [];
+    return data as Employee[] || [];
   },
   
   async create(employee: Omit<Employee, 'id' | 'created_at'>): Promise<Employee> {
@@ -235,7 +235,7 @@ export const employeeService = {
       .single();
     
     if (error) throw error;
-    return data;
+    return data as Employee;
   }
 };
 

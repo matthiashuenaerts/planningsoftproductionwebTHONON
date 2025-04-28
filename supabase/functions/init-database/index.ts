@@ -1,183 +1,257 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.23.0'
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
 serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
   }
-
+  
   try {
-    // Create a Supabase client with the Auth context of the logged in user
     const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      {
-        global: {
-          headers: { Authorization: req.headers.get("Authorization")! },
-        },
-      }
-    );
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
 
-    const { data: employeesExist } = await supabaseClient
-      .from('employees')
-      .select('count')
-      .limit(1);
-
-    // If employees already exist, do nothing
-    if (employeesExist && employeesExist.length > 0 && employeesExist[0].count > 0) {
-      return new Response(
-        JSON.stringify({ message: "Database already initialized" }),
-        { 
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        }
-      );
-    }
-
-    // Seed initial employees
-    const { error: employeesError } = await supabaseClient.from('employees').insert([
-      {
-        name: 'Admin User',
-        email: 'admin@kitchenpro.com',
-        password: 'admin123', // In a real app, this would be hashed
-        role: 'admin'
-      },
-      {
-        name: 'Manager User',
-        email: 'manager@kitchenpro.com',
-        password: 'manager123',
-        role: 'manager'
-      },
-      {
-        name: 'Worker 1',
-        email: 'worker1@kitchenpro.com',
-        password: 'worker123',
-        role: 'worker',
-        workstation: 'CUTTING'
-      },
-      {
-        name: 'Worker 2',
-        email: 'worker2@kitchenpro.com',
-        password: 'worker123',
-        role: 'worker',
-        workstation: 'ASSEMBLY'
-      }
-    ]);
-
-    if (employeesError) throw employeesError;
-
-    // Seed a sample project
-    const { data: project, error: projectError } = await supabaseClient
+    // Check if we already have data
+    const { data: existingProjects } = await supabaseClient
       .from('projects')
-      .insert({
-        name: 'Luxury Kitchen Remodel',
-        client: 'Smith Residence',
-        description: 'Modern kitchen remodel with custom cabinets, island, and high-end appliances.',
-        start_date: new Date().toISOString().split('T')[0],
-        installation_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        status: 'in_progress',
-      })
-      .select()
-      .single();
+      .select('id')
+      .limit(1)
 
-    if (projectError) throw projectError;
-
-    // Get standard phases
-    const phaseTypes = ['PLANNING', 'DESIGN', 'PRODUCTION', 'ASSEMBLY', 'TESTING', 'DEPLOYMENT'];
-    const today = new Date();
-    
-    // Create phases for the project
-    const phases = [];
-    for (let i = 0; i < phaseTypes.length; i++) {
-      const startDate = new Date(today);
-      startDate.setDate(today.getDate() + i * 7);
-      
-      const endDate = new Date(startDate);
-      endDate.setDate(startDate.getDate() + 7);
-      
-      phases.push({
-        project_id: project.id,
-        name: phaseTypes[i],
-        start_date: startDate.toISOString().split('T')[0],
-        end_date: endDate.toISOString().split('T')[0],
-        progress: i <= 1 ? 100 : i === 2 ? 50 : 0,
-      });
+    if (existingProjects && existingProjects.length > 0) {
+      return new Response(
+        JSON.stringify({
+          message: 'Database already initialized with sample data'
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200
+        }
+      )
     }
 
-    const { data: createdPhases, error: phasesError } = await supabaseClient
+    // Insert sample projects
+    const now = new Date()
+    const startDate = new Date()
+    startDate.setDate(now.getDate() - 15)
+    
+    const installDate = new Date()
+    installDate.setDate(now.getDate() + 30)
+
+    // Insert projects
+    const { data: projectsData, error: projectsError } = await supabaseClient
+      .from('projects')
+      .insert([
+        {
+          name: 'Office Building Renovation',
+          client: 'ABC Corp',
+          description: 'Complete renovation of 3-story office building with new furniture and fixtures',
+          start_date: startDate.toISOString().split('T')[0],
+          installation_date: installDate.toISOString().split('T')[0],
+          progress: 0,
+          status: 'in_progress'
+        },
+        {
+          name: 'Restaurant Kitchen Equipment',
+          client: 'Fine Dining LLC',
+          description: 'Custom stainless steel kitchen equipment for new restaurant',
+          start_date: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          installation_date: new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          progress: 0,
+          status: 'planned'
+        }
+      ])
+      .select()
+
+    if (projectsError) {
+      throw projectsError
+    }
+
+    // Define phases for each project
+    const phases = []
+    
+    // Project 1 phases
+    if (projectsData && projectsData[0]) {
+      const project1 = projectsData[0]
+      const phaseTypes = ['PLANNING', 'DESIGN', 'PRODUCTION', 'ASSEMBLY', 'TESTING', 'DEPLOYMENT']
+      
+      let phaseStartDate = new Date(project1.start_date)
+      
+      for (const phaseType of phaseTypes) {
+        const phaseEndDate = new Date(phaseStartDate)
+        phaseEndDate.setDate(phaseStartDate.getDate() + 10) // Each phase is 10 days long
+        
+        phases.push({
+          project_id: project1.id,
+          name: phaseType,
+          start_date: phaseStartDate.toISOString().split('T')[0],
+          end_date: phaseEndDate.toISOString().split('T')[0],
+          progress: phaseType === 'PLANNING' ? 100 : phaseType === 'DESIGN' ? 50 : 0
+        })
+        
+        phaseStartDate = new Date(phaseEndDate)
+        phaseStartDate.setDate(phaseEndDate.getDate() + 1) // Next phase starts day after previous ends
+      }
+    }
+    
+    // Project 2 phases (similar structure)
+    if (projectsData && projectsData[1]) {
+      const project2 = projectsData[1]
+      const phaseTypes = ['PLANNING', 'DESIGN', 'PRODUCTION', 'ASSEMBLY', 'TESTING', 'DEPLOYMENT']
+      
+      let phaseStartDate = new Date(project2.start_date)
+      
+      for (const phaseType of phaseTypes) {
+        const phaseEndDate = new Date(phaseStartDate)
+        phaseEndDate.setDate(phaseStartDate.getDate() + 7) // Each phase is 7 days long for this project
+        
+        phases.push({
+          project_id: project2.id,
+          name: phaseType,
+          start_date: phaseStartDate.toISOString().split('T')[0],
+          end_date: phaseEndDate.toISOString().split('T')[0],
+          progress: phaseType === 'PLANNING' ? 100 : 0
+        })
+        
+        phaseStartDate = new Date(phaseEndDate)
+        phaseStartDate.setDate(phaseEndDate.getDate() + 1)
+      }
+    }
+    
+    // Insert all phases
+    const { data: phasesData, error: phasesError } = await supabaseClient
       .from('phases')
       .insert(phases)
-      .select();
+      .select()
 
-    if (phasesError) throw phasesError;
+    if (phasesError) {
+      throw phasesError
+    }
 
-    // Create tasks for each phase
-    const tasks = [];
-    const workstations = ['CUTTING', 'WELDING', 'PAINTING', 'ASSEMBLY', 'PACKAGING', 'SHIPPING'];
-    const priorities = ['Low', 'Medium', 'High', 'Urgent'];
+    // Create sample tasks for the first few phases
+    const tasks = []
     
-    for (const phase of createdPhases) {
-      const phaseIndex = phaseTypes.indexOf(phase.name);
+    // Sample tasks for the first project's phases
+    if (phasesData) {
+      const planningPhase = phasesData.find(p => p.project_id === projectsData[0].id && p.name === 'PLANNING')
+      const designPhase = phasesData.find(p => p.project_id === projectsData[0].id && p.name === 'DESIGN')
+      const productionPhase = phasesData.find(p => p.project_id === projectsData[0].id && p.name === 'PRODUCTION')
       
-      // Create 2-4 tasks per phase
-      const taskCount = Math.floor(Math.random() * 3) + 2;
-      
-      for (let i = 0; i < taskCount; i++) {
-        const dueDate = new Date(phase.start_date);
-        dueDate.setDate(dueDate.getDate() + i * 2);
+      if (planningPhase) {
+        tasks.push({
+          phase_id: planningPhase.id,
+          title: 'Site inspection',
+          description: 'Inspect site and document existing conditions',
+          workstation: 'CUTTING',
+          status: 'COMPLETED',
+          priority: 'High',
+          due_date: new Date(planningPhase.start_date).toISOString().split('T')[0]
+        })
         
         tasks.push({
-          phase_id: phase.id,
-          assignee_id: null, // Will be assigned later
-          title: `Task ${i + 1} for ${phase.name}`,
-          description: `This is a sample task for the ${phase.name} phase of the project.`,
-          workstation: workstations[Math.floor(Math.random() * workstations.length)],
-          status: phaseIndex <= 1 ? 'COMPLETED' : 
-                 phaseIndex === 2 ? (i % 2 === 0 ? 'COMPLETED' : 'IN_PROGRESS') : 'TODO',
-          priority: priorities[Math.floor(Math.random() * priorities.length)],
-          due_date: dueDate.toISOString().split('T')[0],
-        });
+          phase_id: planningPhase.id,
+          title: 'Requirements gathering',
+          description: 'Meet with client to determine project requirements',
+          workstation: 'ASSEMBLY',
+          status: 'COMPLETED',
+          priority: 'Medium',
+          due_date: new Date(planningPhase.end_date).toISOString().split('T')[0]
+        })
+      }
+      
+      if (designPhase) {
+        tasks.push({
+          phase_id: designPhase.id,
+          title: 'Create blueprints',
+          description: 'Design layout and furniture placement',
+          workstation: 'ASSEMBLY',
+          status: 'COMPLETED',
+          priority: 'High',
+          due_date: new Date(designPhase.start_date).toISOString().split('T')[0]
+        })
+        
+        tasks.push({
+          phase_id: designPhase.id,
+          title: 'Material selection',
+          description: 'Choose materials for furniture and fixtures',
+          workstation: 'CUTTING',
+          status: 'IN_PROGRESS',
+          priority: 'Medium',
+          due_date: new Date(designPhase.end_date).toISOString().split('T')[0]
+        })
+      }
+      
+      if (productionPhase) {
+        const today = new Date().toISOString().split('T')[0]
+        
+        tasks.push({
+          phase_id: productionPhase.id,
+          title: 'Cut desk frames',
+          description: 'Cut metal frames for 20 desks',
+          workstation: 'CUTTING',
+          status: 'TODO',
+          priority: 'High',
+          due_date: today
+        })
+        
+        tasks.push({
+          phase_id: productionPhase.id,
+          title: 'Prepare wood tops',
+          description: 'Cut and sand wooden desk tops',
+          workstation: 'CUTTING',
+          status: 'TODO',
+          priority: 'Medium',
+          due_date: today
+        })
+        
+        tasks.push({
+          phase_id: productionPhase.id,
+          title: 'Weld desk frames',
+          description: 'Weld metal frames for 20 desks',
+          workstation: 'WELDING',
+          status: 'TODO',
+          priority: 'High',
+          due_date: today
+        })
       }
     }
 
-    const { error: tasksError } = await supabaseClient
+    // Insert all tasks
+    const { data: tasksData, error: tasksError } = await supabaseClient
       .from('tasks')
-      .insert(tasks);
+      .insert(tasks)
+      .select()
 
-    if (tasksError) throw tasksError;
+    if (tasksError) {
+      throw tasksError
+    }
 
     return new Response(
-      JSON.stringify({ 
-        message: "Database initialized successfully",
-        data: {
-          employees: 4,
-          projects: 1,
-          phases: createdPhases.length,
-          tasks: tasks.length
-        }
+      JSON.stringify({
+        message: 'Database initialized with sample data',
+        projects: projectsData.length,
+        phases: phasesData.length,
+        tasks: tasksData.length
       }),
-      { 
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
       }
-    );
-    
+    )
   } catch (error) {
-    console.error("Error:", error);
-    
     return new Response(
       JSON.stringify({ error: error.message }),
-      { 
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500,
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
       }
-    );
+    )
   }
-});
+})

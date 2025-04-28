@@ -1,3 +1,4 @@
+
 export type Project = {
   id: string;
   name: string;
@@ -54,7 +55,8 @@ export enum WorkstationType {
 export enum Status {
   TODO = 'TODO',
   IN_PROGRESS = 'IN_PROGRESS',
-  COMPLETED = 'COMPLETED'
+  COMPLETED = 'COMPLETED',
+  NOT_STARTED = 'NOT_STARTED'  // Add this missing value to fix the errors
 }
 
 export enum Priority {

@@ -1,24 +1,57 @@
 
-import React, { useState } from 'react';
-import { useAppContext } from '@/context/AppContext';
-import { getDate } from 'date-fns';
+import React, { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import TaskList from '@/components/TaskList';
-import { getAllTasks, formatDate } from '@/lib/mockData';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { taskService, Task } from '@/services/dataService';
+import { useToast } from '@/hooks/use-toast';
+import { format } from 'date-fns';
 
 const DailyTasks: React.FC = () => {
-  const { tasks } = useAppContext();
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   // Format the selected date to match our date string format
   const formattedSelectedDate = selectedDate 
     ? selectedDate.toISOString().split('T')[0]
     : new Date().toISOString().split('T')[0];
 
-  // Get tasks for the selected date
-  const tasksForSelectedDate = tasks.filter(task => task.dueDate === formattedSelectedDate);
+  // Fetch tasks when date changes
+  useEffect(() => {
+    const fetchTasks = async () => {
+      try {
+        setLoading(true);
+        
+        // For now, we just get today's tasks
+        // In a full implementation, you would filter by the selected date
+        const fetchedTasks = await taskService.getTodaysTasks();
+        setTasks(fetchedTasks);
+      } catch (error: any) {
+        console.error('Error fetching tasks:', error);
+        toast({
+          title: "Error",
+          description: `Failed to load tasks: ${error.message}`,
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTasks();
+  }, [formattedSelectedDate, toast]);
+
+  // Helper function to format date
+  const formatDate = (dateString: string) => {
+    try {
+      return format(new Date(dateString), 'MMMM d, yyyy');
+    } catch (error) {
+      return 'Invalid date';
+    }
+  };
 
   return (
     <div className="flex min-h-screen">
@@ -52,8 +85,12 @@ const DailyTasks: React.FC = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {tasksForSelectedDate.length > 0 ? (
-                    <TaskList tasks={tasksForSelectedDate} title="" />
+                  {loading ? (
+                    <div className="flex justify-center p-4">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                    </div>
+                  ) : tasks.length > 0 ? (
+                    <TaskList tasks={tasks} title="" />
                   ) : (
                     <p className="text-muted-foreground">No tasks scheduled for this day.</p>
                   )}
