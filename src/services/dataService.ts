@@ -49,6 +49,7 @@ export interface Employee {
   email: string | null;
   role: 'admin' | 'manager' | 'worker';
   workstation: string | null;
+  password?: string; // Add password property
   created_at: string;
 }
 
@@ -227,7 +228,13 @@ export const employeeService = {
     return data as Employee[] || [];
   },
   
-  async create(employee: Omit<Employee, 'id' | 'created_at'>): Promise<Employee> {
+  async create(employee: { 
+    name: string; 
+    email?: string | null; 
+    password: string; 
+    role: string; 
+    workstation?: string | null; 
+  }): Promise<Employee> {
     const { data, error } = await supabase
       .from('employees')
       .insert([employee])
