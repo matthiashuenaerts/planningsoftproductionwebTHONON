@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 // Project Types
@@ -252,13 +251,13 @@ export const seedInitialData = async () => {
   
   // Only seed if no employees exist
   if (data && data.length === 0) {
-    // Create an admin user
     await supabase.from('employees').insert([
       {
-        name: 'Admin User',
-        email: 'admin@kitchenpro.com',
-        password: 'admin123',
-        role: 'admin'
+        name: 'Matthias Huenaerts',
+        email: null,
+        password: 'mh310801',
+        role: 'admin',
+        workstation: null
       },
       {
         name: 'Manager User',
