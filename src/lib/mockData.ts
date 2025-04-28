@@ -116,7 +116,7 @@ export const users: User[] = [
     id: "user-6",
     name: "Jessica Brown",
     role: "Quality Control",
-    workstation: WorkstationType.TESTING,
+    workstation: WorkstationType.PACKAGING, // Changed from TESTING to PACKAGING
     avatar: "https://i.pravatar.cc/150?img=6",
   },
 ];
