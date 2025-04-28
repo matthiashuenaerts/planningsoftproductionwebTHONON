@@ -9,6 +9,116 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      employees: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          password: string
+          role: string
+          workstation: string | null
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          password: string
+          role: string
+          workstation?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          password?: string
+          role?: string
+          workstation?: string | null
+        }
+        Relationships: []
+      }
+      phases: {
+        Row: {
+          created_at: string
+          end_date: string
+          id: string
+          name: string
+          progress: number | null
+          project_id: string
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          end_date: string
+          id?: string
+          name: string
+          progress?: number | null
+          project_id: string
+          start_date: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string
+          id?: string
+          name?: string
+          progress?: number | null
+          project_id?: string
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phases_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          client: string
+          created_at: string
+          description: string | null
+          id: string
+          installation_date: string
+          name: string
+          progress: number | null
+          start_date: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          client: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          installation_date: string
+          name: string
+          progress?: number | null
+          start_date: string
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          client?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          installation_date?: string
+          name?: string
+          progress?: number | null
+          start_date?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       Projects: {
         Row: {
           created_at: string | null
@@ -47,6 +157,63 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      tasks: {
+        Row: {
+          assignee_id: string | null
+          created_at: string
+          description: string | null
+          due_date: string
+          id: string
+          phase_id: string
+          priority: string
+          status: string
+          title: string
+          updated_at: string
+          workstation: string
+        }
+        Insert: {
+          assignee_id?: string | null
+          created_at?: string
+          description?: string | null
+          due_date: string
+          id?: string
+          phase_id: string
+          priority: string
+          status: string
+          title: string
+          updated_at?: string
+          workstation: string
+        }
+        Update: {
+          assignee_id?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string
+          id?: string
+          phase_id?: string
+          priority?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          workstation?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_assignee_id_fkey"
+            columns: ["assignee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "phases"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

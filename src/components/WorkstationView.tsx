@@ -1,17 +1,40 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAppContext } from '@/context/AppContext';
 import TaskList from './TaskList';
 import { WorkstationType } from '@/lib/mockData';
+import { taskService, Task } from '@/services/dataService';
+import { useToast } from '@/hooks/use-toast';
 
 interface WorkstationViewProps {
   workstation: WorkstationType;
 }
 
 const WorkstationView: React.FC<WorkstationViewProps> = ({ workstation }) => {
-  const { getTasksForWorkstation } = useAppContext();
-  const tasks = getTasksForWorkstation(workstation);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchWorkstationTasks = async () => {
+      try {
+        setLoading(true);
+        const workstationTasks = await taskService.getByWorkstation(workstation);
+        setTasks(workstationTasks);
+      } catch (error: any) {
+        console.error('Error fetching workstation tasks:', error);
+        toast({
+          title: "Error",
+          description: `Failed to load ${workstation} tasks: ${error.message}`,
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchWorkstationTasks();
+  }, [workstation, toast]);
 
   const getWorkstationColor = (workstation: WorkstationType): string => {
     switch (workstation) {
@@ -41,7 +64,37 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstation }) => {
         </div>
       </CardHeader>
       <CardContent>
-        <TaskList tasks={tasks} title={`${workstation} Tasks`} />
+        {loading ? (
+          <div className="flex justify-center p-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+          </div>
+        ) : (
+          <TaskList 
+            tasks={tasks} 
+            title={`${workstation} Tasks`} 
+            onTaskStatusChange={async (taskId, status) => {
+              try {
+                await taskService.update(taskId, { status });
+                
+                // Update local state
+                setTasks(tasks.map(task => 
+                  task.id === taskId ? { ...task, status } : task
+                ));
+                
+                toast({
+                  title: "Task updated",
+                  description: "Task status has been successfully updated."
+                });
+              } catch (error: any) {
+                toast({
+                  title: "Error",
+                  description: `Failed to update task: ${error.message}`,
+                  variant: "destructive"
+                });
+              }
+            }}
+          />
+        )}
       </CardContent>
     </Card>
   );

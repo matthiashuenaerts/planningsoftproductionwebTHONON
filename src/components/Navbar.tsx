@@ -1,10 +1,12 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Calendar, LayoutDashboard, List } from 'lucide-react';
+import { Calendar, LogOut, LayoutDashboard, List } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 const Navbar: React.FC = () => {
   const location = useLocation();
+  const { currentEmployee, logout } = useAuth();
 
   return (
     <nav className="bg-sidebar text-sidebar-foreground p-4 flex flex-col h-full">
@@ -42,12 +44,21 @@ const Navbar: React.FC = () => {
       <div className="mt-auto">
         <div className="flex items-center gap-3 px-3 py-2 rounded-md">
           <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center">
-            <span className="text-sm font-medium">AJ</span>
+            <span className="text-sm font-medium">
+              {currentEmployee?.name.charAt(0) || 'U'}
+            </span>
           </div>
-          <div>
-            <p className="text-sm font-medium">Alex Johnson</p>
-            <p className="text-xs text-sidebar-foreground/70">Production Manager</p>
+          <div className="flex-1">
+            <p className="text-sm font-medium">{currentEmployee?.name || 'User'}</p>
+            <p className="text-xs text-sidebar-foreground/70">{currentEmployee?.role || 'Employee'}</p>
           </div>
+          <button 
+            onClick={logout} 
+            className="p-2 rounded-md hover:bg-sidebar-accent/50 transition-colors"
+            title="Logout"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </nav>

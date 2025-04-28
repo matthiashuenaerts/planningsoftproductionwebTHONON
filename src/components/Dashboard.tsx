@@ -1,32 +1,73 @@
 
-import React from 'react';
-import { useAppContext } from '@/context/AppContext';
+import React, { useState, useEffect } from 'react';
 import ProjectCard from './ProjectCard';
 import TaskList from './TaskList';
+import SeedDataButton from './SeedDataButton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getTodaysTasks, Status, PhaseType } from '@/lib/mockData';
+import { projectService, taskService, Project, Task } from '@/services/dataService';
+import { useToast } from '@/hooks/use-toast';
 
 const Dashboard: React.FC = () => {
-  const { projects, todaysTasks } = useAppContext();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [todaysTasks, setTodaysTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch projects
+        const projectsData = await projectService.getAll();
+        setProjects(projectsData);
+        
+        // Fetch today's tasks
+        const todaysTasksData = await taskService.getTodaysTasks();
+        setTodaysTasks(todaysTasksData);
+        
+      } catch (error: any) {
+        console.error('Error fetching dashboard data:', error);
+        toast({
+          title: "Error",
+          description: `Failed to load dashboard data: ${error.message}`,
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [toast]);
 
   // Calculate statistics
   const totalProjects = projects.length;
-  const completedProjects = projects.filter(p => p.progress === 100).length;
-  const inProgressProjects = projects.filter(p => p.progress > 0 && p.progress < 100).length;
+  const completedProjects = projects.filter(p => p.status === 'completed').length;
+  const inProgressProjects = projects.filter(p => p.status === 'in_progress').length;
   
-  const allTasks = projects.flatMap(p => p.phases.flatMap(phase => phase.tasks));
-  const totalTasks = allTasks.length;
-  const completedTasks = allTasks.filter(t => t.status === Status.COMPLETED).length;
-  const inProgressTasks = allTasks.filter(t => t.status === Status.IN_PROGRESS).length;
-
-  const tasksToday = getTodaysTasks();
-  const overdueCount = allTasks.filter(task => 
-    new Date(task.dueDate) < new Date() && 
-    task.status !== Status.COMPLETED
+  const overdueCount = todaysTasks.filter(task => 
+    new Date(task.due_date) < new Date() && 
+    task.status !== 'COMPLETED'
   ).length;
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
 
   return (
     <div>
+      {projects.length === 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-md mb-6">
+          <p className="text-yellow-800">No projects found. Initialize the database with sample data to get started.</p>
+          <SeedDataButton />
+        </div>
+      )}
+      
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard title="Total Projects" value={totalProjects.toString()} footer="Projects managed" />
         <StatCard 
@@ -35,14 +76,14 @@ const Dashboard: React.FC = () => {
           footer={`${inProgressProjects} in progress`} 
         />
         <StatCard 
-          title="Task Completion" 
-          value={`${completedTasks}/${totalTasks}`} 
-          footer={`${inProgressTasks} in progress`} 
+          title="Tasks Today" 
+          value={todaysTasks.length.toString()} 
+          footer={`${overdueCount} overdue`} 
         />
         <StatCard 
-          title="Tasks Today" 
-          value={tasksToday.length.toString()} 
-          footer={`${overdueCount} overdue`} 
+          title="Upcoming Installations" 
+          value={projects.filter(p => new Date(p.installation_date) > new Date()).length.toString()}
+          footer="Installations scheduled" 
         />
       </div>
 
@@ -55,7 +96,31 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      <TaskList tasks={todaysTasks} title="Today's Tasks" />
+      <TaskList 
+        tasks={todaysTasks} 
+        title="Today's Tasks" 
+        onTaskStatusChange={async (taskId, status) => {
+          try {
+            await taskService.update(taskId, { status });
+            
+            // Update local state
+            setTodaysTasks(todaysTasks.map(task => 
+              task.id === taskId ? { ...task, status } : task
+            ));
+            
+            toast({
+              title: "Task updated",
+              description: "Task status has been successfully updated."
+            });
+          } catch (error: any) {
+            toast({
+              title: "Error",
+              description: `Failed to update task: ${error.message}`,
+              variant: "destructive"
+            });
+          }
+        }}
+      />
     </div>
   );
 };

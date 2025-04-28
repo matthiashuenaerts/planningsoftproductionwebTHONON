@@ -1,4 +1,3 @@
-
 export type Project = {
   id: string;
   name: string;
@@ -44,20 +43,18 @@ export enum PhaseType {
 }
 
 export enum WorkstationType {
-  CUTTING = "Cutting",
-  WELDING = "Welding",
-  PAINTING = "Painting",
-  ASSEMBLY = "Assembly",
-  PACKAGING = "Packaging",
-  SHIPPING = "Shipping"
+  CUTTING = 'CUTTING',
+  WELDING = 'WELDING',
+  PAINTING = 'PAINTING',
+  ASSEMBLY = 'ASSEMBLY',
+  PACKAGING = 'PACKAGING',
+  SHIPPING = 'SHIPPING'
 }
 
 export enum Status {
-  NOT_STARTED = "Not Started",
-  IN_PROGRESS = "In Progress",
-  COMPLETED = "Completed",
-  DELAYED = "Delayed",
-  BLOCKED = "Blocked"
+  TODO = 'TODO',
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED'
 }
 
 export enum Priority {
@@ -116,7 +113,7 @@ export const users: User[] = [
     id: "user-6",
     name: "Jessica Brown",
     role: "Quality Control",
-    workstation: WorkstationType.PACKAGING, // Changed from TESTING to PACKAGING
+    workstation: WorkstationType.PACKAGING,
     avatar: "https://i.pravatar.cc/150?img=6",
   },
 ];
@@ -423,7 +420,6 @@ export const projects: Project[] = [
           }
         ]
       },
-      // Additional phases similar to project 1...
       {
         id: "phase-2-3",
         name: PhaseType.PRODUCTION,
@@ -506,7 +502,6 @@ export const projects: Project[] = [
           }
         ]
       },
-      // Additional phases...
       {
         id: "phase-3-2",
         name: PhaseType.DESIGN,
