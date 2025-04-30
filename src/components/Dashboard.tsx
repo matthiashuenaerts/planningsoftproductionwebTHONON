@@ -6,13 +6,17 @@ import SeedDataButton from './SeedDataButton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { projectService, taskService, Project, Task } from '@/services/dataService';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/AuthContext';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ShieldCheck } from "lucide-react";
 
 const Dashboard: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [todaysTasks, setTodaysTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-
+  const { currentEmployee } = useAuth();
+  
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
@@ -61,6 +65,16 @@ const Dashboard: React.FC = () => {
 
   return (
     <div>
+      {currentEmployee?.role === 'admin' && (
+        <Alert className="mb-6 bg-blue-50 border border-blue-200">
+          <ShieldCheck className="h-5 w-5 text-blue-600" />
+          <AlertTitle className="text-blue-800">Administrator Account</AlertTitle>
+          <AlertDescription className="text-blue-700">
+            You are logged in as an administrator. You have access to user management functionality.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {projects.length === 0 && (
         <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-md mb-6">
           <p className="text-yellow-800">No projects found. Initialize the database with sample data to get started.</p>
