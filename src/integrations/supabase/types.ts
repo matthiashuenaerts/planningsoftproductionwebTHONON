@@ -119,6 +119,60 @@ export type Database = {
         }
         Relationships: []
       }
+      schedules: {
+        Row: {
+          created_at: string
+          description: string | null
+          employee_id: string
+          end_time: string
+          id: string
+          is_auto_generated: boolean
+          start_time: string
+          task_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          employee_id: string
+          end_time: string
+          id?: string
+          is_auto_generated?: boolean
+          start_time: string
+          task_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          employee_id?: string
+          end_time?: string
+          id?: string
+          is_auto_generated?: boolean
+          start_time?: string
+          task_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedules_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedules_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           assignee_id: string | null

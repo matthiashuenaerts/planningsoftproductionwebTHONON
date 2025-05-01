@@ -33,8 +33,9 @@ export const planningService = {
     const startOfDay = `${dateStr}T00:00:00`;
     const endOfDay = `${dateStr}T23:59:59`;
     
-    // Using the raw query with table name as string since TypeScript doesn't recognize the schedules table yet
-    const { data, error } = await supabase
+    // Using any to bypass TypeScript's strict typing since the schedules table 
+    // is not yet recognized in the auto-generated types
+    const { data, error } = await (supabase as any)
       .from('schedules')
       .select(`
         *,
@@ -46,26 +47,26 @@ export const planningService = {
       .order('start_time');
     
     if (error) throw error;
-    return (data || []) as unknown as Schedule[];
+    return (data || []) as Schedule[];
   },
   
   // Create a new schedule
   async createSchedule(schedule: CreateScheduleInput): Promise<Schedule> {
-    // Using the raw query with table name as string
-    const { data, error } = await supabase
+    // Using any to bypass TypeScript's strict typing
+    const { data, error } = await (supabase as any)
       .from('schedules')
       .insert([schedule])
       .select()
       .single();
     
     if (error) throw error;
-    return data as unknown as Schedule;
+    return data as Schedule;
   },
   
   // Update a schedule
   async updateSchedule(id: string, schedule: Partial<Schedule>): Promise<Schedule> {
-    // Using the raw query with table name as string
-    const { data, error } = await supabase
+    // Using any to bypass TypeScript's strict typing
+    const { data, error } = await (supabase as any)
       .from('schedules')
       .update(schedule)
       .eq('id', id)
@@ -73,12 +74,12 @@ export const planningService = {
       .single();
     
     if (error) throw error;
-    return data as unknown as Schedule;
+    return data as Schedule;
   },
   
   // Delete a schedule
   async deleteSchedule(id: string): Promise<void> {
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('schedules')
       .delete()
       .eq('id', id);
@@ -91,7 +92,6 @@ export const planningService = {
     // In a real application, this might be an edge function or a more complex algorithm
     const dateStr = format(date, 'yyyy-MM-dd');
     
-    // For now, we'll just simulate the process with a simple approach
     // First, get the work periods for this day
     const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
     
@@ -134,7 +134,7 @@ export const planningService = {
     }
     
     // Delete any existing auto-generated schedules for this date
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await (supabase as any)
       .from('schedules')
       .delete()
       .gte('start_time', `${dateStr}T00:00:00`)
@@ -175,9 +175,9 @@ export const planningService = {
       }
     }
     
-    // Insert the generated schedules - using direct table name
+    // Insert the generated schedules - using any to bypass TypeScript checking
     if (schedulesToInsert.length > 0) {
-      const { error: insertError } = await supabase
+      const { error: insertError } = await (supabase as any)
         .from('schedules')
         .insert(schedulesToInsert);
       
