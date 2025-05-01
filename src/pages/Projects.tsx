@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import ProjectCard from '@/components/ProjectCard';
@@ -6,6 +5,9 @@ import Timeline from '@/components/Timeline';
 import TaskList from '@/components/TaskList';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Plus } from 'lucide-react';
+import NewProjectModal from '@/components/NewProjectModal';
 import { projectService, phaseService, taskService, Project, Phase, Task } from '@/services/dataService';
 import { useToast } from '@/hooks/use-toast';
 
@@ -15,30 +17,47 @@ const Projects: React.FC = () => {
   const [phases, setPhases] = useState<Phase[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const { toast } = useToast();
 
-  // Fetch all projects on component mount
-  useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        const data = await projectService.getAll();
-        setProjects(data);
-        
-        if (data.length > 0) {
+  // Function to fetch all projects
+  const fetchProjects = async () => {
+    try {
+      const data = await projectService.getAll();
+      setProjects(data);
+      
+      if (data.length > 0) {
+        // If we already have a selected project, keep it selected if it still exists
+        if (selectedProject) {
+          const stillExists = data.find(p => p.id === selectedProject.id);
+          if (stillExists) {
+            // Update the selected project with the latest data
+            setSelectedProject(stillExists);
+          } else {
+            // If the selected project no longer exists, select the first one
+            setSelectedProject(data[0]);
+          }
+        } else {
+          // If no project is selected, select the first one
           setSelectedProject(data[0]);
         }
-        
-      } catch (error: any) {
-        toast({
-          title: "Error",
-          description: `Failed to load projects: ${error.message}`,
-          variant: "destructive"
-        });
-      } finally {
-        setLoading(false);
+      } else {
+        setSelectedProject(null);
       }
-    };
+      
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: `Failed to load projects: ${error.message}`,
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // Fetch projects on component mount
+  useEffect(() => {
     fetchProjects();
   }, [toast]);
 
@@ -99,16 +118,37 @@ const Projects: React.FC = () => {
       </div>
       <div className="ml-64 w-full p-6">
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-2xl font-bold mb-6">Projects</h1>
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold">Projects</h1>
+            <Button
+              onClick={() => setIsNewProjectModalOpen(true)}
+              className="flex items-center gap-1"
+            >
+              <Plus className="h-4 w-4" /> Add Project
+            </Button>
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="md:col-span-3 xl:col-span-1">
               <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-1 gap-4">
-                {projects.map((project) => (
-                  <div key={project.id} onClick={() => setSelectedProject(project)} className="cursor-pointer">
-                    <ProjectCard project={project} />
+                {projects.length > 0 ? (
+                  projects.map((project) => (
+                    <div key={project.id} onClick={() => setSelectedProject(project)} className="cursor-pointer">
+                      <ProjectCard project={project} />
+                    </div>
+                  ))
+                ) : (
+                  <div className="md:col-span-3 p-6 text-center bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                    <p className="text-muted-foreground">No projects found. Create your first project to get started.</p>
+                    <Button 
+                      variant="outline"
+                      className="mt-4"
+                      onClick={() => setIsNewProjectModalOpen(true)}
+                    >
+                      <Plus className="mr-2 h-4 w-4" /> Create Project
+                    </Button>
                   </div>
-                ))}
+                )}
               </div>
             </div>
             
@@ -187,6 +227,12 @@ const Projects: React.FC = () => {
           </div>
         </div>
       </div>
+      
+      <NewProjectModal 
+        open={isNewProjectModalOpen} 
+        onOpenChange={setIsNewProjectModalOpen} 
+        onSuccess={fetchProjects}
+      />
     </div>
   );
 };
