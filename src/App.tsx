@@ -12,6 +12,7 @@ import Login from "./pages/Login";
 import Projects from "./pages/Projects";
 import Workstations from "./pages/Workstations";
 import DailyTasks from "./pages/DailyTasks";
+import Planning from "./pages/Planning";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -44,6 +45,11 @@ const App = () => (
               <Route path="/daily-tasks" element={
                 <ProtectedRoute>
                   <DailyTasks />
+                </ProtectedRoute>
+              } />
+              <Route path="/planning" element={
+                <ProtectedRoute>
+                  <Planning />
                 </ProtectedRoute>
               } />
               <Route path="*" element={<NotFound />} />

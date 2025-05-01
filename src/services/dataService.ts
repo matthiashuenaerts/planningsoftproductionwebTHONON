@@ -182,6 +182,24 @@ export const taskService = {
     return data as Task[] || [];
   },
   
+  async getOpenTasksByEmployeeOrWorkstation(employeeId: string, workstation: string | null): Promise<Task[]> {
+    let query = supabase
+      .from('tasks')
+      .select('*')
+      .in('status', ['TODO', 'IN_PROGRESS']);
+    
+    if (employeeId) {
+      query = query.eq('assignee_id', employeeId);
+    } else if (workstation) {
+      query = query.eq('workstation', workstation);
+    }
+    
+    const { data, error } = await query.order('priority', { ascending: false });
+    
+    if (error) throw error;
+    return data as Task[] || [];
+  },
+  
   async create(task: Omit<Task, 'id' | 'created_at' | 'updated_at'>): Promise<Task> {
     const { data, error } = await supabase
       .from('tasks')
@@ -242,6 +260,43 @@ export const employeeService = {
     
     if (error) throw error;
     return data as Employee;
+  }
+};
+
+// Work hours service
+export const workHoursService = {
+  async getAll(): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('work_hours')
+      .select('*')
+      .order('day_of_week', { ascending: true })
+      .order('start_time', { ascending: true });
+    
+    if (error) throw error;
+    return data || [];
+  },
+  
+  async getByDayOfWeek(dayOfWeek: number): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('work_hours')
+      .select('*')
+      .eq('day_of_week', dayOfWeek)
+      .order('start_time', { ascending: true });
+    
+    if (error) throw error;
+    return data || [];
+  },
+  
+  async update(id: string, workHours: Partial<any>): Promise<any> {
+    const { data, error } = await supabase
+      .from('work_hours')
+      .update(workHours)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
   }
 };
 
