@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import PlanningTimeline from '@/components/PlanningTimeline';
 import PlanningControls from '@/components/PlanningControls';
 import { employeeService } from '@/services/dataService';
+import { planningService } from '@/services/planningService';
 
 const Planning = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
@@ -42,7 +43,7 @@ const Planning = () => {
   }, [toast]);
 
   const handleGeneratePlan = async () => {
-    if (!currentEmployee?.role === 'admin') {
+    if (currentEmployee?.role !== 'admin') {
       toast({
         title: "Permission Denied",
         description: "Only administrators can generate plans",

@@ -33,6 +33,7 @@ export const planningService = {
     const startOfDay = `${dateStr}T00:00:00`;
     const endOfDay = `${dateStr}T23:59:59`;
     
+    // Using the raw query with table name as string since TypeScript doesn't recognize the schedules table yet
     const { data, error } = await supabase
       .from('schedules')
       .select(`
@@ -45,11 +46,12 @@ export const planningService = {
       .order('start_time');
     
     if (error) throw error;
-    return data as Schedule[] || [];
+    return (data || []) as unknown as Schedule[];
   },
   
   // Create a new schedule
   async createSchedule(schedule: CreateScheduleInput): Promise<Schedule> {
+    // Using the raw query with table name as string
     const { data, error } = await supabase
       .from('schedules')
       .insert([schedule])
@@ -57,11 +59,12 @@ export const planningService = {
       .single();
     
     if (error) throw error;
-    return data as Schedule;
+    return data as unknown as Schedule;
   },
   
   // Update a schedule
   async updateSchedule(id: string, schedule: Partial<Schedule>): Promise<Schedule> {
+    // Using the raw query with table name as string
     const { data, error } = await supabase
       .from('schedules')
       .update(schedule)
@@ -70,7 +73,7 @@ export const planningService = {
       .single();
     
     if (error) throw error;
-    return data as Schedule;
+    return data as unknown as Schedule;
   },
   
   // Delete a schedule
@@ -142,7 +145,7 @@ export const planningService = {
     
     // Simple algorithm to distribute tasks:
     // For each work period, assign tasks to employees with matching workstations
-    const schedulesToInsert = [];
+    const schedulesToInsert: CreateScheduleInput[] = [];
     
     for (const period of workPeriods) {
       const startTime = new Date(`${dateStr}T${period.start_time}`);
@@ -172,7 +175,7 @@ export const planningService = {
       }
     }
     
-    // Insert the generated schedules
+    // Insert the generated schedules - using direct table name
     if (schedulesToInsert.length > 0) {
       const { error: insertError } = await supabase
         .from('schedules')
