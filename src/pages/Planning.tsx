@@ -55,8 +55,7 @@ const Planning = () => {
     try {
       setIsGeneratingPlan(true);
       
-      // In a real implementation, this would call a backend function
-      // to generate a plan based on open tasks and employee availability
+      // Generate a plan based on open tasks and employee availability
       await planningService.generateDailyPlan(selectedDate);
       
       toast({
@@ -121,6 +120,15 @@ const Planning = () => {
         employees={employees}
         isAdmin={currentEmployee?.role === 'admin'}
       />
+      
+      <div className="mt-4 text-sm text-slate-500">
+        <p>Standard working hours:</p>
+        <ul className="list-disc pl-5 mt-1">
+          <li>Morning: 7:00 AM - 10:00 AM</li>
+          <li>Mid-day: 10:15 AM - 12:30 PM</li>
+          <li>Afternoon: 1:00 PM - 4:00 PM</li>
+        </ul>
+      </div>
     </div>
   );
 };
