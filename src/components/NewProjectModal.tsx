@@ -36,16 +36,17 @@ const formSchema = z.object({
   client: z.string().min(1, { message: 'Client name is required' }),
   description: z.string().optional(),
   start_date: z.date({ required_error: 'Start date is required' }),
-  installation_date: z.date({ required_error: 'Installation date is required' }).refine(
-    (date, ctx) => {
-      if (ctx.data.start_date && date < ctx.data.start_date) {
-        return false;
-      }
-      return true;
-    },
-    { message: 'Installation date must be after start date' }
-  ),
-});
+  installation_date: z.date({ required_error: 'Installation date is required' }),
+}).refine(
+  (data) => {
+    // Corrected refine method to work with the whole data object
+    return data.installation_date >= data.start_date;
+  },
+  {
+    message: 'Installation date must be after start date',
+    path: ['installation_date'], // This specifies which field the error belongs to
+  }
+);
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -190,6 +191,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
                           onSelect={field.onChange}
                           disabled={(date) => date < new Date("1900-01-01")}
                           initialFocus
+                          className={cn("p-3 pointer-events-auto")}
                         />
                       </PopoverContent>
                     </Popover>
@@ -233,6 +235,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
                             (form.getValues("start_date") && date < form.getValues("start_date"))
                           }
                           initialFocus
+                          className={cn("p-3 pointer-events-auto")}
                         />
                       </PopoverContent>
                     </Popover>
