@@ -8,8 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import NewProjectModal from '@/components/NewProjectModal';
-import { projectService, phaseService, taskService, Project, Phase, Task } from '@/services/dataService';
+import { projectService, phaseService, taskService, Project, Phase, Task, authService } from '@/services/dataService';
 import { useToast } from '@/hooks/use-toast';
+import { Input } from '@/components/ui/input';
 
 const Projects: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -18,11 +19,83 @@ const Projects: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const { toast } = useToast();
+
+  // Check if user is logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      const session = await authService.getSession();
+      if (session) {
+        setIsLoggedIn(true);
+        fetchProjects();
+      } else {
+        setLoading(false);
+      }
+    };
+    
+    checkAuth();
+  }, []);
+
+  // Function to handle login
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const { error } = await authService.signIn(email, password);
+      if (error) {
+        toast({
+          title: "Login Failed",
+          description: error.message,
+          variant: "destructive"
+        });
+      } else {
+        setIsLoggedIn(true);
+        fetchProjects();
+        toast({
+          title: "Success",
+          description: "Logged in successfully",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: `Failed to login: ${error.message}`,
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Function to handle signup
+  const handleSignup = async () => {
+    try {
+      const { error } = await authService.signUp(email, password);
+      if (error) {
+        toast({
+          title: "Sign Up Failed",
+          description: error.message,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: "Account created successfully. Please check your email to confirm your registration.",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: `Failed to sign up: ${error.message}`,
+        variant: "destructive"
+      });
+    }
+  };
 
   // Function to fetch all projects
   const fetchProjects = async () => {
     try {
+      setLoading(true);
       const data = await projectService.getAll();
       setProjects(data);
       
@@ -55,11 +128,6 @@ const Projects: React.FC = () => {
       setLoading(false);
     }
   };
-
-  // Fetch projects on component mount
-  useEffect(() => {
-    fetchProjects();
-  }, [toast]);
 
   // Fetch phases and tasks when selected project changes
   useEffect(() => {
@@ -106,6 +174,54 @@ const Projects: React.FC = () => {
         </div>
         <div className="ml-64 w-full p-6 flex justify-center items-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <div className="flex min-h-screen">
+        <div className="w-64 bg-sidebar fixed top-0 bottom-0">
+          <Navbar />
+        </div>
+        <div className="ml-64 w-full p-6 flex justify-center items-center">
+          <Card className="w-[350px]">
+            <CardHeader>
+              <CardTitle>Login</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <label htmlFor="email" className="text-sm font-medium">Email</label>
+                  <Input 
+                    id="email"
+                    type="email" 
+                    placeholder="Email" 
+                    value={email} 
+                    onChange={(e) => setEmail(e.target.value)} 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="password" className="text-sm font-medium">Password</label>
+                  <Input 
+                    id="password"
+                    type="password" 
+                    placeholder="Password" 
+                    value={password} 
+                    onChange={(e) => setPassword(e.target.value)} 
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Button type="submit" className="w-full">Login</Button>
+                  <Button type="button" variant="outline" className="w-full" onClick={handleSignup}>Sign Up</Button>
+                  <p className="text-xs text-center text-gray-500 mt-2">
+                    For testing purposes, you can create any email/password
+                  </p>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );

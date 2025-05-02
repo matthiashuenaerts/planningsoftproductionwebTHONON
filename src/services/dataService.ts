@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 // Project Types
@@ -55,12 +56,16 @@ export interface Employee {
 // Project service functions
 export const projectService = {
   async getAll(): Promise<Project[]> {
+    console.log("Fetching all projects...");
     const { data, error } = await supabase
       .from('projects')
       .select('*')
       .order('start_date', { ascending: true });
     
-    if (error) throw error;
+    if (error) {
+      console.error("Error fetching projects:", error);
+      throw error;
+    }
     return data as Project[] || [];
   },
   
@@ -76,13 +81,26 @@ export const projectService = {
   },
   
   async create(project: Omit<Project, 'id' | 'created_at' | 'updated_at'>): Promise<Project> {
+    console.log("Creating project:", project);
+    
+    // Ensure authenticated session is active
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      console.log("No authenticated session found");
+      // For development purposes, you can use the anonymous key instead
+      // but you will need to modify your RLS policies to allow anonymous inserts
+    }
+    
     const { data, error } = await supabase
       .from('projects')
       .insert([project])
       .select()
       .single();
     
-    if (error) throw error;
+    if (error) {
+      console.error("Error creating project:", error);
+      throw error;
+    }
     return data as Project;
   },
   
@@ -297,6 +315,38 @@ export const workHoursService = {
     
     if (error) throw error;
     return data;
+  }
+};
+
+// Seed initial data function
+// Since we're working with authentication now, let's also add a function to handle authentication
+export const authService = {
+  async signIn(email: string, password: string) {
+    return await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+  },
+  
+  async signUp(email: string, password: string) {
+    return await supabase.auth.signUp({
+      email,
+      password
+    });
+  },
+  
+  async signOut() {
+    return await supabase.auth.signOut();
+  },
+  
+  async getCurrentUser() {
+    const { data } = await supabase.auth.getUser();
+    return data.user;
+  },
+  
+  async getSession() {
+    const { data } = await supabase.auth.getSession();
+    return data.session;
   }
 };
 
