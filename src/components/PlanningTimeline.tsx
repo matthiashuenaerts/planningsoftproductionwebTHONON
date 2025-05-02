@@ -21,6 +21,12 @@ interface TimeSlot {
   label: string;
 }
 
+// Define type for dragged item
+interface DragItem {
+  id: string;
+  employeeId: string;
+}
+
 // Define standard working hours
 const WORK_PERIODS = [
   { start: '07:00', end: '10:00', label: 'Morning' },
@@ -54,7 +60,7 @@ const HOURS = generateTimeSlots();
 const DraggableTask = ({ schedule, isAdmin, onDrop }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: 'TASK',
-    item: { id: schedule.id, employeeId: schedule.employee_id },
+    item: { id: schedule.id, employeeId: schedule.employee_id } as DragItem,
     canDrag: isAdmin,
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging(),
@@ -80,7 +86,7 @@ const DraggableTask = ({ schedule, isAdmin, onDrop }) => {
 const DroppableCell = ({ employeeId, timeSlot, onDrop, children, handleCellClick }) => {
   const [{ isOver }, drop] = useDrop(() => ({
     accept: 'TASK',
-    drop: (item) => onDrop(item.id, employeeId, timeSlot),
+    drop: (item: DragItem) => onDrop(item.id, employeeId, timeSlot),
     collect: (monitor) => ({
       isOver: !!monitor.isOver(),
     }),
