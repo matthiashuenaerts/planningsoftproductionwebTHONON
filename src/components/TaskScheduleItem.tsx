@@ -34,16 +34,16 @@ const TaskScheduleItem: React.FC<TaskScheduleItemProps> = ({
     if (hasTask) {
       switch (schedule.task.priority) {
         case 'Urgent': return 'destructive';
-        case 'High': return 'orange';
-        case 'Medium': return 'amber';
+        case 'High': return 'destructive'; // Changed from 'orange' to 'destructive'
+        case 'Medium': return 'secondary'; // Changed from 'amber' to 'secondary'
         case 'Low': return 'outline';
         default: return 'secondary';
       }
     } else if (hasPhase) {
       if (schedule.phase.progress < 25) return 'destructive';
-      if (schedule.phase.progress < 50) return 'orange';
-      if (schedule.phase.progress < 75) return 'amber';
-      return 'green';
+      if (schedule.phase.progress < 50) return 'destructive'; // Changed from 'orange' to 'destructive'
+      if (schedule.phase.progress < 75) return 'secondary'; // Changed from 'amber' to 'secondary'
+      return 'default'; // Changed from 'green' to 'default'
     }
     return 'secondary';
   };

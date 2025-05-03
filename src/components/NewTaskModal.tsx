@@ -20,6 +20,7 @@ import { format, parse, addHours, setHours, setMinutes } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { taskService } from '@/services/dataService';
 import { planningService } from '@/services/planningService';
+import { supabase } from '@/integrations/supabase/client';
 
 interface NewTaskModalProps {
   isOpen: boolean;
