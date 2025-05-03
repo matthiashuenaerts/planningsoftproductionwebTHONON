@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 // Project Types
@@ -182,6 +181,17 @@ export const taskService = {
       .from('tasks')
       .select('*')
       .eq('due_date', today)
+      .order('priority', { ascending: false });
+    
+    if (error) throw error;
+    return data as Task[] || [];
+  },
+  
+  async getByDueDate(dueDate: string): Promise<Task[]> {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('due_date', dueDate)
       .order('priority', { ascending: false });
     
     if (error) throw error;

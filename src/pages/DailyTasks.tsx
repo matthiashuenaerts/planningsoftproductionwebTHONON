@@ -25,9 +25,8 @@ const DailyTasks: React.FC = () => {
       try {
         setLoading(true);
         
-        // For now, we just get today's tasks
-        // In a full implementation, you would filter by the selected date
-        const fetchedTasks = await taskService.getTodaysTasks();
+        // Get tasks scheduled for the selected date
+        const fetchedTasks = await taskService.getByDueDate(formattedSelectedDate);
         setTasks(fetchedTasks);
       } catch (error: any) {
         console.error('Error fetching tasks:', error);

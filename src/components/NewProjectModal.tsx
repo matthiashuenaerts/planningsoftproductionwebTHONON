@@ -27,7 +27,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { projectService, phaseService } from '@/services/dataService';
+import { projectService, phaseService, taskService } from '@/services/dataService';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from './ui/scroll-area';
@@ -57,8 +57,8 @@ interface NewProjectModalProps {
   onSuccess?: () => void;
 }
 
-// Standard phases that will always be available for selection
-const STANDARD_PHASES = [
+// Standard tasks that will always be available for selection
+const STANDARD_TASKS = [
   { id: '01', name: 'Prog. Vectorworks', workstation: 'productievoorbereiding' },
   { id: '02', name: 'Bestellen E&S + WB', workstation: 'productievoorbereiding' },
   { id: '03', name: 'Prog. Korpus', workstation: 'productiesturing' },
@@ -105,7 +105,7 @@ const STANDARD_PHASES = [
   { id: '44', name: 'Project Eindfactuur gemaakt', workstation: '' },
 ];
 
-interface PhaseItem {
+interface TaskItem {
   id: string;
   name: string;
   workstation: string;
@@ -118,11 +118,11 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
   onSuccess
 }) => {
   const { toast } = useToast();
-  const [phases, setPhases] = useState<PhaseItem[]>(
-    STANDARD_PHASES.map(phase => ({ ...phase, selected: true }))
+  const [tasks, setTasks] = useState<TaskItem[]>(
+    STANDARD_TASKS.map(task => ({ ...task, selected: true }))
   );
-  const [newPhaseName, setNewPhaseName] = useState('');
-  const [newPhaseWorkstation, setNewPhaseWorkstation] = useState('');
+  const [newTaskName, setNewTaskName] = useState('');
+  const [newTaskWorkstation, setNewTaskWorkstation] = useState('');
   
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -135,30 +135,30 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
     },
   });
 
-  const handleAddCustomPhase = () => {
-    if (newPhaseName.trim()) {
-      const nextId = (phases.length + 1).toString().padStart(2, '0');
-      setPhases([
-        ...phases, 
+  const handleAddCustomTask = () => {
+    if (newTaskName.trim()) {
+      const nextId = (tasks.length + 1).toString().padStart(2, '0');
+      setTasks([
+        ...tasks, 
         { 
           id: nextId, 
-          name: newPhaseName.trim(), 
-          workstation: newPhaseWorkstation.trim(),
+          name: newTaskName.trim(), 
+          workstation: newTaskWorkstation.trim(),
           selected: true 
         }
       ]);
-      setNewPhaseName('');
-      setNewPhaseWorkstation('');
+      setNewTaskName('');
+      setNewTaskWorkstation('');
     }
   };
 
-  const handleRemovePhase = (index: number) => {
-    setPhases(phases.filter((_, i) => i !== index));
+  const handleRemoveTask = (index: number) => {
+    setTasks(tasks.filter((_, i) => i !== index));
   };
 
-  const handleTogglePhase = (index: number) => {
-    setPhases(phases.map((phase, i) => 
-      i === index ? { ...phase, selected: !phase.selected } : phase
+  const handleToggleTask = (index: number) => {
+    setTasks(tasks.map((task, i) => 
+      i === index ? { ...task, selected: !task.selected } : task
     ));
   };
 
@@ -175,51 +175,67 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
         progress: 0,
       });
       
-      // Then add the selected phases
-      const selectedPhases = phases.filter(phase => phase.selected);
+      // Create a generic phase for these tasks
+      const phase = await phaseService.create({
+        project_id: newProject.id,
+        name: 'Project Tasks',
+        start_date: format(data.start_date, 'yyyy-MM-dd'),
+        end_date: format(data.installation_date, 'yyyy-MM-dd'),
+        progress: 0
+      });
       
       // Calculate days between start and installation
       const totalDays = Math.ceil(
         (data.installation_date.getTime() - data.start_date.getTime()) / (1000 * 60 * 60 * 24)
       );
       
-      // Calculate phase durations based on the number of phases
-      const daysPerPhase = Math.max(1, Math.floor(totalDays / selectedPhases.length));
+      // Calculate task distribution across the project timeline
+      const selectedTasks = tasks.filter(task => task.selected);
+      const daysPerTask = Math.max(1, Math.floor(totalDays / selectedTasks.length));
       
-      // Create all the phases with proper timing
-      const phasePromises = selectedPhases.map((phase, index) => {
-        const phaseStartDate = new Date(data.start_date);
-        phaseStartDate.setDate(data.start_date.getDate() + (index * daysPerPhase));
+      // Create all tasks with proper timing
+      const taskPromises = selectedTasks.map((task, index) => {
+        const taskStartDate = new Date(data.start_date);
+        taskStartDate.setDate(data.start_date.getDate() + (index * daysPerTask));
         
-        const phaseEndDate = new Date(phaseStartDate);
-        // Last phase ends on installation date
-        if (index === selectedPhases.length - 1) {
-          phaseEndDate.setTime(data.installation_date.getTime());
-        } else {
-          phaseEndDate.setDate(phaseStartDate.getDate() + daysPerPhase - 1);
+        // Create a task name with the ID prefix
+        const taskName = `${task.id} - ${task.name}`;
+        
+        // Map the workstation to one of the allowed values
+        let workstation: 'CUTTING' | 'WELDING' | 'PAINTING' | 'ASSEMBLY' | 'PACKAGING' | 'SHIPPING' = 'ASSEMBLY';
+        
+        // Simple mapping of workstations to standard categories
+        if (task.workstation.includes('zaag')) {
+          workstation = 'CUTTING';
+        } else if (task.workstation.includes('CNC')) {
+          workstation = 'CUTTING';
+        } else if (task.workstation.includes('Pers')) {
+          workstation = 'ASSEMBLY';
+        } else if (task.workstation.toLowerCase().includes('productie')) {
+          workstation = 'ASSEMBLY';
         }
         
-        // Create a clean phase name without special characters
-        const phaseName = `${phase.id} - ${phase.name}`;
-        
-        return phaseService.create({
-          project_id: newProject.id,
-          name: phaseName,
-          start_date: format(phaseStartDate, 'yyyy-MM-dd'),
-          end_date: format(phaseEndDate, 'yyyy-MM-dd'),
-          progress: 0
+        return taskService.create({
+          phase_id: phase.id,
+          assignee_id: null,
+          title: taskName,
+          description: task.workstation ? `Workstation: ${task.workstation}` : null,
+          workstation: workstation,
+          status: 'TODO',
+          priority: index < 5 ? 'High' : index < 15 ? 'Medium' : 'Low',
+          due_date: format(taskStartDate, 'yyyy-MM-dd')
         });
       });
       
-      await Promise.all(phasePromises);
+      await Promise.all(taskPromises);
       
       toast({
         title: "Success",
-        description: `Project created successfully with ${selectedPhases.length} phases`,
+        description: `Project created successfully with ${selectedTasks.length} tasks`,
       });
       
       form.reset();
-      setPhases(STANDARD_PHASES.map(phase => ({ ...phase, selected: true })));
+      setTasks(STANDARD_TASKS.map(task => ({ ...task, selected: true })));
       onOpenChange(false);
       if (onSuccess) onSuccess();
     } catch (error: any) {
@@ -375,25 +391,25 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
               </div>
 
               <div className="border rounded-md p-4">
-                <h3 className="font-medium mb-2">Project Phases</h3>
+                <h3 className="font-medium mb-2">Project Tasks</h3>
                 
                 <div className="space-y-2 mb-4 max-h-[300px] overflow-y-auto pr-2">
-                  {phases.map((phase, index) => (
+                  {tasks.map((task, index) => (
                     <div key={index} className="flex items-center space-x-2">
                       <Checkbox 
-                        id={`phase-${index}`} 
-                        checked={phase.selected} 
-                        onCheckedChange={() => handleTogglePhase(index)} 
+                        id={`task-${index}`} 
+                        checked={task.selected} 
+                        onCheckedChange={() => handleToggleTask(index)} 
                       />
-                      <label htmlFor={`phase-${index}`} className="text-sm flex-1">
-                        {phase.id} - {phase.name}
-                        {phase.workstation && <span className="text-muted-foreground ml-1">({phase.workstation})</span>}
+                      <label htmlFor={`task-${index}`} className="text-sm flex-1">
+                        {task.id} - {task.name}
+                        {task.workstation && <span className="text-muted-foreground ml-1">({task.workstation})</span>}
                       </label>
                       <Button 
                         type="button" 
                         variant="ghost" 
                         size="icon" 
-                        onClick={() => handleRemovePhase(index)}
+                        onClick={() => handleRemoveTask(index)}
                       >
                         <Trash className="h-4 w-4" />
                       </Button>
@@ -404,21 +420,21 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
                 <div className="grid grid-cols-1 gap-2 mt-2">
                   <div className="flex gap-2">
                     <Input
-                      placeholder="New phase name"
-                      value={newPhaseName}
-                      onChange={(e) => setNewPhaseName(e.target.value)}
+                      placeholder="New task name"
+                      value={newTaskName}
+                      onChange={(e) => setNewTaskName(e.target.value)}
                       className="flex-1"
                     />
                     <Input
                       placeholder="Workstation (optional)"
-                      value={newPhaseWorkstation}
-                      onChange={(e) => setNewPhaseWorkstation(e.target.value)}
+                      value={newTaskWorkstation}
+                      onChange={(e) => setNewTaskWorkstation(e.target.value)}
                       className="flex-1"
                     />
                     <Button 
                       type="button" 
                       size="icon" 
-                      onClick={handleAddCustomPhase}
+                      onClick={handleAddCustomTask}
                     >
                       <Plus className="h-4 w-4" />
                     </Button>
