@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -268,6 +267,27 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
       </DialogContent>
     </Dialog>
   );
+};
+
+export const fetchAvailablePhasesForDate = async (date: Date) => {
+  const dateStr = format(date, 'yyyy-MM-dd');
+  
+  const { data, error } = await supabase
+    .from('phases')
+    .select(`
+      *,
+      project:projects(id, name, status)
+    `)
+    .lt('progress', 100) // Only get incomplete phases
+    .lte('start_date', dateStr) // Has already started or starts today
+    .gte('end_date', dateStr);  // Hasn't ended yet
+    
+  if (error) {
+    console.error('Error fetching phases:', error);
+    throw error;
+  }
+  
+  return data || [];
 };
 
 export default NewTaskModal;

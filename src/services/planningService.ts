@@ -7,6 +7,7 @@ export interface Schedule {
   id: string;
   employee_id: string;
   task_id?: string;
+  phase_id?: string; // Add phase_id to associate schedules with project phases
   title: string;
   description?: string;
   start_time: string;
@@ -19,6 +20,7 @@ export interface Schedule {
 export interface CreateScheduleInput {
   employee_id: string;
   task_id?: string;
+  phase_id?: string; // Add phase_id to input interface
   title: string;
   description?: string;
   start_time: string;
@@ -40,7 +42,8 @@ export const planningService = {
       .select(`
         *,
         employee:employees(id, name, role, workstation),
-        task:tasks(id, title, description, priority, status)
+        task:tasks(id, title, description, priority, status),
+        phase:phases(id, name, project_id, progress)
       `)
       .gte('start_time', startOfDay)
       .lte('start_time', endOfDay)
@@ -116,10 +119,18 @@ export const planningService = {
     
     if (tasksError) throw tasksError;
     
-    if (!tasks?.length) {
-      // No tasks to schedule
-      return;
-    }
+    // Get active project phases
+    const { data: phases, error: phasesError } = await supabase
+      .from('phases')
+      .select(`
+        *,
+        project:projects(id, name, status)
+      `)
+      .lt('progress', 100) // Only get incomplete phases
+      .lte('start_date', dateStr) // Has already started or starts today
+      .gte('end_date', dateStr);  // Hasn't ended yet
+    
+    if (phasesError) throw phasesError;
     
     // Get employees
     const { data: employees, error: employeesError } = await supabase
@@ -143,10 +154,9 @@ export const planningService = {
     
     if (deleteError) throw deleteError;
     
-    // Simple algorithm to distribute tasks:
-    // For each work period, assign tasks to employees with matching workstations
     const schedulesToInsert: CreateScheduleInput[] = [];
     
+    // First, distribute tasks to employees with matching workstations
     for (const period of workPeriods) {
       const startTime = new Date(`${dateStr}T${period.start_time}`);
       const endTime = new Date(`${dateStr}T${period.end_time}`);
@@ -156,7 +166,7 @@ export const planningService = {
         if (!employee.workstation) continue;
         
         // Find unassigned tasks for this employee's workstation
-        const suitableTask = tasks.find(task => 
+        const suitableTask = tasks?.find(task => 
           task.workstation === employee.workstation && 
           !schedulesToInsert.some(s => s.task_id === task.id)
         );
@@ -175,7 +185,54 @@ export const planningService = {
       }
     }
     
-    // Insert the generated schedules - using any to bypass TypeScript checking
+    // Then, distribute project phases to available employees
+    if (phases && phases.length > 0) {
+      for (const period of workPeriods) {
+        const startTime = new Date(`${dateStr}T${period.start_time}`);
+        const endTime = new Date(`${dateStr}T${period.end_time}`);
+        
+        // For remaining employees without assigned tasks in this period
+        const assignedEmployeesIds = schedulesToInsert
+          .filter(s => 
+            new Date(s.start_time).getTime() === startTime.getTime() && 
+            new Date(s.end_time).getTime() === endTime.getTime()
+          )
+          .map(s => s.employee_id);
+        
+        const availableEmployees = employees.filter(emp => 
+          !assignedEmployeesIds.includes(emp.id)
+        );
+        
+        // For each available employee, try to assign a project phase
+        for (let i = 0; i < availableEmployees.length && i < phases.length; i++) {
+          const employee = availableEmployees[i];
+          const phase = phases[i];
+          
+          // Extract workstation from phase name if possible
+          const phaseName = phase.name || '';
+          const workstationMatch = phaseName.match(/workstation: ([A-Z\s]+)/i);
+          const phaseWorkstation = workstationMatch ? workstationMatch[1].trim() : null;
+          
+          // Only assign if employee has no workstation or workstation matches
+          if (!employee.workstation || 
+              !phaseWorkstation || 
+              employee.workstation.toUpperCase() === phaseWorkstation.toUpperCase()) {
+            
+            schedulesToInsert.push({
+              employee_id: employee.id,
+              phase_id: phase.id,
+              title: `Phase: ${phaseName}`,
+              description: `Project: ${phase.project?.name || 'Unknown'}`,
+              start_time: startTime.toISOString(),
+              end_time: endTime.toISOString(),
+              is_auto_generated: true
+            });
+          }
+        }
+      }
+    }
+    
+    // Insert the generated schedules
     if (schedulesToInsert.length > 0) {
       const { error: insertError } = await (supabase as any)
         .from('schedules')
