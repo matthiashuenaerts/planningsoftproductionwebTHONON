@@ -199,9 +199,12 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
           phaseEndDate.setDate(phaseStartDate.getDate() + daysPerPhase - 1);
         }
         
+        // Create a clean phase name without special characters
+        const phaseName = `${phase.id} - ${phase.name}`;
+        
         return phaseService.create({
           project_id: newProject.id,
-          name: `${phase.id} - ${phase.name}${phase.workstation ? ` - ${phase.workstation}` : ''}`,
+          name: phaseName,
           start_date: format(phaseStartDate, 'yyyy-MM-dd'),
           end_date: format(phaseEndDate, 'yyyy-MM-dd'),
           progress: 0

@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 // Project Types
@@ -122,13 +123,18 @@ export const phaseService = {
   },
   
   async create(phase: Omit<Phase, 'id' | 'created_at' | 'updated_at'>): Promise<Phase> {
+    // Ensure the phase name meets any constraints
     const { data, error } = await supabase
       .from('phases')
       .insert([phase])
       .select()
       .single();
     
-    if (error) throw error;
+    if (error) {
+      console.error('Phase creation error:', error);
+      throw error;
+    }
+    
     return data as Phase;
   },
   

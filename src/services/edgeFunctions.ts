@@ -3,6 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const initializeDatabase = async () => {
   try {
+    // Make sure constraints are properly set up
+    const { error: constraintError } = await supabase.rpc('check_and_fix_constraints');
+    
+    if (constraintError) {
+      console.warn('Constraint check warning:', constraintError);
+    }
+    
     const { data, error } = await supabase.functions.invoke('init-database');
     
     if (error) {
