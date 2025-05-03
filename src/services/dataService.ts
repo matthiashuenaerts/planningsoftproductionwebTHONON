@@ -18,7 +18,7 @@ export interface Project {
 export interface Phase {
   id: string;
   project_id: string;
-  name: 'PLANNING' | 'DESIGN' | 'PRODUCTION' | 'ASSEMBLY' | 'TESTING' | 'DEPLOYMENT';
+  name: string;
   start_date: string;
   end_date: string;
   progress: number;

@@ -74,55 +74,98 @@ serve(async (req) => {
       throw projectsError
     }
 
+    // Define standard phases from the list
+    const standardPhases = [
+      { id: '01', name: 'Prog. Vectorworks', workstation: 'productievoorbereiding' },
+      { id: '02', name: 'Bestellen E&S + WB', workstation: 'productievoorbereiding' },
+      { id: '03', name: 'Prog. Korpus', workstation: 'productiesturing' },
+      { id: '04', name: 'Bestellen lades', workstation: '' },
+      { id: '05', name: 'Klaarleggen', workstation: 'beslag, toebehoren, platen, kanten' },
+      { id: '06', name: 'Bestel Toebehoren', workstation: '' },
+      { id: '07', name: 'Bestel Plaatmateriaal en kanten', workstation: '' },
+      { id: '08', name: 'Bestel Fronten', workstation: '' },
+      { id: '09', name: 'Levering Kantenband', workstation: '' },
+      { id: '10', name: 'Levering Korpusmateriaal', workstation: '' },
+      { id: '11', name: 'Levering Frontmateriaal', workstation: '' },
+      { id: '12', name: 'Korpusmateriaal Zagen', workstation: 'Opdeelzaag 1' },
+      { id: '13', name: 'Korpusmateriaal Zagen', workstation: 'Opdeelzaag 2' },
+      { id: '14', name: 'Frontmateriaal Zagen', workstation: 'Opdeelzaag 1' },
+      { id: '15', name: 'Frontmateriaal Zagen', workstation: 'Opdeelzaag 2' }
+    ]
+    
     // Define phases for each project
     const phases = []
     
     // Project 1 phases
     if (projectsData && projectsData[0]) {
       const project1 = projectsData[0]
-      const phaseTypes = ['PLANNING', 'DESIGN', 'PRODUCTION', 'ASSEMBLY', 'TESTING', 'DEPLOYMENT']
       
-      let phaseStartDate = new Date(project1.start_date)
+      // Calculate days between start and installation for project 1
+      const project1Start = new Date(project1.start_date)
+      const project1Installation = new Date(project1.installation_date)
+      const totalDays = Math.ceil(
+        (project1Installation.getTime() - project1Start.getTime()) / (1000 * 60 * 60 * 24)
+      )
       
-      for (const phaseType of phaseTypes) {
+      // Create 6 phases with standard phase names
+      const phasesToUse = standardPhases.slice(0, 6) // Use first 6 phases
+      const daysPerPhase = Math.max(1, Math.floor(totalDays / phasesToUse.length))
+      
+      phasesToUse.forEach((phaseInfo, index) => {
+        const phaseStartDate = new Date(project1Start)
+        phaseStartDate.setDate(project1Start.getDate() + (index * daysPerPhase))
+        
         const phaseEndDate = new Date(phaseStartDate)
-        phaseEndDate.setDate(phaseStartDate.getDate() + 10) // Each phase is 10 days long
+        if (index === phasesToUse.length - 1) {
+          phaseEndDate.setTime(project1Installation.getTime())
+        } else {
+          phaseEndDate.setDate(phaseStartDate.getDate() + daysPerPhase - 1)
+        }
         
         phases.push({
           project_id: project1.id,
-          name: phaseType,
+          name: `${phaseInfo.id} - ${phaseInfo.name}${phaseInfo.workstation ? ` - ${phaseInfo.workstation}` : ''}`,
           start_date: phaseStartDate.toISOString().split('T')[0],
           end_date: phaseEndDate.toISOString().split('T')[0],
-          progress: phaseType === 'PLANNING' ? 100 : phaseType === 'DESIGN' ? 50 : 0
+          progress: index === 0 ? 100 : index === 1 ? 50 : 0
         })
-        
-        phaseStartDate = new Date(phaseEndDate)
-        phaseStartDate.setDate(phaseEndDate.getDate() + 1) // Next phase starts day after previous ends
-      }
+      })
     }
     
-    // Project 2 phases (similar structure)
+    // Project 2 phases - similar approach
     if (projectsData && projectsData[1]) {
       const project2 = projectsData[1]
-      const phaseTypes = ['PLANNING', 'DESIGN', 'PRODUCTION', 'ASSEMBLY', 'TESTING', 'DEPLOYMENT']
       
-      let phaseStartDate = new Date(project2.start_date)
+      // Calculate days between start and installation for project 2
+      const project2Start = new Date(project2.start_date)
+      const project2Installation = new Date(project2.installation_date)
+      const totalDays = Math.ceil(
+        (project2Installation.getTime() - project2Start.getTime()) / (1000 * 60 * 60 * 24)
+      )
       
-      for (const phaseType of phaseTypes) {
+      // Create phases with standard phase names (use a different range of phases)
+      const phasesToUse = standardPhases.slice(6, 12) // Use phases 7-12
+      const daysPerPhase = Math.max(1, Math.floor(totalDays / phasesToUse.length))
+      
+      phasesToUse.forEach((phaseInfo, index) => {
+        const phaseStartDate = new Date(project2Start)
+        phaseStartDate.setDate(project2Start.getDate() + (index * daysPerPhase))
+        
         const phaseEndDate = new Date(phaseStartDate)
-        phaseEndDate.setDate(phaseStartDate.getDate() + 7) // Each phase is 7 days long for this project
+        if (index === phasesToUse.length - 1) {
+          phaseEndDate.setTime(project2Installation.getTime())
+        } else {
+          phaseEndDate.setDate(phaseStartDate.getDate() + daysPerPhase - 1)
+        }
         
         phases.push({
           project_id: project2.id,
-          name: phaseType,
+          name: `${phaseInfo.id} - ${phaseInfo.name}${phaseInfo.workstation ? ` - ${phaseInfo.workstation}` : ''}`,
           start_date: phaseStartDate.toISOString().split('T')[0],
           end_date: phaseEndDate.toISOString().split('T')[0],
-          progress: phaseType === 'PLANNING' ? 100 : 0
+          progress: index === 0 ? 100 : 0
         })
-        
-        phaseStartDate = new Date(phaseEndDate)
-        phaseStartDate.setDate(phaseEndDate.getDate() + 1)
-      }
+      })
     }
     
     // Insert all phases
@@ -140,54 +183,57 @@ serve(async (req) => {
     
     // Sample tasks for the first project's phases
     if (phasesData) {
-      const planningPhase = phasesData.find(p => p.project_id === projectsData[0].id && p.name === 'PLANNING')
-      const designPhase = phasesData.find(p => p.project_id === projectsData[0].id && p.name === 'DESIGN')
-      const productionPhase = phasesData.find(p => p.project_id === projectsData[0].id && p.name === 'PRODUCTION')
+      // Get first two phases from project 1
+      const projectOnePhases = phasesData.filter(p => p.project_id === projectsData[0].id);
+      const firstPhase = projectOnePhases[0];
+      const secondPhase = projectOnePhases[1];
       
-      if (planningPhase) {
+      if (firstPhase) {
         tasks.push({
-          phase_id: planningPhase.id,
+          phase_id: firstPhase.id,
           title: 'Site inspection',
           description: 'Inspect site and document existing conditions',
           workstation: 'CUTTING',
           status: 'COMPLETED',
           priority: 'High',
-          due_date: new Date(planningPhase.start_date).toISOString().split('T')[0]
+          due_date: new Date(firstPhase.start_date).toISOString().split('T')[0]
         })
         
         tasks.push({
-          phase_id: planningPhase.id,
+          phase_id: firstPhase.id,
           title: 'Requirements gathering',
           description: 'Meet with client to determine project requirements',
           workstation: 'ASSEMBLY',
           status: 'COMPLETED',
           priority: 'Medium',
-          due_date: new Date(planningPhase.end_date).toISOString().split('T')[0]
+          due_date: new Date(firstPhase.end_date).toISOString().split('T')[0]
         })
       }
       
-      if (designPhase) {
+      if (secondPhase) {
         tasks.push({
-          phase_id: designPhase.id,
+          phase_id: secondPhase.id,
           title: 'Create blueprints',
           description: 'Design layout and furniture placement',
           workstation: 'ASSEMBLY',
           status: 'COMPLETED',
           priority: 'High',
-          due_date: new Date(designPhase.start_date).toISOString().split('T')[0]
+          due_date: new Date(secondPhase.start_date).toISOString().split('T')[0]
         })
         
         tasks.push({
-          phase_id: designPhase.id,
+          phase_id: secondPhase.id,
           title: 'Material selection',
           description: 'Choose materials for furniture and fixtures',
           workstation: 'CUTTING',
           status: 'IN_PROGRESS',
           priority: 'Medium',
-          due_date: new Date(designPhase.end_date).toISOString().split('T')[0]
+          due_date: new Date(secondPhase.end_date).toISOString().split('T')[0]
         })
       }
       
+      // Add a task for a production phase
+      const productionPhase = projectOnePhases[2];
       if (productionPhase) {
         const today = new Date().toISOString().split('T')[0]
         
