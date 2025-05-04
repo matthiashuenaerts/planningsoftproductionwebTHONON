@@ -2,16 +2,15 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import TaskList from './TaskList';
-import { WorkstationType } from '@/lib/mockData';
 import { taskService, Task } from '@/services/dataService';
 import { useToast } from '@/hooks/use-toast';
-import { workstationService } from '@/services/workstationService';
 
 interface WorkstationViewProps {
-  workstation: WorkstationType;
+  workstation: string;
+  workstationId: string;
 }
 
-const WorkstationView: React.FC<WorkstationViewProps> = ({ workstation }) => {
+const WorkstationView: React.FC<WorkstationViewProps> = ({ workstation, workstationId }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -21,17 +20,8 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstation }) => {
       try {
         setLoading(true);
         
-        // First get the workstation ID by name
-        const { data } = await workstationService.getByName(workstation);
-        
-        if (!data) {
-          console.log(`No workstation found with name: ${workstation}`);
-          setTasks([]);
-          return;
-        }
-        
-        // Then get tasks for this workstation ID
-        const workstationTasks = await taskService.getByWorkstationId(data.id);
+        // Fetch tasks directly using workstation ID
+        const workstationTasks = await taskService.getByWorkstationId(workstationId);
         setTasks(workstationTasks);
       } catch (error: any) {
         console.error('Error fetching workstation tasks:', error);
@@ -48,25 +38,24 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstation }) => {
     };
 
     fetchWorkstationTasks();
-  }, [workstation, toast]);
+  }, [workstation, workstationId, toast]);
 
-  const getWorkstationColor = (workstation: WorkstationType): string => {
-    switch (workstation) {
-      case WorkstationType.CUTTING:
-        return 'bg-workstation-cutting';
-      case WorkstationType.WELDING:
-        return 'bg-workstation-welding';
-      case WorkstationType.PAINTING:
-        return 'bg-workstation-painting';
-      case WorkstationType.ASSEMBLY:
-        return 'bg-workstation-assembly';
-      case WorkstationType.PACKAGING:
-        return 'bg-workstation-packaging';
-      case WorkstationType.SHIPPING:
-        return 'bg-workstation-shipping';
-      default:
-        return 'bg-gray-500';
-    }
+  const getWorkstationColor = (name: string): string => {
+    // Create a consistent color mapping based on the workstation name
+    const colorClasses = [
+      'bg-blue-500',
+      'bg-green-500',
+      'bg-amber-500',
+      'bg-red-500',
+      'bg-purple-500',
+      'bg-pink-500',
+      'bg-indigo-500',
+      'bg-teal-500',
+    ];
+    
+    // Simple hash function to pick a consistent color for each workstation name
+    const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return colorClasses[hash % colorClasses.length];
   };
 
   return (

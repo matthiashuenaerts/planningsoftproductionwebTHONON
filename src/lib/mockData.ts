@@ -1,4 +1,3 @@
-
 export type Project = {
   id: string;
   name: string;
@@ -43,13 +42,14 @@ export enum PhaseType {
   DEPLOYMENT = "Deployment"
 }
 
+// Update the enum to be a string type that matches database values
 export enum WorkstationType {
-  CUTTING = 'CUTTING',
-  WELDING = 'WELDING',
-  PAINTING = 'PAINTING',
-  ASSEMBLY = 'ASSEMBLY',
-  PACKAGING = 'PACKAGING',
-  SHIPPING = 'SHIPPING'
+  CUTTING = "CUTTING",
+  WELDING = "WELDING",
+  PAINTING = "PAINTING",
+  ASSEMBLY = "ASSEMBLY",
+  PACKAGING = "PACKAGING",
+  SHIPPING = "SHIPPING"
 }
 
 export enum Status {

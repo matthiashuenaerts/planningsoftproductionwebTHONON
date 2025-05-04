@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 // Project Types
@@ -209,8 +208,8 @@ export const taskService = {
       
       if (error) throw error;
       
-      // Extract tasks from the joined data
-      const tasks = data.map(item => item.tasks) || [];
+      // Extract tasks from the joined data and ensure they match the Task type
+      const tasks = data.map(item => item.tasks as Task) || [];
       return tasks;
     } catch (error) {
       console.error('Error in getByWorkstationId:', error);
