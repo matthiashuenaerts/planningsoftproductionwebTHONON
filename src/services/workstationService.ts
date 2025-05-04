@@ -48,6 +48,16 @@ export const workstationService = {
     return data as Workstation;
   },
   
+  async getByName(name: string): Promise<{ data: Workstation | null, error: any }> {
+    const { data, error } = await supabase
+      .from('workstations')
+      .select('*')
+      .eq('name', name)
+      .maybeSingle();
+    
+    return { data, error };
+  },
+  
   async create(workstation: { name: string; description?: string | null }): Promise<Workstation> {
     const { data, error } = await supabase
       .from('workstations')

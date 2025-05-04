@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 // Project Types
@@ -173,28 +174,48 @@ export const taskService = {
   },
   
   async getByWorkstation(workstation: string): Promise<Task[]> {
-    // First get the workstation ID
-    const { data: workstationData, error: workstationError } = await supabase
-      .from('workstations')
-      .select('id')
-      .eq('name', workstation)
-      .single();
-    
-    if (workstationError) throw workstationError;
-    
-    // Get tasks linked to this workstation
-    const { data, error } = await supabase
-      .from('task_workstation_links')
-      .select(`
-        task_id,
-        tasks (*)
-      `)
-      .eq('workstation_id', workstationData.id);
-    
-    if (error) throw error;
-    
-    // Extract tasks from the joined data
-    return data.map(item => item.tasks) as Task[] || [];
+    try {
+      // First get the workstation ID
+      const { data: workstationData, error: workstationError } = await supabase
+        .from('workstations')
+        .select('id')
+        .eq('name', workstation)
+        .maybeSingle();
+      
+      if (workstationError) throw workstationError;
+      
+      if (!workstationData) {
+        console.warn(`No workstation found with name: ${workstation}`);
+        return [];
+      }
+      
+      return await this.getByWorkstationId(workstationData.id);
+    } catch (error) {
+      console.error('Error in getByWorkstation:', error);
+      throw error;
+    }
+  },
+
+  async getByWorkstationId(workstationId: string): Promise<Task[]> {
+    try {
+      // Get tasks linked to this workstation
+      const { data, error } = await supabase
+        .from('task_workstation_links')
+        .select(`
+          task_id,
+          tasks (*)
+        `)
+        .eq('workstation_id', workstationId);
+      
+      if (error) throw error;
+      
+      // Extract tasks from the joined data
+      const tasks = data.map(item => item.tasks) || [];
+      return tasks;
+    } catch (error) {
+      console.error('Error in getByWorkstationId:', error);
+      throw error;
+    }
   },
   
   async getTodaysTasks(): Promise<Task[]> {

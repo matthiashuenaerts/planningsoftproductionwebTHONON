@@ -5,6 +5,7 @@ import TaskList from './TaskList';
 import { WorkstationType } from '@/lib/mockData';
 import { taskService, Task } from '@/services/dataService';
 import { useToast } from '@/hooks/use-toast';
+import { workstationService } from '@/services/workstationService';
 
 interface WorkstationViewProps {
   workstation: WorkstationType;
@@ -19,7 +20,18 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstation }) => {
     const fetchWorkstationTasks = async () => {
       try {
         setLoading(true);
-        const workstationTasks = await taskService.getByWorkstation(workstation);
+        
+        // First get the workstation ID by name
+        const { data } = await workstationService.getByName(workstation);
+        
+        if (!data) {
+          console.log(`No workstation found with name: ${workstation}`);
+          setTasks([]);
+          return;
+        }
+        
+        // Then get tasks for this workstation ID
+        const workstationTasks = await taskService.getByWorkstationId(data.id);
         setTasks(workstationTasks);
       } catch (error: any) {
         console.error('Error fetching workstation tasks:', error);
@@ -28,6 +40,8 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstation }) => {
           description: `Failed to load ${workstation} tasks: ${error.message}`,
           variant: "destructive"
         });
+        // Setting empty tasks to prevent UI errors
+        setTasks([]);
       } finally {
         setLoading(false);
       }
