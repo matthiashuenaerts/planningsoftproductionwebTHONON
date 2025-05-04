@@ -1,12 +1,13 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Calendar, LogOut, LayoutDashboard, List } from 'lucide-react';
+import { Calendar, LogOut, LayoutDashboard, List, Settings as SettingsIcon } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const Navbar: React.FC = () => {
   const location = useLocation();
   const { currentEmployee, logout } = useAuth();
+  const isAdmin = currentEmployee?.role === 'admin';
 
   return (
     <nav className="bg-sidebar text-sidebar-foreground p-4 flex flex-col h-full">
@@ -39,6 +40,14 @@ const Navbar: React.FC = () => {
           title="Daily Tasks" 
           active={location.pathname === '/daily-tasks'} 
         />
+        {isAdmin && (
+          <NavItem 
+            to="/settings" 
+            icon={<SettingsIcon className="w-5 h-5" />} 
+            title="Settings" 
+            active={location.pathname === '/settings'} 
+          />
+        )}
       </div>
       
       <div className="mt-auto">

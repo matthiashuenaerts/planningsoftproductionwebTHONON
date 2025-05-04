@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { Task } from '@/services/dataService';
+import { workstationService } from '@/services/workstationService';
+import { useState, useEffect } from 'react';
 
 interface TaskListProps {
   tasks: Task[];
@@ -13,6 +15,38 @@ interface TaskListProps {
 }
 
 const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatusChange }) => {
+  const [taskWorkstations, setTaskWorkstations] = useState<Record<string, string[]>>({});
+  
+  useEffect(() => {
+    const loadTaskWorkstations = async () => {
+      const workstationMap: Record<string, string[]> = {};
+      
+      for (const task of tasks) {
+        try {
+          const { data } = await supabase
+            .from('task_workstation_links')
+            .select('workstations(name)')
+            .eq('task_id', task.id);
+          
+          if (data && data.length > 0) {
+            workstationMap[task.id] = data.map(item => item.workstations.name);
+          } else {
+            workstationMap[task.id] = [];
+          }
+        } catch (error) {
+          console.error(`Error fetching workstations for task ${task.id}:`, error);
+          workstationMap[task.id] = [];
+        }
+      }
+      
+      setTaskWorkstations(workstationMap);
+    };
+    
+    if (tasks.length > 0) {
+      loadTaskWorkstations();
+    }
+  }, [tasks]);
+
   if (tasks.length === 0) {
     return (
       <div className="mt-4">
@@ -91,9 +125,11 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
               
               <div className="flex justify-between items-center text-xs text-muted-foreground">
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="font-normal">
-                    {task.workstation}
-                  </Badge>
+                  {taskWorkstations[task.id]?.map(workstation => (
+                    <Badge key={workstation} variant="secondary" className="font-normal">
+                      {workstation}
+                    </Badge>
+                  ))}
                   {task.assignee_id && (
                     <span className="flex items-center gap-1">
                       <div className="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">

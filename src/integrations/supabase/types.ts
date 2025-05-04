@@ -9,6 +9,42 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      employee_workstation_links: {
+        Row: {
+          created_at: string
+          employee_id: string | null
+          id: string
+          workstation_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          employee_id?: string | null
+          id?: string
+          workstation_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string | null
+          id?: string
+          workstation_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_workstation_links_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_workstation_links_workstation_id_fkey"
+            columns: ["workstation_id"]
+            isOneToOne: false
+            referencedRelation: "workstations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           created_at: string
@@ -173,6 +209,42 @@ export type Database = {
           },
         ]
       }
+      task_workstation_links: {
+        Row: {
+          created_at: string
+          id: string
+          task_id: string | null
+          workstation_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          task_id?: string | null
+          workstation_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          task_id?: string | null
+          workstation_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_workstation_links_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_workstation_links_workstation_id_fkey"
+            columns: ["workstation_id"]
+            isOneToOne: false
+            referencedRelation: "workstations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           assignee_id: string | null
@@ -256,6 +328,30 @@ export type Database = {
           id?: string
           segment_name?: string
           start_time?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      workstations: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
           updated_at?: string
         }
         Relationships: []

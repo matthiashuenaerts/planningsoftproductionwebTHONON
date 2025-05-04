@@ -33,7 +33,7 @@ export interface Task {
   assignee_id: string | null;
   title: string;
   description: string | null;
-  workstation: 'CUTTING' | 'WELDING' | 'PAINTING' | 'ASSEMBLY' | 'PACKAGING' | 'SHIPPING';
+  workstation: string;
   status: 'TODO' | 'IN_PROGRESS' | 'COMPLETED';
   priority: 'Low' | 'Medium' | 'High' | 'Urgent';
   due_date: string;
@@ -47,7 +47,6 @@ export interface Employee {
   name: string;
   email: string | null;
   role: 'admin' | 'manager' | 'worker';
-  workstation: string | null;
   password?: string; // Add password property
   created_at: string;
 }
@@ -152,6 +151,16 @@ export const phaseService = {
 
 // Task service functions
 export const taskService = {
+  async getAll(): Promise<Task[]> {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .order('due_date', { ascending: true });
+    
+    if (error) throw error;
+    return data as Task[] || [];
+  },
+
   async getByPhase(phaseId: string): Promise<Task[]> {
     const { data, error } = await supabase
       .from('tasks')
@@ -164,14 +173,28 @@ export const taskService = {
   },
   
   async getByWorkstation(workstation: string): Promise<Task[]> {
+    // First get the workstation ID
+    const { data: workstationData, error: workstationError } = await supabase
+      .from('workstations')
+      .select('id')
+      .eq('name', workstation)
+      .single();
+    
+    if (workstationError) throw workstationError;
+    
+    // Get tasks linked to this workstation
     const { data, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('workstation', workstation)
-      .order('due_date', { ascending: true });
+      .from('task_workstation_links')
+      .select(`
+        task_id,
+        tasks (*)
+      `)
+      .eq('workstation_id', workstationData.id);
     
     if (error) throw error;
-    return data as Task[] || [];
+    
+    // Extract tasks from the joined data
+    return data.map(item => item.tasks) as Task[] || [];
   },
   
   async getTodaysTasks(): Promise<Task[]> {
@@ -199,21 +222,46 @@ export const taskService = {
   },
   
   async getOpenTasksByEmployeeOrWorkstation(employeeId: string, workstation: string | null): Promise<Task[]> {
-    let query = supabase
-      .from('tasks')
-      .select('*')
-      .in('status', ['TODO', 'IN_PROGRESS']);
-    
+    // Get tasks assigned to an employee
     if (employeeId) {
-      query = query.eq('assignee_id', employeeId);
-    } else if (workstation) {
-      query = query.eq('workstation', workstation);
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('assignee_id', employeeId)
+        .in('status', ['TODO', 'IN_PROGRESS'])
+        .order('priority', { ascending: false });
+      
+      if (error) throw error;
+      return data as Task[] || [];
+    } 
+    // Get tasks for a workstation
+    else if (workstation) {
+      // First get the workstation ID
+      const { data: workstationData, error: workstationError } = await supabase
+        .from('workstations')
+        .select('id')
+        .eq('name', workstation)
+        .single();
+      
+      if (workstationError) throw workstationError;
+      
+      // Get tasks linked to this workstation
+      const { data, error } = await supabase
+        .from('task_workstation_links')
+        .select(`
+          task_id,
+          tasks (*)
+        `)
+        .eq('workstation_id', workstationData.id);
+      
+      if (error) throw error;
+      
+      // Extract tasks from the joined data and filter for open tasks
+      const tasks = data.map(item => item.tasks) as Task[] || [];
+      return tasks.filter(task => task.status === 'TODO' || task.status === 'IN_PROGRESS');
     }
     
-    const { data, error } = await query.order('priority', { ascending: false });
-    
-    if (error) throw error;
-    return data as Task[] || [];
+    return [];
   },
   
   async create(task: Omit<Task, 'id' | 'created_at' | 'updated_at'>): Promise<Task> {
@@ -266,7 +314,6 @@ export const employeeService = {
     email?: string | null; 
     password: string; 
     role: string; 
-    workstation?: string | null; 
   }): Promise<Employee> {
     const { data, error } = await supabase
       .from('employees')
@@ -327,8 +374,7 @@ export const seedInitialData = async () => {
         name: 'Matthias Huenaerts',
         email: null,
         password: 'mh310801',
-        role: 'admin',
-        workstation: null
+        role: 'admin'
       },
       {
         name: 'Manager User',
@@ -340,15 +386,13 @@ export const seedInitialData = async () => {
         name: 'Worker 1',
         email: 'worker1@kitchenpro.com',
         password: 'worker123',
-        role: 'worker',
-        workstation: 'CUTTING'
+        role: 'worker'
       },
       {
         name: 'Worker 2',
         email: 'worker2@kitchenpro.com',
         password: 'worker123',
-        role: 'worker',
-        workstation: 'ASSEMBLY'
+        role: 'worker'
       }
     ]);
   }
