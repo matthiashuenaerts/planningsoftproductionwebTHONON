@@ -21,6 +21,7 @@ export const CheckboxCard: React.FC<CheckboxCardProps> = ({
   onCheckedChange,
   disabled = false
 }) => {
+  // Simple standalone checkbox component - not using useFormField hook
   return (
     <Card className={`border ${checked ? 'border-primary' : 'border-border'}`}>
       <CardHeader className="p-4 pb-2">
@@ -34,6 +35,7 @@ export const CheckboxCard: React.FC<CheckboxCardProps> = ({
                 id={id}
                 checked={checked}
                 onCheckedChange={onCheckedChange}
+                aria-label={`Toggle ${title}`}
               />
             )}
           </div>

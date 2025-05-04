@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { taskService, Task } from '@/services/dataService';
 import { workstationService } from '@/services/workstationService';
 import { Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface TaskWorkstationsManagerProps {
   workstationId: string;

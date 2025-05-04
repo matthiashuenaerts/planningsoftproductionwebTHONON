@@ -153,7 +153,7 @@ const UserManagement = () => {
               <th className="py-3 px-4 text-left">Name</th>
               <th className="py-3 px-4 text-left">Email</th>
               <th className="py-3 px-4 text-left">Role</th>
-              <th className="py-3 px-4 text-left">Workstation</th>
+              <th className="py-3 px-4 text-left">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -162,7 +162,10 @@ const UserManagement = () => {
                 <td className="py-3 px-4">{employee.name}</td>
                 <td className="py-3 px-4">{employee.email || '-'}</td>
                 <td className="py-3 px-4">{employee.role}</td>
-                <td className="py-3 px-4">{employee.workstation || '-'}</td>
+                <td className="py-3 px-4">
+                  {/* Actions would go here */}
+                  <Button variant="outline" size="sm">Edit</Button>
+                </td>
               </tr>
             ))}
           </tbody>

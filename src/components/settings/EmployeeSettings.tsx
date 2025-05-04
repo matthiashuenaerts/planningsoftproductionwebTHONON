@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Card,
@@ -31,7 +30,6 @@ import { useToast } from '@/hooks/use-toast';
 import { employeeService } from '@/services/dataService';
 import { EmployeeWorkstationsManager } from './EmployeeWorkstationsManager';
 import { Employee } from '@/services/dataService';
-import { useForm } from 'react-hook-form';
 
 const EmployeeSettings: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);

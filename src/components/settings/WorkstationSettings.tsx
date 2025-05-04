@@ -189,46 +189,48 @@ const WorkstationSettings: React.FC = () => {
                 </DialogDescription>
               </DialogHeader>
               
-              <form onSubmit={form.handleSubmit(isEditing ? handleUpdate : handleCreate)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter workstation name" {...field} required />
-                      </FormControl>
-                      <FormDescription>
-                        The name of the workstation (e.g., CUTTING, WELDING)
-                      </FormDescription>
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Enter workstation description" {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        Detailed description of this workstation's function
-                      </FormDescription>
-                    </FormItem>
-                  )}
-                />
-                
-                <div className="flex justify-end gap-3">
-                  <DialogClose asChild>
-                    <Button type="button" variant="outline">Cancel</Button>
-                  </DialogClose>
-                  <Button type="submit">{isEditing ? 'Update' : 'Create'}</Button>
-                </div>
-              </form>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(isEditing ? handleUpdate : handleCreate)} className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Enter workstation name" {...field} required />
+                        </FormControl>
+                        <FormDescription>
+                          The name of the workstation (e.g., CUTTING, WELDING)
+                        </FormDescription>
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Description</FormLabel>
+                        <FormControl>
+                          <Textarea placeholder="Enter workstation description" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Detailed description of this workstation's function
+                        </FormDescription>
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <div className="flex justify-end gap-3">
+                    <DialogClose asChild>
+                      <Button type="button" variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button type="submit">{isEditing ? 'Update' : 'Create'}</Button>
+                  </div>
+                </form>
+              </Form>
             </DialogContent>
           </Dialog>
         </CardHeader>
