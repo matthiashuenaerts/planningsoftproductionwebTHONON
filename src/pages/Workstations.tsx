@@ -2,33 +2,52 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import WorkstationView from '@/components/WorkstationView';
-import { useAppContext } from '@/context/AppContext';
-import { workstationService, Workstation } from '@/services/workstationService';
-import { useToast } from '@/hooks/use-toast';
-import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monitor, Truck, Flag, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { workstationService } from '@/services/workstationService';
+import { 
+  ArrowLeft, 
+  Package, 
+  FileText, 
+  PackagePlus, 
+  Edit, 
+  ListCheck, 
+  PackageX, 
+  Calendar, 
+  ListOrdered,
+  CalendarArrowDown
+} from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+
+// Define workstation with appropriate icon mapping
+interface WorkstationWithIcon {
+  id: string;
+  name: string;
+  description: string | null;
+  icon: React.ReactNode;
+}
 
 const Workstations: React.FC = () => {
-  const { setViewingWorkstation } = useAppContext();
-  const [workstations, setWorkstations] = useState<Workstation[]>([]);
-  const [selectedWorkstation, setSelectedWorkstation] = useState<Workstation | null>(null);
+  const [selectedWorkstation, setSelectedWorkstation] = useState<string | null>(null);
+  const [workstations, setWorkstations] = useState<WorkstationWithIcon[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  
+
   useEffect(() => {
-    const fetchWorkstations = async () => {
+    const loadWorkstations = async () => {
       try {
-        setLoading(true);
         const data = await workstationService.getAll();
-        setWorkstations(data);
         
-        // Reset selected workstation when fetching new data
-        setSelectedWorkstation(null);
-        if (data.length > 0) {
-          setViewingWorkstation(data[0].name);
-        }
+        // Map workstations to include icons
+        const workstationsWithIcons = data.map(ws => {
+          return {
+            ...ws,
+            icon: getWorkstationIcon(ws.name)
+          };
+        });
+        
+        setWorkstations(workstationsWithIcons);
       } catch (error: any) {
-        console.error('Error fetching workstations:', error);
         toast({
           title: "Error",
           description: `Failed to load workstations: ${error.message}`,
@@ -38,37 +57,25 @@ const Workstations: React.FC = () => {
         setLoading(false);
       }
     };
+    
+    loadWorkstations();
+  }, [toast]);
 
-    fetchWorkstations();
-  }, [setViewingWorkstation, toast]);
-
-  const handleWorkstationClick = (workstation: Workstation) => {
-    setSelectedWorkstation(workstation);
-    setViewingWorkstation(workstation.name);
-  };
-
+  // Function to get icon based on workstation name
   const getWorkstationIcon = (name: string) => {
-    // Return appropriate icon based on workstation name
-    const lowerCaseName = name.toLowerCase();
-    if (lowerCaseName.includes('productievoor')) return <Package size={32} />;
-    if (lowerCaseName.includes('productiestur')) return <LayoutGrid size={32} />;
-    if (lowerCaseName.includes('stock') || lowerCaseName.includes('logistiek')) return <Warehouse size={32} />;
-    if (lowerCaseName.includes('opdeelzaag 1')) return <Wrench size={32} />;
-    if (lowerCaseName.includes('opdeelzaag 2')) return <Scissors size={32} />;
-    if (lowerCaseName.includes('afplakken')) return <Layers size={32} />;
-    if (lowerCaseName.includes('cnc')) return <Wrench size={32} />;
-    if (lowerCaseName.includes('controle/opkuis')) return <Check size={32} />;
-    if (lowerCaseName.includes('montage')) return <Layers size={32} />;
-    if (lowerCaseName.includes('afwerking')) return <Wrench size={32} />;
-    if (lowerCaseName.includes('controle e+s')) return <Monitor size={32} />;
-    if (lowerCaseName.includes('eindcontrole')) return <Check size={32} />;
-    if (lowerCaseName.includes('bufferzone')) return <Warehouse size={32} />;
-    if (lowerCaseName.includes('laden') || lowerCaseName.includes('vrachtwagen')) return <Truck size={32} />;
-    if (lowerCaseName.includes('plaatsen')) return <Package size={32} />;
-    if (lowerCaseName.includes('afsluiten')) return <Flag size={32} />;
+    const lowercaseName = name.toLowerCase();
+    
+    if (lowercaseName.includes('cnc')) return <FileText className="h-8 w-8" />;
+    if (lowercaseName.includes('assembly')) return <Package className="h-8 w-8" />;
+    if (lowercaseName.includes('warehouse')) return <PackagePlus className="h-8 w-8" />;
+    if (lowercaseName.includes('cutting')) return <Edit className="h-8 w-8" />;
+    if (lowercaseName.includes('quality')) return <ListCheck className="h-8 w-8" />;
+    if (lowercaseName.includes('packaging')) return <PackageX className="h-8 w-8" />;
+    if (lowercaseName.includes('planning')) return <Calendar className="h-8 w-8" />;
+    if (lowercaseName.includes('production')) return <ListOrdered className="h-8 w-8" />;
     
     // Default icon
-    return <Wrench size={32} />;
+    return <CalendarArrowDown className="h-8 w-8" />;
   };
 
   if (loading) {
@@ -78,7 +85,7 @@ const Workstations: React.FC = () => {
           <Navbar />
         </div>
         <div className="ml-64 w-full p-6 flex justify-center items-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
         </div>
       </div>
     );
@@ -86,53 +93,47 @@ const Workstations: React.FC = () => {
 
   return (
     <div className="flex min-h-screen">
-      <div className="w-64 bg-sidebar fixed top-0 bottom-0 z-10">
+      <div className="w-64 bg-sidebar fixed top-0 bottom-0">
         <Navbar />
       </div>
-      <div className="ml-64 w-full p-4 md:p-6">
+      <div className="ml-64 w-full p-6">
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-2xl font-bold mb-6">Workstations</h1>
-          
-          {workstations.length === 0 ? (
-            <div className="bg-amber-50 border border-amber-200 p-4 rounded-md">
-              <p className="text-amber-700">
-                No workstations found. Please create workstations in the Settings page.
-              </p>
+          {selectedWorkstation ? (
+            <div>
+              <Button 
+                variant="outline" 
+                className="mb-4"
+                onClick={() => setSelectedWorkstation(null)}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Workstations
+              </Button>
+              <WorkstationView 
+                workstationId={selectedWorkstation} 
+                onBack={() => setSelectedWorkstation(null)}
+              />
             </div>
           ) : (
             <div>
-              {!selectedWorkstation ? (
-                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {workstations.map((workstation) => (
-                    <button 
-                      key={workstation.id} 
-                      className="flex flex-col items-center justify-center p-4 md:p-6 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors text-white cursor-pointer h-32 md:h-40"
-                      onClick={() => handleWorkstationClick(workstation)}
-                    >
-                      <div className="bg-gray-600 p-4 rounded-full mb-3">
-                        {getWorkstationIcon(workstation.name)}
-                      </div>
-                      <span className="text-center font-medium text-white text-sm md:text-base line-clamp-2">
-                        {workstation.name}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div>
-                  <Button 
-                    className="mb-4 flex items-center hover:bg-gray-100 p-2 rounded text-gray-700 transition-colors"
-                    variant="ghost"
-                    onClick={() => setSelectedWorkstation(null)}
+              <h1 className="text-2xl font-bold mb-6">Workstations</h1>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+                {workstations.map((workstation) => (
+                  <Card 
+                    key={workstation.id} 
+                    className="hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => setSelectedWorkstation(workstation.id)}
                   >
-                    <ArrowLeft className="h-5 w-5 mr-1" />
-                    <span>Back to all workstations</span>
-                  </Button>
-                  <div className="h-[calc(100vh-180px)] overflow-auto">
-                    <WorkstationView workstation={selectedWorkstation.name} workstationId={selectedWorkstation.id} />
-                  </div>
-                </div>
-              )}
+                    <CardContent className="p-6 flex flex-col items-center text-center">
+                      <div className="bg-primary/10 p-4 rounded-full mb-4">
+                        {workstation.icon}
+                      </div>
+                      <h3 className="text-lg font-medium mb-1">{workstation.name}</h3>
+                      {workstation.description && (
+                        <p className="text-sm text-muted-foreground">{workstation.description}</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </div>
           )}
         </div>

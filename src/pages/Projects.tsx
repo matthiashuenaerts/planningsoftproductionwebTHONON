@@ -6,10 +6,11 @@ import TaskList from '@/components/TaskList';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Plus, ArrowLeft } from 'lucide-react';
 import NewProjectModal from '@/components/NewProjectModal';
 import { projectService, phaseService, taskService, Project, Phase, Task } from '@/services/dataService';
 import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
 
 const Projects: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -19,6 +20,7 @@ const Projects: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   // Function to fetch all projects
   const fetchProjects = async () => {
@@ -118,113 +120,171 @@ const Projects: React.FC = () => {
       </div>
       <div className="ml-64 w-full p-6">
         <div className="max-w-7xl mx-auto">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold">Projects</h1>
-            <Button
-              onClick={() => setIsNewProjectModalOpen(true)}
-              className="flex items-center gap-1"
-            >
-              <Plus className="h-4 w-4" /> Add Project
-            </Button>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="md:col-span-3 xl:col-span-1">
-              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-1 gap-4">
-                {projects.length > 0 ? (
-                  projects.map((project) => (
-                    <div key={project.id} onClick={() => setSelectedProject(project)} className="cursor-pointer">
-                      <ProjectCard project={project} />
-                    </div>
-                  ))
-                ) : (
-                  <div className="md:col-span-3 p-6 text-center bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                    <p className="text-muted-foreground">No projects found. Create your first project to get started.</p>
-                    <Button 
-                      variant="outline"
-                      className="mt-4"
-                      onClick={() => setIsNewProjectModalOpen(true)}
-                    >
-                      <Plus className="mr-2 h-4 w-4" /> Create Project
-                    </Button>
+          {selectedProject ? (
+            <>
+              <div className="flex justify-between items-center mb-4">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setSelectedProject(null)}
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" /> Back to All Projects
+                </Button>
+                
+                <Button 
+                  variant="outline"
+                  onClick={() => navigate(`/projects/${selectedProject.id}/orders`)}
+                >
+                  View Orders
+                </Button>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="md:col-span-3 xl:col-span-1">
+                  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-1 gap-4">
+                    {projects.length > 0 ? (
+                      projects.map((project) => (
+                        <div key={project.id} onClick={() => setSelectedProject(project)} className="cursor-pointer">
+                          <ProjectCard project={project} />
+                        </div>
+                      ))
+                    ) : (
+                      <div className="md:col-span-3 p-6 text-center bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                        <p className="text-muted-foreground">No projects found. Create your first project to get started.</p>
+                        <Button 
+                          variant="outline"
+                          className="mt-4"
+                          onClick={() => setIsNewProjectModalOpen(true)}
+                        >
+                          <Plus className="mr-2 h-4 w-4" /> Create Project
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
+                
+                <div className="md:col-span-3 xl:col-span-2">
+                  <div className="space-y-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>{selectedProject.name}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="mb-4">{selectedProject.description}</p>
+                        <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                          <div className="flex justify-between md:block">
+                            <dt className="text-muted-foreground">Client</dt>
+                            <dd>{selectedProject.client}</dd>
+                          </div>
+                          <div className="flex justify-between md:block">
+                            <dt className="text-muted-foreground">Start Date</dt>
+                            <dd>{formatDate(selectedProject.start_date)}</dd>
+                          </div>
+                          <div className="flex justify-between md:block">
+                            <dt className="text-muted-foreground">Installation Date</dt>
+                            <dd>{formatDate(selectedProject.installation_date)}</dd>
+                          </div>
+                          <div className="flex justify-between md:block">
+                            <dt className="text-muted-foreground">Progress</dt>
+                            <dd>{selectedProject.progress}% Complete</dd>
+                          </div>
+                          <div className="flex justify-between md:block">
+                            <dt className="text-muted-foreground">Status</dt>
+                            <dd>{selectedProject.status}</dd>
+                          </div>
+                        </dl>
+                      </CardContent>
+                    </Card>
+                    
+                    {/* Temporarily comment out Timeline until we update it
+                    <Timeline project={selectedProject} /> */}
+                    
+                    <Tabs defaultValue="tasks">
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="tasks">Tasks</TabsTrigger>
+                        <TabsTrigger value="phases">Phases</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="tasks" className="mt-4">
+                        <TaskList 
+                          tasks={tasks}
+                          title="Project Tasks" 
+                        />
+                      </TabsContent>
+                      <TabsContent value="phases" className="mt-4">
+                        <div className="space-y-4">
+                          {phases.map(phase => (
+                            <Card key={phase.id}>
+                              <CardHeader className="pb-2">
+                                <CardTitle className="text-base">{phase.name} ({phase.progress}%)</CardTitle>
+                                <p className="text-xs text-muted-foreground">
+                                  {formatDate(phase.start_date)} - {formatDate(phase.end_date)}
+                                </p>
+                              </CardHeader>
+                              <CardContent className="pb-2">
+                                <TaskList 
+                                  tasks={tasks.filter(t => t.phase_id === phase.id)} 
+                                  title={`${phase.name} Tasks`} 
+                                />
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      </TabsContent>
+                    </Tabs>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div>
+              <div className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-bold">Projects</h1>
+                <Button
+                  onClick={() => setIsNewProjectModalOpen(true)}
+                  className="flex items-center gap-1"
+                >
+                  <Plus className="h-4 w-4" /> Add Project
+                </Button>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="md:col-span-3 xl:col-span-1">
+                  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-1 gap-4">
+                    {projects.length > 0 ? (
+                      projects.map((project) => (
+                        <div key={project.id} onClick={() => setSelectedProject(project)} className="cursor-pointer">
+                          <ProjectCard project={project} />
+                        </div>
+                      ))
+                    ) : (
+                      <div className="md:col-span-3 p-6 text-center bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                        <p className="text-muted-foreground">No projects found. Create your first project to get started.</p>
+                        <Button 
+                          variant="outline"
+                          className="mt-4"
+                          onClick={() => setIsNewProjectModalOpen(true)}
+                        >
+                          <Plus className="mr-2 h-4 w-4" /> Create Project
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="md:col-span-3 xl:col-span-2">
+                  <div className="space-y-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Project Details</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="mb-4">No project selected.</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
               </div>
             </div>
-            
-            <div className="md:col-span-3 xl:col-span-2">
-              {selectedProject && (
-                <div className="space-y-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>{selectedProject.name}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="mb-4">{selectedProject.description}</p>
-                      <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                        <div className="flex justify-between md:block">
-                          <dt className="text-muted-foreground">Client</dt>
-                          <dd>{selectedProject.client}</dd>
-                        </div>
-                        <div className="flex justify-between md:block">
-                          <dt className="text-muted-foreground">Start Date</dt>
-                          <dd>{formatDate(selectedProject.start_date)}</dd>
-                        </div>
-                        <div className="flex justify-between md:block">
-                          <dt className="text-muted-foreground">Installation Date</dt>
-                          <dd>{formatDate(selectedProject.installation_date)}</dd>
-                        </div>
-                        <div className="flex justify-between md:block">
-                          <dt className="text-muted-foreground">Progress</dt>
-                          <dd>{selectedProject.progress}% Complete</dd>
-                        </div>
-                        <div className="flex justify-between md:block">
-                          <dt className="text-muted-foreground">Status</dt>
-                          <dd>{selectedProject.status}</dd>
-                        </div>
-                      </dl>
-                    </CardContent>
-                  </Card>
-                  
-                  {/* Temporarily comment out Timeline until we update it
-                  <Timeline project={selectedProject} /> */}
-                  
-                  <Tabs defaultValue="tasks">
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="tasks">Tasks</TabsTrigger>
-                      <TabsTrigger value="phases">Phases</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="tasks" className="mt-4">
-                      <TaskList 
-                        tasks={tasks}
-                        title="Project Tasks" 
-                      />
-                    </TabsContent>
-                    <TabsContent value="phases" className="mt-4">
-                      <div className="space-y-4">
-                        {phases.map(phase => (
-                          <Card key={phase.id}>
-                            <CardHeader className="pb-2">
-                              <CardTitle className="text-base">{phase.name} ({phase.progress}%)</CardTitle>
-                              <p className="text-xs text-muted-foreground">
-                                {formatDate(phase.start_date)} - {formatDate(phase.end_date)}
-                              </p>
-                            </CardHeader>
-                            <CardContent className="pb-2">
-                              <TaskList 
-                                tasks={tasks.filter(t => t.phase_id === phase.id)} 
-                                title={`${phase.name} Tasks`} 
-                              />
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    </TabsContent>
-                  </Tabs>
-                </div>
-              )}
-            </div>
-          </div>
+          )}
         </div>
       </div>
       
