@@ -7,6 +7,7 @@ interface Employee {
   name: string;
   role: 'admin' | 'manager' | 'worker';
   workstation?: string;
+  expires?: number;
 }
 
 interface AuthContextType {
@@ -22,23 +23,46 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
   const navigate = useNavigate();
   
-  // Check for existing session on component mount
+  // Check for existing session on component mount and check for expiration
   useEffect(() => {
-    const storedSession = localStorage.getItem('employeeSession');
-    if (storedSession) {
-      try {
-        const employeeData = JSON.parse(storedSession);
-        setCurrentEmployee(employeeData);
-      } catch (error) {
-        console.error('Failed to parse stored session:', error);
-        localStorage.removeItem('employeeSession');
+    const checkSession = () => {
+      const storedSession = localStorage.getItem('employeeSession');
+      if (storedSession) {
+        try {
+          const employeeData = JSON.parse(storedSession);
+          
+          // Check if session has expired
+          if (employeeData.expires && employeeData.expires < Date.now()) {
+            console.log('Session expired, logging out');
+            localStorage.removeItem('employeeSession');
+            setCurrentEmployee(null);
+            // Only redirect to login if not already there
+            if (window.location.pathname !== '/login') {
+              navigate('/login');
+            }
+            return;
+          }
+          
+          setCurrentEmployee(employeeData);
+        } catch (error) {
+          console.error('Failed to parse stored session:', error);
+          localStorage.removeItem('employeeSession');
+        }
       }
-    }
-  }, []);
+    };
+    
+    // Check session immediately
+    checkSession();
+    
+    // Set up interval to check session every minute
+    const intervalId = setInterval(checkSession, 60000);
+    
+    return () => clearInterval(intervalId);
+  }, [navigate]);
   
   const login = (employeeData: Employee) => {
     setCurrentEmployee(employeeData);
-    localStorage.setItem('employeeSession', JSON.stringify(employeeData));
+    // Session storage is handled in the login component
   };
   
   const logout = () => {

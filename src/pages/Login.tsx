@@ -50,12 +50,17 @@ const Login: React.FC = () => {
         throw new Error('Incorrect password');
       }
       
-      // Create a session in localStorage
+      // Calculate session expiration - end of today
+      const today = new Date();
+      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+      
+      // Create a session in localStorage with expiration
       localStorage.setItem('employeeSession', JSON.stringify({
         id: employee.id,
         name: employee.name,
         role: employee.role,
-        workstation: employee.workstation
+        workstation: employee.workstation,
+        expires: endOfDay.getTime()
       }));
       
       toast({

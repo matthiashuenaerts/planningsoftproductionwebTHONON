@@ -5,6 +5,7 @@ import TaskList from './TaskList';
 import { taskService, Task } from '@/services/dataService';
 import { useToast } from '@/hooks/use-toast';
 import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monitor, Truck, Flag } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface WorkstationViewProps {
   workstation: string;
@@ -23,7 +24,13 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstation, workstat
         
         // Fetch tasks directly using workstation ID
         const workstationTasks = await taskService.getByWorkstationId(workstationId);
-        setTasks(workstationTasks);
+        
+        // Filter out completed tasks
+        const incompleteTasks = workstationTasks.filter(
+          task => task.status !== 'COMPLETED'
+        );
+        
+        setTasks(incompleteTasks);
       } catch (error: any) {
         console.error('Error fetching workstation tasks:', error);
         toast({
@@ -40,6 +47,27 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstation, workstat
 
     fetchWorkstationTasks();
   }, [workstation, workstationId, toast]);
+
+  // Function to handle completing a task
+  const handleCompleteTask = async (taskId: string) => {
+    try {
+      await taskService.update(taskId, { status: 'COMPLETED' });
+      
+      // Update local state to remove the completed task
+      setTasks(tasks.filter(task => task.id !== taskId));
+      
+      toast({
+        title: "Task completed",
+        description: "Task has been marked as completed."
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: `Failed to complete task: ${error.message}`,
+        variant: "destructive"
+      });
+    }
+  };
 
   const getWorkstationIcon = (name: string) => {
     // Return appropriate icon based on workstation name
@@ -84,7 +112,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstation, workstat
   };
 
   return (
-    <Card>
+    <Card className="h-full">
       <CardHeader className="pb-2">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-full ${getWorkstationColor(workstation)}`}>
@@ -99,31 +127,53 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstation, workstat
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
           </div>
         ) : (
-          <TaskList 
-            tasks={tasks} 
-            title={`${workstation} Tasks`} 
-            onTaskStatusChange={async (taskId, status) => {
-              try {
-                await taskService.update(taskId, { status });
-                
-                // Update local state
-                setTasks(tasks.map(task => 
-                  task.id === taskId ? { ...task, status } : task
-                ));
-                
-                toast({
-                  title: "Task updated",
-                  description: "Task status has been successfully updated."
-                });
-              } catch (error: any) {
-                toast({
-                  title: "Error",
-                  description: `Failed to update task: ${error.message}`,
-                  variant: "destructive"
-                });
-              }
-            }}
-          />
+          <>
+            {tasks.length === 0 ? (
+              <div className="text-center p-8">
+                <Check className="mx-auto h-12 w-12 text-green-500 mb-4" />
+                <h3 className="text-lg font-medium mb-2">All caught up!</h3>
+                <p className="text-muted-foreground">No pending tasks for this workstation.</p>
+              </div>
+            ) : (
+              <div className="space-y-4 mt-2">
+                {tasks.map((task) => (
+                  <Card key={task.id} className="overflow-hidden">
+                    <div className="border-l-4 border-l-blue-500 p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <h4 className="font-medium text-lg">{task.title}</h4>
+                        <div className="flex items-center gap-2">
+                          <div className={`px-2 py-1 rounded text-xs font-medium ${
+                            task.priority === 'High' || task.priority === 'Urgent' 
+                              ? 'bg-red-100 text-red-800' 
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {task.priority}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {task.description && (
+                        <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
+                      )}
+                      
+                      <div className="flex justify-between items-center mt-4">
+                        <div className="text-sm text-muted-foreground">
+                          Due: {new Date(task.due_date).toLocaleDateString()}
+                        </div>
+                        <Button 
+                          onClick={() => handleCompleteTask(task.id)}
+                          className="bg-green-500 hover:bg-green-600"
+                          size="sm"
+                        >
+                          <Check className="mr-1 h-4 w-4" /> Complete Task
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>

@@ -5,7 +5,8 @@ import WorkstationView from '@/components/WorkstationView';
 import { useAppContext } from '@/context/AppContext';
 import { workstationService, Workstation } from '@/services/workstationService';
 import { useToast } from '@/hooks/use-toast';
-import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monitor, Truck, Flag } from 'lucide-react';
+import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monitor, Truck, Flag, ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const Workstations: React.FC = () => {
   const { setViewingWorkstation } = useAppContext();
@@ -85,10 +86,10 @@ const Workstations: React.FC = () => {
 
   return (
     <div className="flex min-h-screen">
-      <div className="w-64 bg-sidebar fixed top-0 bottom-0">
+      <div className="w-64 bg-sidebar fixed top-0 bottom-0 z-10">
         <Navbar />
       </div>
-      <div className="ml-64 w-full p-6">
+      <div className="ml-64 w-full p-4 md:p-6">
         <div className="max-w-7xl mx-auto">
           <h1 className="text-2xl font-bold mb-6">Workstations</h1>
           
@@ -101,32 +102,35 @@ const Workstations: React.FC = () => {
           ) : (
             <div>
               {!selectedWorkstation ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {workstations.map((workstation) => (
                     <button 
                       key={workstation.id} 
-                      className="flex flex-col items-center justify-center p-6 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors text-white cursor-pointer"
+                      className="flex flex-col items-center justify-center p-4 md:p-6 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors text-white cursor-pointer h-32 md:h-40"
                       onClick={() => handleWorkstationClick(workstation)}
                     >
-                      <div className="bg-gray-600 p-6 rounded-full mb-3">
+                      <div className="bg-gray-600 p-4 rounded-full mb-3">
                         {getWorkstationIcon(workstation.name)}
                       </div>
-                      <span className="text-center font-medium text-white">{workstation.name}</span>
+                      <span className="text-center font-medium text-white text-sm md:text-base line-clamp-2">
+                        {workstation.name}
+                      </span>
                     </button>
                   ))}
                 </div>
               ) : (
                 <div>
-                  <button 
-                    className="mb-4 flex items-center text-blue-500 hover:text-blue-700 transition-colors"
+                  <Button 
+                    className="mb-4 flex items-center hover:bg-gray-100 p-2 rounded text-gray-700 transition-colors"
+                    variant="ghost"
                     onClick={() => setSelectedWorkstation(null)}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
-                    </svg>
-                    Back to all workstations
-                  </button>
-                  <WorkstationView workstation={selectedWorkstation.name} workstationId={selectedWorkstation.id} />
+                    <ArrowLeft className="h-5 w-5 mr-1" />
+                    <span>Back to all workstations</span>
+                  </Button>
+                  <div className="h-[calc(100vh-180px)] overflow-auto">
+                    <WorkstationView workstation={selectedWorkstation.name} workstationId={selectedWorkstation.id} />
+                  </div>
                 </div>
               )}
             </div>
