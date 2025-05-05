@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Calendar, LogOut, LayoutDashboard, List, Settings as SettingsIcon } from 'lucide-react';
+import { Calendar, LogOut, LayoutDashboard, List, Settings as SettingsIcon, Package } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const Navbar: React.FC = () => {
@@ -26,7 +26,7 @@ const Navbar: React.FC = () => {
           to="/projects" 
           icon={<List className="w-5 h-5" />} 
           title="Projects" 
-          active={location.pathname === '/projects'} 
+          active={location.pathname === '/projects' || location.pathname.includes('/projects/')} 
         />
         <NavItem 
           to="/workstations" 
