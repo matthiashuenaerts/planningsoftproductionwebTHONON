@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import TaskList from './TaskList';
 import { taskService, Task } from '@/services/dataService';
 import { useToast } from '@/hooks/use-toast';
+import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monitor, Truck, Flag } from 'lucide-react';
 
 interface WorkstationViewProps {
   workstation: string;
@@ -40,6 +41,30 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstation, workstat
     fetchWorkstationTasks();
   }, [workstation, workstationId, toast]);
 
+  const getWorkstationIcon = (name: string) => {
+    // Return appropriate icon based on workstation name
+    const lowerCaseName = name.toLowerCase();
+    if (lowerCaseName.includes('productievoor')) return <Package size={24} />;
+    if (lowerCaseName.includes('productiestur')) return <LayoutGrid size={24} />;
+    if (lowerCaseName.includes('stock') || lowerCaseName.includes('logistiek')) return <Warehouse size={24} />;
+    if (lowerCaseName.includes('opdeelzaag 1')) return <Wrench size={24} />;
+    if (lowerCaseName.includes('opdeelzaag 2')) return <Scissors size={24} />;
+    if (lowerCaseName.includes('afplakken')) return <Layers size={24} />;
+    if (lowerCaseName.includes('cnc')) return <Wrench size={24} />;
+    if (lowerCaseName.includes('controle/opkuis')) return <Check size={24} />;
+    if (lowerCaseName.includes('montage')) return <Layers size={24} />;
+    if (lowerCaseName.includes('afwerking')) return <Wrench size={24} />;
+    if (lowerCaseName.includes('controle e+s')) return <Monitor size={24} />;
+    if (lowerCaseName.includes('eindcontrole')) return <Check size={24} />;
+    if (lowerCaseName.includes('bufferzone')) return <Warehouse size={24} />;
+    if (lowerCaseName.includes('laden') || lowerCaseName.includes('vrachtwagen')) return <Truck size={24} />;
+    if (lowerCaseName.includes('plaatsen')) return <Package size={24} />;
+    if (lowerCaseName.includes('afsluiten')) return <Flag size={24} />;
+    
+    // Default icon
+    return <Wrench size={24} />;
+  };
+
   const getWorkstationColor = (name: string): string => {
     // Create a consistent color mapping based on the workstation name
     const colorClasses = [
@@ -62,8 +87,10 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstation, workstat
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center gap-3">
-          <div className={`w-3 h-3 rounded-full ${getWorkstationColor(workstation)}`}></div>
-          <CardTitle>{workstation} Workstation</CardTitle>
+          <div className={`p-2 rounded-full ${getWorkstationColor(workstation)}`}>
+            {getWorkstationIcon(workstation)}
+          </div>
+          <CardTitle>{workstation}</CardTitle>
         </div>
       </CardHeader>
       <CardContent>
