@@ -95,7 +95,7 @@ const DroppableCell = ({ employeeId, timeSlot, onDrop, children, handleCellClick
   return (
     <td 
       ref={drop}
-      className={`p-2 text-sm text-gray-500 border-l hover:bg-gray-50 cursor-pointer ${isOver ? 'bg-blue-50' : ''}`}
+      className={`p-2 text-sm text-gray-500 border-t hover:bg-gray-50 cursor-pointer ${isOver ? 'bg-blue-50' : ''}`}
       onClick={() => handleCellClick(employeeId, timeSlot)}
     >
       {children}
@@ -106,6 +106,7 @@ const DroppableCell = ({ employeeId, timeSlot, onDrop, children, handleCellClick
 const PlanningTimeline: React.FC<PlanningTimelineProps> = ({ selectedDate, employees, isAdmin }) => {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
@@ -118,10 +119,23 @@ const PlanningTimeline: React.FC<PlanningTimelineProps> = ({ selectedDate, emplo
     const fetchSchedules = async () => {
       try {
         setIsLoading(true);
-        const schedulesData = await planningService.getSchedulesByDate(selectedDate);
+        setIsError(false);
+        
+        // Make sure the date is properly formatted
+        const formattedDate = new Date(selectedDate);
+        
+        // Add a console log to debug
+        console.log("Fetching schedules for date:", formattedDate);
+        
+        const schedulesData = await planningService.getSchedulesByDate(formattedDate);
+        
+        // Add a console log to see what was returned
+        console.log("Schedules fetched:", schedulesData);
+        
         setSchedules(schedulesData);
       } catch (error) {
         console.error('Error fetching schedules:', error);
+        setIsError(true);
         toast({
           title: "Error",
           description: "Failed to load schedule data",
@@ -213,6 +227,37 @@ const PlanningTimeline: React.FC<PlanningTimelineProps> = ({ selectedDate, emplo
     );
   }
 
+  if (isError) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="bg-red-500 text-white p-4 rounded-lg max-w-md text-center">
+          <h3 className="text-lg font-bold">Error</h3>
+          <p>Failed to load schedule data</p>
+          <Button 
+            variant="outline"
+            className="mt-4 bg-white text-red-500 hover:bg-gray-100" 
+            onClick={() => {
+              setIsError(false);
+              setIsLoading(true);
+              planningService.getSchedulesByDate(selectedDate)
+                .then(data => {
+                  setSchedules(data);
+                  setIsLoading(false);
+                })
+                .catch(err => {
+                  console.error(err);
+                  setIsError(true);
+                  setIsLoading(false);
+                });
+            }}
+          >
+            Try Again
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   // Group schedules by employee
   const schedulesByEmployee = employees.reduce((acc, employee) => {
     acc[employee.id] = schedules.filter(schedule => schedule.employee_id === employee.id);
@@ -223,38 +268,38 @@ const PlanningTimeline: React.FC<PlanningTimelineProps> = ({ selectedDate, emplo
     <div className="mt-6">
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <div className="overflow-y-auto max-h-[70vh]">
             <div className="inline-block min-w-full align-middle">
               <div className="overflow-hidden">
                 <DndProvider backend={HTML5Backend}>
-                  <table className="min-w-full divide-y divide-gray-200 table-fixed">
+                  <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="w-40 p-4 text-left text-sm font-medium text-gray-500">
-                          Employee
+                        <th className="p-4 text-left text-sm font-medium text-gray-500 w-40">
+                          Time / Employee
                         </th>
-                        {timeSlots.map((slot) => (
+                        {employees.map((employee) => (
                           <th
-                            key={slot.time}
+                            key={employee.id}
                             className="p-4 text-left text-sm font-medium text-gray-500 border-l"
-                            style={{ minWidth: '120px' }}
+                            style={{ minWidth: '140px' }}
                           >
-                            {slot.label}
+                            {employee.name}
+                            <div className="text-xs text-gray-500">
+                              {employee.workstation || 'No workstation'}
+                            </div>
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 bg-white">
-                      {employees.map(employee => (
-                        <tr key={employee.id}>
+                      {timeSlots.map(slot => (
+                        <tr key={slot.time}>
                           <td className="p-4 text-sm font-medium text-gray-900">
-                            {employee.name}
-                            <div className="text-xs text-gray-500">
-                              {employee.workstation || 'No workstation'}
-                            </div>
+                            {slot.label}
                           </td>
                           
-                          {timeSlots.map(slot => {
+                          {employees.map(employee => {
                             const employeeSchedules = schedulesByEmployee[employee.id] || [];
                             const schedulesInSlot = employeeSchedules.filter(schedule => {
                               const slotTime = parse(slot.time, 'HH:mm', new Date());
