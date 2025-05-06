@@ -9,6 +9,8 @@ import NewTaskModal from './NewTaskModal';
 import { planningService } from '@/services/planningService';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
+import { AlertCircle, Loader2 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface PlanningTimelineProps {
   selectedDate: Date;
@@ -95,7 +97,7 @@ const DroppableCell = ({ employeeId, timeSlot, onDrop, children, handleCellClick
   return (
     <td 
       ref={drop}
-      className={`p-2 text-sm text-gray-500 border-t hover:bg-gray-50 cursor-pointer ${isOver ? 'bg-blue-50' : ''}`}
+      className={`p-2 text-sm text-gray-500 border-l hover:bg-gray-50 cursor-pointer ${isOver ? 'bg-blue-50' : ''}`}
       onClick={() => handleCellClick(employeeId, timeSlot)}
     >
       {children}
@@ -107,6 +109,7 @@ const PlanningTimeline: React.FC<PlanningTimelineProps> = ({ selectedDate, emplo
   const [schedules, setSchedules] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
@@ -120,6 +123,7 @@ const PlanningTimeline: React.FC<PlanningTimelineProps> = ({ selectedDate, emplo
       try {
         setIsLoading(true);
         setIsError(false);
+        setErrorMessage("");
         
         // Make sure the date is properly formatted
         const formattedDate = new Date(selectedDate);
@@ -133,9 +137,10 @@ const PlanningTimeline: React.FC<PlanningTimelineProps> = ({ selectedDate, emplo
         console.log("Schedules fetched:", schedulesData);
         
         setSchedules(schedulesData);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching schedules:', error);
         setIsError(true);
+        setErrorMessage(error.message || "Failed to load schedule data");
         toast({
           title: "Error",
           description: "Failed to load schedule data",
@@ -219,10 +224,29 @@ const PlanningTimeline: React.FC<PlanningTimelineProps> = ({ selectedDate, emplo
     }
   };
 
+  const handleRetry = () => {
+    setIsError(false);
+    setIsLoading(true);
+    planningService.getSchedulesByDate(selectedDate)
+      .then(data => {
+        setSchedules(data);
+        setIsLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setIsError(true);
+        setErrorMessage(err.message || "Failed to load schedule data");
+        setIsLoading(false);
+      });
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+        <div className="flex flex-col items-center">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mb-2" />
+          <span className="text-gray-500">Loading schedule...</span>
+        </div>
       </div>
     );
   }
@@ -230,30 +254,20 @@ const PlanningTimeline: React.FC<PlanningTimelineProps> = ({ selectedDate, emplo
   if (isError) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="bg-red-500 text-white p-4 rounded-lg max-w-md text-center">
-          <h3 className="text-lg font-bold">Error</h3>
-          <p>Failed to load schedule data</p>
+        <Alert variant="destructive" className="max-w-md">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
+            {errorMessage || "Failed to load schedule data"}
+          </AlertDescription>
           <Button 
             variant="outline"
             className="mt-4 bg-white text-red-500 hover:bg-gray-100" 
-            onClick={() => {
-              setIsError(false);
-              setIsLoading(true);
-              planningService.getSchedulesByDate(selectedDate)
-                .then(data => {
-                  setSchedules(data);
-                  setIsLoading(false);
-                })
-                .catch(err => {
-                  console.error(err);
-                  setIsError(true);
-                  setIsLoading(false);
-                });
-            }}
+            onClick={handleRetry}
           >
             Try Again
           </Button>
-        </div>
+        </Alert>
       </div>
     );
   }
@@ -267,77 +281,90 @@ const PlanningTimeline: React.FC<PlanningTimelineProps> = ({ selectedDate, emplo
   return (
     <div className="mt-6">
       <Card>
-        <CardContent className="p-0">
-          <div className="overflow-y-auto max-h-[70vh]">
-            <div className="inline-block min-w-full align-middle">
-              <div className="overflow-hidden">
-                <DndProvider backend={HTML5Backend}>
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="p-4 text-left text-sm font-medium text-gray-500 w-40">
-                          Time / Employee
-                        </th>
-                        {employees.map((employee) => (
-                          <th
-                            key={employee.id}
-                            className="p-4 text-left text-sm font-medium text-gray-500 border-l"
-                            style={{ minWidth: '140px' }}
-                          >
-                            {employee.name}
-                            <div className="text-xs text-gray-500">
-                              {employee.workstation || 'No workstation'}
-                            </div>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 bg-white">
-                      {timeSlots.map(slot => (
-                        <tr key={slot.time}>
-                          <td className="p-4 text-sm font-medium text-gray-900">
-                            {slot.label}
-                          </td>
-                          
-                          {employees.map(employee => {
-                            const employeeSchedules = schedulesByEmployee[employee.id] || [];
-                            const schedulesInSlot = employeeSchedules.filter(schedule => {
-                              const slotTime = parse(slot.time, 'HH:mm', new Date());
-                              const nextSlotIndex = timeSlots.indexOf(slot) + 1;
-                              const nextSlotTime = nextSlotIndex < timeSlots.length 
-                                ? parse(timeSlots[nextSlotIndex].time, 'HH:mm', new Date())
-                                : addHours(slotTime, 0.5);
-                              
-                              const scheduleStart = new Date(schedule.start_time);
-                              return scheduleStart >= slotTime && scheduleStart < nextSlotTime;
-                            });
-                            
-                            return (
-                              <DroppableCell
-                                key={`${employee.id}-${slot.time}`}
-                                employeeId={employee.id}
-                                timeSlot={slot.time}
-                                onDrop={handleTaskDrop}
-                                handleCellClick={handleCellClick}
+        <CardContent className="p-0 overflow-auto">
+          <div className="p-4">
+            <DndProvider backend={HTML5Backend}>
+              <div className="flex flex-col space-y-6">
+                {WORK_PERIODS.map((period, periodIndex) => (
+                  <div key={period.label} className="border rounded-lg">
+                    <div className="bg-gray-100 p-3 font-medium border-b">
+                      {period.label}: {format(parse(period.start, 'HH:mm', new Date()), 'h:mm a')} - 
+                      {format(parse(period.end, 'HH:mm', new Date()), 'h:mm a')}
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            {employees.map((employee) => (
+                              <th
+                                key={employee.id}
+                                className="p-4 text-left text-sm font-medium text-gray-500 border-r last:border-r-0"
+                                style={{ minWidth: '180px' }}
                               >
-                                {schedulesInSlot.map(schedule => (
-                                  <DraggableTask
-                                    key={schedule.id}
-                                    schedule={schedule}
-                                    isAdmin={isAdmin}
-                                    onDrop={handleTaskDrop}
-                                  />
-                                ))}
-                              </DroppableCell>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </DndProvider>
+                                {employee.name}
+                                <div className="text-xs text-gray-500">
+                                  {employee.workstation || 'No workstation'}
+                                </div>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 bg-white">
+                          {/* Generate rows for each time slot in this period */}
+                          {timeSlots
+                            .filter(slot => {
+                              const slotTime = parse(slot.time, 'HH:mm', new Date());
+                              const periodStart = parse(period.start, 'HH:mm', new Date());
+                              const periodEnd = parse(period.end, 'HH:mm', new Date());
+                              return slotTime >= periodStart && slotTime < periodEnd;
+                            })
+                            .map(slot => (
+                              <tr key={slot.time} className="hover:bg-gray-50">
+                                {employees.map(employee => {
+                                  const employeeSchedules = schedulesByEmployee[employee.id] || [];
+                                  const schedulesInSlot = employeeSchedules.filter(schedule => {
+                                    const slotTime = parse(slot.time, 'HH:mm', selectedDate);
+                                    const slotEndTime = addHours(slotTime, 0.5);
+                                    const scheduleStart = new Date(schedule.start_time);
+                                    
+                                    return scheduleStart >= slotTime && scheduleStart < slotEndTime;
+                                  });
+                                  
+                                  return (
+                                    <DroppableCell
+                                      key={`${employee.id}-${slot.time}`}
+                                      employeeId={employee.id}
+                                      timeSlot={slot.time}
+                                      onDrop={handleTaskDrop}
+                                      handleCellClick={handleCellClick}
+                                    >
+                                      <div className="p-1 flex items-center">
+                                        <div className="text-xs text-gray-500 w-16 flex-shrink-0">
+                                          {slot.label}
+                                        </div>
+                                        <div className="flex-grow">
+                                          {schedulesInSlot.map(schedule => (
+                                            <DraggableTask
+                                              key={schedule.id}
+                                              schedule={schedule}
+                                              isAdmin={isAdmin}
+                                              onDrop={handleTaskDrop}
+                                            />
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </DroppableCell>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
+            </DndProvider>
           </div>
         </CardContent>
       </Card>

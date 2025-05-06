@@ -10,18 +10,20 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Navbar from '@/components/Navbar';
 import PlanningTimeline from '@/components/PlanningTimeline';
 import PlanningControls from '@/components/PlanningControls';
 import { employeeService } from '@/services/dataService';
 import { planningService } from '@/services/planningService';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 const Planning = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [employees, setEmployees] = useState<any[]>([]);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const { currentEmployee } = useAuth();
   const { toast } = useToast();
   const isAdmin = currentEmployee?.role === 'admin';
@@ -56,6 +58,7 @@ const Planning = () => {
 
     try {
       setIsGeneratingPlan(true);
+      setGenerationError(null);
       
       // Generate a plan based on open tasks and employee availability
       await planningService.generateDailyPlan(selectedDate);
@@ -65,6 +68,8 @@ const Planning = () => {
         description: "Daily plan has been generated",
       });
     } catch (error: any) {
+      console.error("Generate plan error:", error);
+      setGenerationError(error.message || "Failed to generate plan");
       toast({
         title: "Error",
         description: `Failed to generate plan: ${error.message}`,
@@ -123,6 +128,14 @@ const Planning = () => {
               )}
             </div>
           </div>
+
+          {generationError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{generationError}</AlertDescription>
+            </Alert>
+          )}
 
           <PlanningTimeline 
             selectedDate={selectedDate}

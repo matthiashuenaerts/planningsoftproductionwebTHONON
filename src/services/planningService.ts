@@ -43,9 +43,7 @@ export const planningService = {
     console.log('Fetching schedules between:', startOfDay, 'and', endOfDay);
     
     try {
-      // Using any to bypass TypeScript's strict typing since the schedules table 
-      // is not yet recognized in the auto-generated types
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('schedules')
         .select(`
           *,
@@ -82,7 +80,7 @@ export const planningService = {
     const endOfDay = `${dateStr}T23:59:59`;
     
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('schedules')
         .select(`
           *,
@@ -110,8 +108,7 @@ export const planningService = {
   // Create a new schedule
   async createSchedule(schedule: CreateScheduleInput): Promise<Schedule> {
     try {
-      // Using any to bypass TypeScript's strict typing
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('schedules')
         .insert([schedule])
         .select()
@@ -132,8 +129,7 @@ export const planningService = {
   // Update a schedule
   async updateSchedule(id: string, schedule: Partial<Schedule>): Promise<Schedule> {
     try {
-      // Using any to bypass TypeScript's strict typing
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('schedules')
         .update(schedule)
         .eq('id', id)
@@ -155,7 +151,7 @@ export const planningService = {
   // Delete a schedule
   async deleteSchedule(id: string): Promise<void> {
     try {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('schedules')
         .delete()
         .eq('id', id);
@@ -244,7 +240,7 @@ export const planningService = {
       }
       
       // Delete any existing auto-generated schedules for this date
-      const { error: deleteError } = await (supabase as any)
+      const { error: deleteError } = await supabase
         .from('schedules')
         .delete()
         .gte('start_time', `${dateStr}T00:00:00`)
@@ -336,9 +332,9 @@ export const planningService = {
       
       console.log('Schedules to insert:', schedulesToInsert.length);
       
-      // Insert the generated schedules
+      // Insert the generated schedules in batches if needed
       if (schedulesToInsert.length > 0) {
-        const { error: insertError } = await (supabase as any)
+        const { error: insertError } = await supabase
           .from('schedules')
           .insert(schedulesToInsert);
         
@@ -347,9 +343,9 @@ export const planningService = {
           throw insertError;
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in generateDailyPlan:', error);
-      throw error;
+      throw new Error(`Failed to generate plan: ${error.message || 'Unknown error'}`);
     }
   },
   
