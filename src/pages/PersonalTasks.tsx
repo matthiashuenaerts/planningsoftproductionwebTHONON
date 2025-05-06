@@ -60,11 +60,17 @@ const PersonalTasks = () => {
             }
             
             // Filter for tasks assigned to the current employee or unassigned
-            const relevantTasks = tasksData.filter(task => 
-              !task.assignee_id || task.assignee_id === currentEmployee.id
-            );
+            const relevantTasks = tasksData
+              .filter(task => 
+                !task.assignee_id || task.assignee_id === currentEmployee.id
+              )
+              .map(task => ({
+                ...task,
+                // Ensure status is properly typed as our Task interface expects
+                status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED"
+              }));
             
-            setTasks(relevantTasks);
+            setTasks(relevantTasks as Task[]);
           }
         } else {
           // If workstation is directly assigned
@@ -79,11 +85,17 @@ const PersonalTasks = () => {
           }
           
           // Filter for tasks assigned to the current employee or unassigned
-          const relevantTasks = tasksData.filter(task => 
-            !task.assignee_id || task.assignee_id === currentEmployee.id
-          );
+          const relevantTasks = tasksData
+            .filter(task => 
+              !task.assignee_id || task.assignee_id === currentEmployee.id
+            )
+            .map(task => ({
+              ...task,
+              // Ensure status is properly typed as our Task interface expects
+              status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED"
+            }));
           
-          setTasks(relevantTasks);
+          setTasks(relevantTasks as Task[]);
         }
       } catch (error: any) {
         console.error('Error fetching personal tasks:', error);
