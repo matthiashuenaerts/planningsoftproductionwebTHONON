@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -6,6 +5,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +30,7 @@ interface NewTaskModalProps {
   timeSlot: string | null;
   date: Date;
   onTaskAdded: () => void;
+  editingSchedule?: any;
 }
 
 const NewTaskModal: React.FC<NewTaskModalProps> = ({
@@ -38,7 +39,8 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
   employee,
   timeSlot,
   date,
-  onTaskAdded
+  onTaskAdded,
+  editingSchedule
 }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -53,12 +55,47 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
   const { toast } = useToast();
 
   useEffect(() => {
-    if (timeSlot) {
+    // If we have an existing schedule to edit, populate the form with its data
+    if (editingSchedule) {
+      setTitle(editingSchedule.title || '');
+      setDescription(editingSchedule.description || '');
+      
+      const startDate = new Date(editingSchedule.start_time);
+      const endDate = new Date(editingSchedule.end_time);
+      
+      setStartTime(format(startDate, 'HH:mm'));
+      setEndTime(format(endDate, 'HH:mm'));
+      
+      // Calculate duration in hours
+      const durationMs = endDate.getTime() - startDate.getTime();
+      const durationHours = (durationMs / (1000 * 60 * 60)).toFixed(1);
+      setDuration(durationHours);
+      
+      // Set task or phase if available
+      if (editingSchedule.task_id) {
+        setSelectedTask(editingSchedule.task_id);
+        setSelectedPhase('');
+      } else if (editingSchedule.phase_id) {
+        setSelectedPhase(editingSchedule.phase_id);
+        setSelectedTask('');
+      } else {
+        setSelectedTask('');
+        setSelectedPhase('');
+      }
+    } else if (timeSlot) {
+      // If it's a new task with a timeSlot, set the start and end times
       const parsedTime = parse(timeSlot, 'HH:mm', new Date());
       setStartTime(format(parsedTime, 'HH:mm'));
       setEndTime(format(addHours(parsedTime, 1), 'HH:mm'));
+      setDuration('1');
+      
+      // Clear fields for new task
+      setTitle('');
+      setDescription('');
+      setSelectedTask('');
+      setSelectedPhase('');
     }
-  }, [timeSlot]);
+  }, [timeSlot, editingSchedule]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -97,6 +134,12 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
   const handleSelectTask = (taskId: string) => {
     setSelectedTask(taskId);
     setSelectedPhase(''); // Clear phase selection when task is selected
+    
+    if (taskId === 'none') {
+      // Do not change title and description if "none" is selected
+      return;
+    }
+    
     const task = availableTasks.find(t => t.id === taskId);
     if (task) {
       setTitle(task.title);
@@ -107,6 +150,12 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
   const handleSelectPhase = (phaseId: string) => {
     setSelectedPhase(phaseId);
     setSelectedTask(''); // Clear task selection when phase is selected
+    
+    if (phaseId === 'none') {
+      // Do not change title and description if "none" is selected
+      return;
+    }
+    
     const phase = availablePhases.find(p => p.id === phaseId);
     if (phase) {
       setTitle(`Phase: ${phase.name}`);
@@ -135,17 +184,26 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
       const endDateTime = new Date(date);
       const [endHours, endMinutes] = endTime.split(':').map(Number);
       endDateTime.setHours(endHours, endMinutes);
-      
-      await planningService.createSchedule({
+
+      // Data to save/update
+      const scheduleData = {
         employee_id: employee.id,
-        task_id: selectedTask || undefined,
-        phase_id: selectedPhase || undefined,
+        task_id: selectedTask && selectedTask !== 'none' ? selectedTask : undefined,
+        phase_id: selectedPhase && selectedPhase !== 'none' ? selectedPhase : undefined,
         title,
         description,
         start_time: startDateTime.toISOString(),
         end_time: endDateTime.toISOString(),
         is_auto_generated: false
-      });
+      };
+      
+      // If editing existing schedule, update it
+      if (editingSchedule) {
+        await planningService.updateSchedule(editingSchedule.id, scheduleData);
+      } else {
+        // Otherwise create a new one
+        await planningService.createSchedule(scheduleData);
+      }
       
       onTaskAdded();
       onClose();
@@ -171,7 +229,14 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Schedule Task for {employee?.name}</DialogTitle>
+          <DialogTitle>
+            {editingSchedule ? 'Edit Task' : 'Schedule Task'} for {employee?.name}
+          </DialogTitle>
+          <DialogDescription>
+            {editingSchedule 
+              ? 'Update the details for this scheduled task.' 
+              : 'Add a new task to the schedule.'}
+          </DialogDescription>
         </DialogHeader>
         
         <div className="grid gap-4 py-4">
@@ -184,6 +249,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
                 <Select
                   value={selectedTask}
                   onValueChange={handleSelectTask}
+                  disabled={!!selectedPhase && selectedPhase !== 'none'}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select a task" />
@@ -210,7 +276,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
                 <Select
                   value={selectedPhase}
                   onValueChange={handleSelectPhase}
-                  disabled={!!selectedTask}
+                  disabled={!!selectedTask && selectedTask !== 'none'}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select a phase" />
@@ -310,7 +376,10 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
             onClick={handleSubmit} 
             disabled={!title || !startTime || !endTime || isLoading}
           >
-            {isLoading ? 'Scheduling...' : 'Schedule Task'}
+            {isLoading 
+              ? (editingSchedule ? 'Updating...' : 'Scheduling...') 
+              : (editingSchedule ? 'Update Task' : 'Schedule Task')
+            }
           </Button>
         </DialogFooter>
       </DialogContent>

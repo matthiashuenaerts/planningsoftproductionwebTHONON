@@ -59,7 +59,7 @@ const generateTimeSlots = () => {
 const HOURS = generateTimeSlots();
 
 // Define DraggableTask component
-const DraggableTask = ({ schedule, isAdmin, onDrop }) => {
+const DraggableTask = ({ schedule, isAdmin, onDrop, onTaskUpdated }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: 'TASK',
     item: { id: schedule.id, employeeId: schedule.employee_id } as DragItem,
@@ -79,6 +79,7 @@ const DraggableTask = ({ schedule, isAdmin, onDrop }) => {
         schedule={schedule}
         isAdmin={isAdmin}
         isDraggable={isAdmin}
+        onTaskUpdated={onTaskUpdated}
       />
     </div>
   );
@@ -113,6 +114,7 @@ const PlanningTimeline: React.FC<PlanningTimelineProps> = ({ selectedDate, emplo
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
+  const [editingSchedule, setEditingSchedule] = useState<any>(null);
   const { toast } = useToast();
 
   // Generate time slots for the timeline
@@ -154,11 +156,37 @@ const PlanningTimeline: React.FC<PlanningTimelineProps> = ({ selectedDate, emplo
     fetchSchedules();
   }, [selectedDate, toast]);
 
+  // Add event listener for task editing
+  useEffect(() => {
+    const handleEditTask = (event: CustomEvent) => {
+      if (event.detail) {
+        setEditingSchedule(event.detail);
+        // Find the employee for this schedule
+        const employeeForTask = employees.find(emp => emp.id === event.detail.employee_id);
+        setSelectedEmployee(employeeForTask);
+        
+        // Extract the time from the start_time
+        const startTime = new Date(event.detail.start_time);
+        const formattedTime = format(startTime, 'HH:mm');
+        setSelectedTimeSlot(formattedTime);
+        
+        setIsModalOpen(true);
+      }
+    };
+
+    window.addEventListener('editTask', handleEditTask as EventListener);
+    
+    return () => {
+      window.removeEventListener('editTask', handleEditTask as EventListener);
+    };
+  }, [employees]);
+
   const handleCellClick = (employeeId: string, timeSlot: string) => {
     if (!isAdmin) return;
     
     setSelectedEmployee(employees.find(emp => emp.id === employeeId));
     setSelectedTimeSlot(timeSlot);
+    setEditingSchedule(null); // Clear any editing schedule
     setIsModalOpen(true);
   };
 
@@ -179,6 +207,11 @@ const PlanningTimeline: React.FC<PlanningTimelineProps> = ({ selectedDate, emplo
           variant: "destructive"
         });
       });
+  };
+
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    setEditingSchedule(null);
   };
 
   const handleTaskDrop = async (taskId: string, newEmployeeId: string, newTimeSlot: string) => {
@@ -349,6 +382,7 @@ const PlanningTimeline: React.FC<PlanningTimelineProps> = ({ selectedDate, emplo
                                               schedule={schedule}
                                               isAdmin={isAdmin}
                                               onDrop={handleTaskDrop}
+                                              onTaskUpdated={handleTaskAdded}
                                             />
                                           ))}
                                         </div>
@@ -372,11 +406,12 @@ const PlanningTimeline: React.FC<PlanningTimelineProps> = ({ selectedDate, emplo
       {isAdmin && (
         <NewTaskModal
           isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
+          onClose={handleModalClose}
           employee={selectedEmployee}
           timeSlot={selectedTimeSlot}
           date={selectedDate}
           onTaskAdded={handleTaskAdded}
+          editingSchedule={editingSchedule}
         />
       )}
     </div>
