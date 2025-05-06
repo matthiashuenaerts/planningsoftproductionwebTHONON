@@ -286,6 +286,7 @@ export type Database = {
           end_time: string
           id: string
           is_auto_generated: boolean
+          phase_id: string | null
           start_time: string
           task_id: string | null
           title: string
@@ -298,6 +299,7 @@ export type Database = {
           end_time: string
           id?: string
           is_auto_generated?: boolean
+          phase_id?: string | null
           start_time: string
           task_id?: string | null
           title: string
@@ -310,6 +312,7 @@ export type Database = {
           end_time?: string
           id?: string
           is_auto_generated?: boolean
+          phase_id?: string | null
           start_time?: string
           task_id?: string | null
           title?: string
@@ -321,6 +324,13 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedules_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "phases"
             referencedColumns: ["id"]
           },
           {

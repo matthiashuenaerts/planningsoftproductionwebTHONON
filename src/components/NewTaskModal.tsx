@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -46,7 +47,9 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
   const [duration, setDuration] = useState('1');
   const [isLoading, setIsLoading] = useState(false);
   const [availableTasks, setAvailableTasks] = useState<any[]>([]);
+  const [availablePhases, setAvailablePhases] = useState<any[]>([]);
   const [selectedTask, setSelectedTask] = useState<string>('');
+  const [selectedPhase, setSelectedPhase] = useState<string>('');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -58,7 +61,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
   }, [timeSlot]);
 
   useEffect(() => {
-    const fetchTasks = async () => {
+    const fetchData = async () => {
       if (!employee) return;
       
       try {
@@ -68,31 +71,46 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
           employee.workstation
         );
         setAvailableTasks(tasks);
+        
+        // Fetch available phases for today
+        const phases = await fetchAvailablePhasesForDate(date);
+        setAvailablePhases(phases);
       } catch (error) {
-        console.error('Error fetching available tasks:', error);
+        console.error('Error fetching planning data:', error);
       }
     };
 
     if (isOpen && employee) {
-      fetchTasks();
+      fetchData();
     }
-  }, [isOpen, employee]);
+  }, [isOpen, employee, date]);
 
   const handleDurationChange = (newDuration: string) => {
     setDuration(newDuration);
     if (startTime && newDuration) {
       const start = parse(startTime, 'HH:mm', new Date());
-      const end = addHours(start, parseInt(newDuration));
+      const end = addHours(start, parseFloat(newDuration));
       setEndTime(format(end, 'HH:mm'));
     }
   };
 
   const handleSelectTask = (taskId: string) => {
     setSelectedTask(taskId);
+    setSelectedPhase(''); // Clear phase selection when task is selected
     const task = availableTasks.find(t => t.id === taskId);
     if (task) {
       setTitle(task.title);
       setDescription(task.description || '');
+    }
+  };
+  
+  const handleSelectPhase = (phaseId: string) => {
+    setSelectedPhase(phaseId);
+    setSelectedTask(''); // Clear task selection when phase is selected
+    const phase = availablePhases.find(p => p.id === phaseId);
+    if (phase) {
+      setTitle(`Phase: ${phase.name}`);
+      setDescription(`Project: ${phase.project?.name || 'Unknown'}`);
     }
   };
 
@@ -121,6 +139,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
       await planningService.createSchedule({
         employee_id: employee.id,
         task_id: selectedTask || undefined,
+        phase_id: selectedPhase || undefined,
         title,
         description,
         start_time: startDateTime.toISOString(),
@@ -135,6 +154,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
       setTitle('');
       setDescription('');
       setSelectedTask('');
+      setSelectedPhase('');
       
     } catch (error: any) {
       toast({
@@ -169,9 +189,37 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
                     <SelectValue placeholder="Select a task" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="">None</SelectItem>
                     {availableTasks.map(task => (
                       <SelectItem key={task.id} value={task.id}>
                         {task.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          
+          {availablePhases.length > 0 && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="existingPhase" className="text-right">
+                Project Phase
+              </Label>
+              <div className="col-span-3">
+                <Select
+                  value={selectedPhase}
+                  onValueChange={handleSelectPhase}
+                  disabled={!!selectedTask}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a phase" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    {availablePhases.map(phase => (
+                      <SelectItem key={phase.id} value={phase.id}>
+                        {phase.name} ({phase.project?.name})
                       </SelectItem>
                     ))}
                   </SelectContent>
