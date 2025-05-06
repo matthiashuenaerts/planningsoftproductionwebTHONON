@@ -10,6 +10,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Projects from "./pages/Projects";
+import ProjectDetails from "./pages/ProjectDetails";
 import Workstations from "./pages/Workstations";
 import DailyTasks from "./pages/DailyTasks";
 import Planning from "./pages/Planning";
@@ -38,6 +39,11 @@ const App = () => (
               <Route path="/projects" element={
                 <ProtectedRoute>
                   <Projects />
+                </ProtectedRoute>
+              } />
+              <Route path="/projects/:projectId" element={
+                <ProtectedRoute>
+                  <ProjectDetails />
                 </ProtectedRoute>
               } />
               <Route path="/workstations" element={

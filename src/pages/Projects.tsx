@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
@@ -37,10 +38,9 @@ import {
   Clock,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import ProjectCard from '@/components/ProjectCard';
-import NewProjectModal from '@/components/NewProjectModal';
 import { projectService, Project } from '@/services/dataService';
 import { useAuth } from '@/context/AuthContext';
+import NewProjectModal from '@/components/NewProjectModal';
 
 const Projects = () => {
   const navigate = useNavigate();
