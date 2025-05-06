@@ -15,6 +15,7 @@ import DailyTasks from "./pages/DailyTasks";
 import Planning from "./pages/Planning";
 import Settings from "./pages/Settings";
 import Orders from "./pages/Orders";
+import ProjectOrders from "./pages/ProjectOrders";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -59,9 +60,14 @@ const App = () => (
                   <Settings />
                 </ProtectedRoute>
               } />
-              <Route path="/projects/:projectId/orders" element={
+              <Route path="/orders" element={
                 <ProtectedRoute>
                   <Orders />
+                </ProtectedRoute>
+              } />
+              <Route path="/projects/:projectId/orders" element={
+                <ProtectedRoute>
+                  <ProjectOrders />
                 </ProtectedRoute>
               } />
               <Route path="*" element={<NotFound />} />

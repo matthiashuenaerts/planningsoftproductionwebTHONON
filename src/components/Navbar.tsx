@@ -40,6 +40,12 @@ const Navbar: React.FC = () => {
           title="Daily Tasks" 
           active={location.pathname === '/daily-tasks'} 
         />
+        <NavItem 
+          to="/orders" 
+          icon={<Package className="w-5 h-5" />} 
+          title="Orders" 
+          active={location.pathname === '/orders' || location.pathname.includes('/orders/')} 
+        />
         {isAdmin && (
           <NavItem 
             to="/settings" 

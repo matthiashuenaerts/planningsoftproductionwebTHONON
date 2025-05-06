@@ -8,19 +8,30 @@ import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monito
 import { Button } from '@/components/ui/button';
 
 interface WorkstationViewProps {
-  workstation: string;
   workstationId: string;
+  onBack?: () => void; // Make onBack optional
 }
 
-const WorkstationView: React.FC<WorkstationViewProps> = ({ workstation, workstationId }) => {
+const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack }) => {
+  const [workstation, setWorkstation] = useState<string>("");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
-    const fetchWorkstationTasks = async () => {
+    const fetchWorkstationData = async () => {
       try {
         setLoading(true);
+        
+        // First fetch the workstation name
+        const { data: workstationData, error: workstationError } = await supabase
+          .from('workstations')
+          .select('name')
+          .eq('id', workstationId)
+          .single();
+        
+        if (workstationError) throw workstationError;
+        setWorkstation(workstationData?.name || "");
         
         // Fetch tasks directly using workstation ID
         const workstationTasks = await taskService.getByWorkstationId(workstationId);
@@ -32,10 +43,10 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstation, workstat
         
         setTasks(incompleteTasks);
       } catch (error: any) {
-        console.error('Error fetching workstation tasks:', error);
+        console.error('Error fetching workstation data:', error);
         toast({
           title: "Error",
-          description: `Failed to load ${workstation} tasks: ${error.message}`,
+          description: `Failed to load workstation tasks: ${error.message}`,
           variant: "destructive"
         });
         // Setting empty tasks to prevent UI errors
@@ -45,8 +56,8 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstation, workstat
       }
     };
 
-    fetchWorkstationTasks();
-  }, [workstation, workstationId, toast]);
+    fetchWorkstationData();
+  }, [workstationId, toast]);
 
   // Function to handle completing a task
   const handleCompleteTask = async (taskId: string) => {

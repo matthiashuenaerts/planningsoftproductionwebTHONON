@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { supabase } from "@/integrations/supabase/client";
 import Navbar from '@/components/Navbar';
 import WorkstationView from '@/components/WorkstationView';
 import { Button } from '@/components/ui/button';
