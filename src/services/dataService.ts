@@ -39,6 +39,7 @@ export interface Task {
   due_date: string;
   created_at: string;
   updated_at: string;
+  project_name?: string; // Added for WorkstationView
 }
 
 // Employee Types
@@ -47,7 +48,7 @@ export interface Employee {
   name: string;
   email: string | null;
   role: 'admin' | 'manager' | 'worker';
-  password?: string; // Add password property
+  password?: string;
   created_at: string;
 }
 
@@ -98,12 +99,133 @@ export const projectService = {
   },
   
   async delete(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('projects')
-      .delete()
-      .eq('id', id);
-    
-    if (error) throw error;
+    try {
+      // Get all phases for this project
+      const { data: phases, error: phasesError } = await supabase
+        .from('phases')
+        .select('id')
+        .eq('project_id', id);
+      
+      if (phasesError) throw phasesError;
+
+      // Delete all tasks associated with these phases
+      if (phases && phases.length > 0) {
+        const phaseIds = phases.map(phase => phase.id);
+        
+        // Delete task-workstation links first
+        const { data: tasks, error: tasksError } = await supabase
+          .from('tasks')
+          .select('id')
+          .in('phase_id', phaseIds);
+        
+        if (tasksError) throw tasksError;
+        
+        if (tasks && tasks.length > 0) {
+          const taskIds = tasks.map(task => task.id);
+          
+          // Delete task_workstation_links
+          const { error: linksError } = await supabase
+            .from('task_workstation_links')
+            .delete()
+            .in('task_id', taskIds);
+          
+          if (linksError) throw linksError;
+          
+          // Delete schedules associated with tasks
+          const { error: schedulesError } = await supabase
+            .from('schedules')
+            .delete()
+            .in('task_id', taskIds);
+          
+          if (schedulesError && schedulesError.code !== '42P01') throw schedulesError;
+          
+          // Delete tasks
+          const { error: deleteTasksError } = await supabase
+            .from('tasks')
+            .delete()
+            .in('phase_id', phaseIds);
+          
+          if (deleteTasksError) throw deleteTasksError;
+        }
+        
+        // Delete phases
+        const { error: deletePhasesError } = await supabase
+          .from('phases')
+          .delete()
+          .eq('project_id', id);
+        
+        if (deletePhasesError) throw deletePhasesError;
+      }
+      
+      // Get all orders for this project
+      const { data: orders, error: ordersError } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('project_id', id);
+      
+      if (ordersError) throw ordersError;
+      
+      // Delete all orders and their associated items and attachments
+      if (orders && orders.length > 0) {
+        for (const order of orders) {
+          // Delete order items
+          const { error: itemsError } = await supabase
+            .from('order_items')
+            .delete()
+            .eq('order_id', order.id);
+          
+          if (itemsError) throw itemsError;
+          
+          // Get all attachments for this order
+          const { data: attachments, error: attachmentsError } = await supabase
+            .from('order_attachments')
+            .select('id, file_name, order_id')
+            .eq('order_id', order.id);
+          
+          if (attachmentsError && attachmentsError.code !== '42P01') throw attachmentsError;
+          
+          // Delete all attachment files from storage
+          if (attachments && attachments.length > 0) {
+            for (const attachment of attachments) {
+              const filePath = `${attachment.order_id}/${attachment.file_name}`;
+              
+              const { error: storageError } = await supabase.storage
+                .from('order-attachments')
+                .remove([filePath]);
+              
+              if (storageError) console.error("Error removing file from storage:", storageError);
+            }
+            
+            // Delete attachment records
+            const { error: deleteAttachmentsError } = await supabase
+              .from('order_attachments')
+              .delete()
+              .eq('order_id', order.id);
+            
+            if (deleteAttachmentsError && deleteAttachmentsError.code !== '42P01') throw deleteAttachmentsError;
+          }
+        }
+        
+        // Delete orders
+        const { error: deleteOrdersError } = await supabase
+          .from('orders')
+          .delete()
+          .eq('project_id', id);
+        
+        if (deleteOrdersError) throw deleteOrdersError;
+      }
+      
+      // Finally delete the project itself
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error deleting project:", error);
+      throw error;
+    }
   }
 };
 

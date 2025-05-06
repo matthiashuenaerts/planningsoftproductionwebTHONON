@@ -4,20 +4,30 @@ import Navbar from '@/components/Navbar';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Plus, 
-  ArrowLeft, 
-  ChevronDown, 
-  ChevronUp, 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Plus,
+  ArrowLeft,
+  ChevronDown,
+  ChevronUp,
   Paperclip,
   Trash2,
   UploadCloud,
@@ -44,6 +54,7 @@ const ProjectOrders: React.FC = () => {
   const [orderAttachments, setOrderAttachments] = useState<Record<string, OrderAttachment[]>>({});
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
   const [uploadingForOrder, setUploadingForOrder] = useState<string | null>(null);
+  const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
   
   const isAdmin = currentEmployee?.role === 'admin';
   
@@ -242,6 +253,35 @@ const ProjectOrders: React.FC = () => {
       });
     }
   };
+
+  const handleDeleteOrder = async () => {
+    if (!orderToDelete) return;
+    
+    try {
+      await orderService.deleteOrder(orderToDelete);
+      
+      // Update local state
+      setOrders(prev => prev.filter(order => order.id !== orderToDelete));
+      
+      // If the deleted order was expanded, close it
+      if (expandedOrder === orderToDelete) {
+        setExpandedOrder(null);
+      }
+      
+      toast({
+        title: "Success",
+        description: "Order deleted successfully",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: `Failed to delete order: ${error.message}`,
+        variant: "destructive"
+      });
+    } finally {
+      setOrderToDelete(null);
+    }
+  };
   
   if (loading) {
     return (
@@ -336,16 +376,30 @@ const ProjectOrders: React.FC = () => {
                             </TableCell>
                             {isAdmin && (
                               <TableCell className="text-right">
-                                <select 
-                                  value={order.status}
-                                  onChange={(e) => updateOrderStatus(order.id, e.target.value as Order['status'])}
-                                  className="p-1 text-xs rounded border border-gray-300"
-                                >
-                                  <option value="pending">Pending</option>
-                                  <option value="delivered">Delivered</option>
-                                  <option value="delayed">Delayed</option>
-                                  <option value="canceled">Canceled</option>
-                                </select>
+                                <div className="flex items-center justify-end gap-2">
+                                  <select 
+                                    value={order.status}
+                                    onChange={(e) => updateOrderStatus(order.id, e.target.value as Order['status'])}
+                                    className="p-1 text-xs rounded border border-gray-300"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <option value="pending">Pending</option>
+                                    <option value="delivered">Delivered</option>
+                                    <option value="delayed">Delayed</option>
+                                    <option value="canceled">Canceled</option>
+                                  </select>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOrderToDelete(order.id);
+                                    }}
+                                    className="h-8 w-8 text-destructive hover:text-destructive/80"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </TableCell>
                             )}
                           </TableRow>
@@ -485,6 +539,25 @@ const ProjectOrders: React.FC = () => {
           onSuccess={refreshOrders}
         />
       )}
+
+      {/* Delete Order Confirmation Dialog */}
+      <AlertDialog open={!!orderToDelete} onOpenChange={(open) => !open && setOrderToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action will delete the order and all associated items and attachments.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteOrder} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

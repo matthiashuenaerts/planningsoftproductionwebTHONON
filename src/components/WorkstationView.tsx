@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import TaskList from './TaskList';
-import { taskService, Task } from '@/services/dataService';
+import { taskService, Task, projectService } from '@/services/dataService';
 import { useToast } from '@/hooks/use-toast';
 import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monitor, Truck, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -42,7 +42,41 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
           task => task.status !== 'COMPLETED'
         );
         
-        setTasks(incompleteTasks);
+        // Fetch project information for each task's phase
+        const tasksWithProjectInfo = await Promise.all(
+          incompleteTasks.map(async (task) => {
+            try {
+              // Get the phase to get the project_id
+              const { data: phaseData, error: phaseError } = await supabase
+                .from('phases')
+                .select('project_id, name')
+                .eq('id', task.phase_id)
+                .single();
+              
+              if (phaseError) throw phaseError;
+              
+              // Get the project name
+              const { data: projectData, error: projectError } = await supabase
+                .from('projects')
+                .select('name')
+                .eq('id', phaseData.project_id)
+                .single();
+              
+              if (projectError) throw projectError;
+              
+              // Append project name to task title
+              return {
+                ...task,
+                project_name: projectData.name
+              };
+            } catch (error) {
+              console.error('Error fetching project info for task:', error);
+              return task;
+            }
+          })
+        );
+        
+        setTasks(tasksWithProjectInfo);
       } catch (error: any) {
         console.error('Error fetching workstation data:', error);
         toast({
@@ -152,7 +186,9 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
                   <Card key={task.id} className="overflow-hidden">
                     <div className="border-l-4 border-l-blue-500 p-4">
                       <div className="flex justify-between items-start mb-2">
-                        <h4 className="font-medium text-lg">{task.title}</h4>
+                        <h4 className="font-medium text-lg">
+                          {task.project_name ? `${task.project_name} - ${task.title}` : task.title}
+                        </h4>
                         <div className="flex items-center gap-2">
                           <div className={`px-2 py-1 rounded text-xs font-medium ${
                             task.priority === 'High' || task.priority === 'Urgent' 

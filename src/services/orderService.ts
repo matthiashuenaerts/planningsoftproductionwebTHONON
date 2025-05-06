@@ -96,7 +96,10 @@ export const orderService = {
           upsert: true
         });
       
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("Storage upload error:", uploadError);
+        throw uploadError;
+      }
       
       // Get public URL for the file
       const { data: publicUrlData } = supabase.storage
@@ -121,6 +124,7 @@ export const orderService = {
         .single();
       
       if (attachmentError) {
+        console.error("Database attachment error:", attachmentError);
         // If table doesn't exist yet
         if (attachmentError.code === '42P01') {
           console.error("Table 'order_attachments' doesn't exist yet. Make sure you run the required SQL migrations.");
@@ -158,8 +162,6 @@ export const orderService = {
       if (fetchError) throw fetchError;
       
       // Extract the file path from the URL
-      const url = new URL(attachment.file_path);
-      const pathnameParts = url.pathname.split('/');
       const filePath = `${attachment.order_id}/${attachment.file_name}`;
       
       // Delete the file from storage
@@ -181,6 +183,37 @@ export const orderService = {
       if (deleteError) throw deleteError;
     } catch (error) {
       console.error("Error deleting attachment:", error);
+      throw error;
+    }
+  },
+
+  async deleteOrder(orderId: string): Promise<void> {
+    try {
+      // First delete all order items
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .delete()
+        .eq('order_id', orderId);
+      
+      if (itemsError) throw itemsError;
+      
+      // Get all attachments
+      const attachments = await this.getOrderAttachments(orderId);
+      
+      // Delete each attachment (this will handle both DB record and storage)
+      for (const attachment of attachments) {
+        await this.deleteOrderAttachment(attachment.id);
+      }
+      
+      // Finally delete the order itself
+      const { error: orderError } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderId);
+      
+      if (orderError) throw orderError;
+    } catch (error) {
+      console.error("Error deleting order:", error);
       throw error;
     }
   }
