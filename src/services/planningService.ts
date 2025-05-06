@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { format } from 'date-fns';
 
@@ -7,7 +6,7 @@ export interface Schedule {
   id: string;
   employee_id: string;
   task_id?: string;
-  phase_id?: string; // Add phase_id to associate schedules with project phases
+  phase_id?: string; 
   title: string;
   description?: string;
   start_time: string;
@@ -20,7 +19,7 @@ export interface Schedule {
 export interface CreateScheduleInput {
   employee_id: string;
   task_id?: string;
-  phase_id?: string; // Add phase_id to input interface
+  phase_id?: string;
   title: string;
   description?: string;
   start_time: string;
@@ -45,6 +44,29 @@ export const planningService = {
         task:tasks(id, title, description, priority, status),
         phase:phases(id, name, project_id, progress)
       `)
+      .gte('start_time', startOfDay)
+      .lte('start_time', endOfDay)
+      .order('start_time');
+    
+    if (error) throw error;
+    return (data || []) as Schedule[];
+  },
+  
+  // Get schedules for a specific employee on a specific date
+  async getSchedulesByEmployeeAndDate(employeeId: string, date: Date): Promise<Schedule[]> {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const startOfDay = `${dateStr}T00:00:00`;
+    const endOfDay = `${dateStr}T23:59:59`;
+    
+    const { data, error } = await (supabase as any)
+      .from('schedules')
+      .select(`
+        *,
+        employee:employees(id, name, role, workstation),
+        task:tasks(id, title, description, priority, status),
+        phase:phases(id, name, project_id, progress)
+      `)
+      .eq('employee_id', employeeId)
       .gte('start_time', startOfDay)
       .lte('start_time', endOfDay)
       .order('start_time');
@@ -240,5 +262,49 @@ export const planningService = {
       
       if (insertError) throw insertError;
     }
+  },
+  
+  // Get available tasks for planning
+  async getAvailableTasksForPlanning(): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select(`
+        *,
+        phase:phases(name, project:projects(name))
+      `)
+      .in('status', ['TODO', 'IN_PROGRESS'])
+      .order('priority', { ascending: false })
+      .order('due_date', { ascending: true });
+    
+    if (error) throw error;
+    return data || [];
+  },
+  
+  // Get employee workstation assignments
+  async getEmployeeWorkstations(employeeId: string): Promise<string[]> {
+    // First check if workstation is directly assigned
+    const { data: employeeData, error: employeeError } = await supabase
+      .from('employees')
+      .select('workstation')
+      .eq('id', employeeId)
+      .single();
+    
+    if (employeeError && employeeError.code !== 'PGRST116') {
+      throw employeeError;
+    }
+    
+    if (employeeData?.workstation) {
+      return [employeeData.workstation];
+    }
+    
+    // Otherwise check for workstation links
+    const { data: links, error: linksError } = await supabase
+      .from('employee_workstation_links')
+      .select('workstations(name)')
+      .eq('employee_id', employeeId);
+    
+    if (linksError) throw linksError;
+    
+    return links?.map(link => link.workstations.name) || [];
   }
 };

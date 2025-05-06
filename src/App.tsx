@@ -13,6 +13,7 @@ import Projects from "./pages/Projects";
 import ProjectDetails from "./pages/ProjectDetails";
 import Workstations from "./pages/Workstations";
 import DailyTasks from "./pages/DailyTasks";
+import PersonalTasks from "./pages/PersonalTasks";
 import Planning from "./pages/Planning";
 import Settings from "./pages/Settings";
 import Orders from "./pages/Orders";
@@ -49,6 +50,11 @@ const App = () => (
               <Route path="/workstations" element={
                 <ProtectedRoute>
                   <Workstations />
+                </ProtectedRoute>
+              } />
+              <Route path="/personal-tasks" element={
+                <ProtectedRoute>
+                  <PersonalTasks />
                 </ProtectedRoute>
               } />
               <Route path="/daily-tasks" element={

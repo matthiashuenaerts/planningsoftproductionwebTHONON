@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Calendar, LogOut, LayoutDashboard, List, Settings as SettingsIcon, Package } from 'lucide-react';
+import { Calendar, LogOut, LayoutDashboard, List, Settings as SettingsIcon, Package, CalendarClock, CalendarCheck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const Navbar: React.FC = () => {
@@ -35,10 +35,22 @@ const Navbar: React.FC = () => {
           active={location.pathname === '/workstations'} 
         />
         <NavItem 
+          to="/personal-tasks" 
+          icon={<CalendarCheck className="w-5 h-5" />} 
+          title="Personal Tasks" 
+          active={location.pathname === '/personal-tasks'} 
+        />
+        <NavItem 
           to="/daily-tasks" 
           icon={<Calendar className="w-5 h-5" />} 
           title="Daily Tasks" 
           active={location.pathname === '/daily-tasks'} 
+        />
+        <NavItem 
+          to="/planning" 
+          icon={<CalendarClock className="w-5 h-5" />} 
+          title="Day Planning" 
+          active={location.pathname === '/planning'} 
         />
         <NavItem 
           to="/orders" 
