@@ -189,7 +189,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
                     <SelectValue placeholder="Select a task" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {availableTasks.map(task => (
                       <SelectItem key={task.id} value={task.id}>
                         {task.title}
@@ -216,7 +216,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
                     <SelectValue placeholder="Select a phase" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {availablePhases.map(phase => (
                       <SelectItem key={phase.id} value={phase.id}>
                         {phase.name} ({phase.project?.name})
