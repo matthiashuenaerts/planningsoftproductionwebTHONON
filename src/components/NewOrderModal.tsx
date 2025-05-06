@@ -85,7 +85,6 @@ const NewOrderModal: React.FC<NewOrderModalProps> = ({
         order_date: new Date().toISOString(),
         expected_delivery: new Date(expectedDelivery).toISOString(),
         status: 'pending',
-        total_amount: calculateTotal()
       });
       
       // Create the order items

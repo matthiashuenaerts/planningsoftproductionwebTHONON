@@ -6,6 +6,7 @@ import { taskService, Task } from '@/services/dataService';
 import { useToast } from '@/hooks/use-toast';
 import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monitor, Truck, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { supabase } from "@/integrations/supabase/client";
 
 interface WorkstationViewProps {
   workstationId: string;

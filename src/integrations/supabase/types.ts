@@ -75,6 +75,47 @@ export type Database = {
         }
         Relationships: []
       }
+      order_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number
+          file_type: string
+          id: string
+          order_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size: number
+          file_type: string
+          id?: string
+          order_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number
+          file_type?: string
+          id?: string
+          order_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_attachments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_items: {
         Row: {
           created_at: string
@@ -125,7 +166,6 @@ export type Database = {
           project_id: string
           status: string
           supplier: string
-          total_amount: number
           updated_at: string
         }
         Insert: {
@@ -136,7 +176,6 @@ export type Database = {
           project_id: string
           status: string
           supplier: string
-          total_amount: number
           updated_at?: string
         }
         Update: {
@@ -147,7 +186,6 @@ export type Database = {
           project_id?: string
           status?: string
           supplier?: string
-          total_amount?: number
           updated_at?: string
         }
         Relationships: [
