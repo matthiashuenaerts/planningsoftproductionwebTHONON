@@ -330,8 +330,16 @@ export const taskService = {
       
       if (error) throw error;
       
+      // Check if data exists and has tasks property
+      if (!data || data.length === 0) {
+        return [];
+      }
+      
       // Extract tasks from the joined data and ensure they match the Task type
-      const tasks = data.map(item => item.tasks as Task) || [];
+      const tasks = data
+        .filter(item => item.tasks !== null) // Filter out any null tasks
+        .map(item => item.tasks as Task);
+      
       return tasks;
     } catch (error) {
       console.error('Error in getByWorkstationId:', error);

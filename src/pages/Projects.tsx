@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
@@ -117,6 +116,10 @@ const Projects = () => {
     }
   };
 
+  const handleProjectClick = (projectId: string) => {
+    navigate(`/projects/${projectId}`);
+  };
+
   return (
     <div className="flex min-h-screen">
       <div className="w-64 bg-sidebar fixed top-0 bottom-0">
@@ -160,11 +163,12 @@ const Projects = () => {
           ) : filteredProjects.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredProjects.map((project) => (
-                <Card key={project.id} className="overflow-hidden">
-                  <div 
-                    className="cursor-pointer"
-                    onClick={() => navigate(`/projects/${project.id}`)}
-                  >
+                <Card 
+                  key={project.id} 
+                  className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => handleProjectClick(project.id)}
+                >
+                  <div>
                     <CardHeader className="pb-2">
                       <div className="flex justify-between items-start">
                         <div>

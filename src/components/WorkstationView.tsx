@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import TaskList from './TaskList';
@@ -34,7 +33,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
         if (workstationError) throw workstationError;
         setWorkstation(workstationData?.name || "");
         
-        // Fetch tasks directly using workstation ID
+        // Fetch tasks for this workstation - use taskService directly
         const workstationTasks = await taskService.getByWorkstationId(workstationId);
         
         // Filter out completed tasks
@@ -64,7 +63,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
               
               if (projectError) throw projectError;
               
-              // Append project name to task title
+              // Append project name to task
               return {
                 ...task,
                 project_name: projectData.name
