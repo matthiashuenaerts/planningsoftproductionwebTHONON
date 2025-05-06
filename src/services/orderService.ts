@@ -87,7 +87,7 @@ export const orderService = {
   async uploadOrderAttachment(orderId: string, file: File): Promise<OrderAttachment> {
     try {
       // First, upload the file to Supabase Storage
-      const filePath = `order-attachments/${orderId}/${file.name}`;
+      const filePath = `${orderId}/${file.name}`;
       
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('order-attachments')
@@ -157,9 +157,12 @@ export const orderService = {
       
       if (fetchError) throw fetchError;
       
-      // Delete the file from storage
-      const filePath = attachment.file_path.split('/').slice(-2).join('/');
+      // Extract the file path from the URL
+      const url = new URL(attachment.file_path);
+      const pathnameParts = url.pathname.split('/');
+      const filePath = `${attachment.order_id}/${attachment.file_name}`;
       
+      // Delete the file from storage
       const { error: storageError } = await supabase.storage
         .from('order-attachments')
         .remove([filePath]);
