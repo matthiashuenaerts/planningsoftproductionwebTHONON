@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -124,6 +124,21 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
   );
   const [newTaskName, setNewTaskName] = useState('');
   const [newTaskWorkstation, setNewTaskWorkstation] = useState('');
+  const [workstations, setWorkstations] = useState<{id: string, name: string}[]>([]);
+  
+  // Fetch all workstations when component mounts
+  useEffect(() => {
+    const fetchWorkstations = async () => {
+      try {
+        const workstationData = await workstationService.getAll();
+        setWorkstations(workstationData.map(w => ({ id: w.id, name: w.name })));
+      } catch (error) {
+        console.error('Error fetching workstations:', error);
+      }
+    };
+    
+    fetchWorkstations();
+  }, []);
   
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -163,6 +178,24 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
     ));
   };
 
+  // Helper function to find workstation ID by name
+  const findWorkstationIdByName = (name: string): string | undefined => {
+    if (!name) return undefined;
+    
+    // Try exact match first
+    const exactMatch = workstations.find(w => 
+      w.name.toLowerCase() === name.toLowerCase()
+    );
+    if (exactMatch) return exactMatch.id;
+    
+    // Try partial match if exact match fails
+    const partialMatch = workstations.find(w => 
+      w.name.toLowerCase().includes(name.toLowerCase()) || 
+      name.toLowerCase().includes(w.name.toLowerCase())
+    );
+    return partialMatch?.id;
+  };
+
   const onSubmit = async (data: FormValues) => {
     try {
       // First create the project
@@ -194,8 +227,9 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
       const selectedTasks = tasks.filter(task => task.selected);
       const daysPerTask = Math.max(1, Math.floor(totalDays / selectedTasks.length));
       
-      // Create all tasks with proper timing
-      const taskPromises = selectedTasks.map((task, index) => {
+      // Create all tasks with proper timing and link to workstations
+      for (let index = 0; index < selectedTasks.length; index++) {
+        const task = selectedTasks[index];
         const taskStartDate = new Date(data.start_date);
         taskStartDate.setDate(data.start_date.getDate() + (index * daysPerTask));
         
@@ -203,32 +237,42 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
         const taskName = `${task.id} - ${task.name}`;
         
         // Map the workstation to one of the allowed values
-        let workstation: 'CUTTING' | 'WELDING' | 'PAINTING' | 'ASSEMBLY' | 'PACKAGING' | 'SHIPPING' = 'ASSEMBLY';
+        let workstationType: 'CUTTING' | 'WELDING' | 'PAINTING' | 'ASSEMBLY' | 'PACKAGING' | 'SHIPPING' = 'ASSEMBLY';
         
         // Simple mapping of workstations to standard categories
         if (task.workstation.includes('zaag')) {
-          workstation = 'CUTTING';
+          workstationType = 'CUTTING';
         } else if (task.workstation.includes('CNC')) {
-          workstation = 'CUTTING';
+          workstationType = 'CUTTING';
         } else if (task.workstation.includes('Pers')) {
-          workstation = 'ASSEMBLY';
+          workstationType = 'ASSEMBLY';
         } else if (task.workstation.toLowerCase().includes('productie')) {
-          workstation = 'ASSEMBLY';
+          workstationType = 'ASSEMBLY';
         }
         
-        return taskService.create({
+        // Create the task
+        const newTask = await taskService.create({
           phase_id: phase.id,
           assignee_id: null,
           title: taskName,
           description: task.workstation ? `Workstation: ${task.workstation}` : null,
-          workstation: workstation,
+          workstation: workstationType,
           status: 'TODO',
           priority: index < 5 ? 'High' : index < 15 ? 'Medium' : 'Low',
           due_date: format(taskStartDate, 'yyyy-MM-dd')
         });
-      });
-      
-      await Promise.all(taskPromises);
+        
+        // Link task to workstation if we can find a matching workstation
+        const workstationId = findWorkstationIdByName(task.workstation);
+        if (workstationId && newTask.id) {
+          try {
+            await workstationService.linkTaskToWorkstation(newTask.id, workstationId);
+            console.log(`Linked task ${newTask.id} to workstation ${workstationId}`);
+          } catch (error) {
+            console.error(`Failed to link task ${newTask.id} to workstation ${workstationId}:`, error);
+          }
+        }
+      }
       
       toast({
         title: "Success",
