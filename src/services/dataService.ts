@@ -75,6 +75,17 @@ export const projectService = {
     return data as Project;
   },
   
+  async getProjectPhases(projectId: string): Promise<Phase[]> {
+    const { data, error } = await supabase
+      .from('phases')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('start_date', { ascending: true });
+    
+    if (error) throw error;
+    return data as Phase[] || [];
+  },
+  
   async create(project: Omit<Project, 'id' | 'created_at' | 'updated_at'>): Promise<Project> {
     const { data, error } = await supabase
       .from('projects')

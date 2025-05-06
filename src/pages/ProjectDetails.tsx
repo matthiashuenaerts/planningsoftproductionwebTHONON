@@ -15,27 +15,41 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Calendar, CalendarDays, Clock, Package } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { projectService, Project } from '@/services/dataService';
+import { projectService, Project, Task, taskService } from '@/services/dataService';
+import TaskList from '@/components/TaskList';
 
 const ProjectDetails = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [project, setProject] = useState<Project | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchProject = async () => {
+    const fetchProjectData = async () => {
       if (!projectId) return;
       
       try {
         setLoading(true);
         const projectData = await projectService.getById(projectId);
         setProject(projectData);
+        
+        // Fetch phases for this project
+        const phaseData = await projectService.getProjectPhases(projectId);
+        
+        // Fetch tasks for all phases
+        let allTasks: Task[] = [];
+        for (const phase of phaseData) {
+          const phaseTasks = await taskService.getByPhase(phase.id);
+          allTasks = [...allTasks, ...phaseTasks];
+        }
+        
+        setTasks(allTasks);
       } catch (error: any) {
         toast({
           title: "Error",
-          description: `Failed to load project: ${error.message}`,
+          description: `Failed to load project data: ${error.message}`,
           variant: "destructive"
         });
       } finally {
@@ -43,8 +57,32 @@ const ProjectDetails = () => {
       }
     };
 
-    fetchProject();
+    fetchProjectData();
   }, [projectId, toast]);
+
+  const handleTaskStatusChange = async (taskId: string, status: Task['status']) => {
+    try {
+      await taskService.update(taskId, { status });
+      
+      // Update local state
+      setTasks(prevTasks => 
+        prevTasks.map(task => 
+          task.id === taskId ? { ...task, status } : task
+        )
+      );
+      
+      toast({
+        title: "Task updated",
+        description: "Task status has been updated successfully.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: `Failed to update task status: ${error.message}`,
+        variant: "destructive"
+      });
+    }
+  };
 
   if (loading) {
     return (
@@ -106,6 +144,11 @@ const ProjectDetails = () => {
         return <Badge>{status}</Badge>;
     }
   };
+
+  // Group tasks by status
+  const todoTasks = tasks.filter(task => task.status === 'TODO');
+  const inProgressTasks = tasks.filter(task => task.status === 'IN_PROGRESS');
+  const completedTasks = tasks.filter(task => task.status === 'COMPLETED');
 
   return (
     <div className="flex min-h-screen">
@@ -181,56 +224,38 @@ const ProjectDetails = () => {
               </CardContent>
             </Card>
             
-            {/* Project Details Card */}
+            {/* Project Tasks Card */}
             <Card className="lg:col-span-2">
               <CardHeader>
-                <CardTitle>Project Details</CardTitle>
+                <CardTitle>Project Tasks</CardTitle>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="description">
+                <Tabs defaultValue="todo">
                   <TabsList className="mb-4">
-                    <TabsTrigger value="description">Description</TabsTrigger>
-                    <TabsTrigger value="phases">Phases</TabsTrigger>
+                    <TabsTrigger value="todo">To Do ({todoTasks.length})</TabsTrigger>
+                    <TabsTrigger value="in_progress">In Progress ({inProgressTasks.length})</TabsTrigger>
+                    <TabsTrigger value="completed">Completed ({completedTasks.length})</TabsTrigger>
                   </TabsList>
-                  <TabsContent value="description" className="space-y-4">
-                    {project.description ? (
-                      <p>{project.description}</p>
-                    ) : (
-                      <p className="text-muted-foreground">No description provided for this project.</p>
-                    )}
+                  <TabsContent value="todo">
+                    <TaskList 
+                      tasks={todoTasks} 
+                      title="To Do Tasks" 
+                      onTaskStatusChange={handleTaskStatusChange}
+                    />
                   </TabsContent>
-                  <TabsContent value="phases">
-                    {project.phases && project.phases.length > 0 ? (
-                      <div className="space-y-4">
-                        {project.phases.map((phase) => (
-                          <Card key={phase.id}>
-                            <CardHeader className="py-3">
-                              <div className="flex justify-between items-center">
-                                <CardTitle className="text-lg">{phase.name}</CardTitle>
-                                <span className="text-sm font-medium">{phase.progress}% Complete</span>
-                              </div>
-                            </CardHeader>
-                            <CardContent className="py-2">
-                              <div className="flex justify-between items-center text-sm mb-2">
-                                <span>
-                                  <Calendar className="h-3.5 w-3.5 inline mr-1" />
-                                  {formatDate(phase.start_date)} - {formatDate(phase.end_date)}
-                                </span>
-                                <span>{phase.tasks.length} Tasks</span>
-                              </div>
-                              <div className="w-full bg-muted rounded-full h-2">
-                                <div 
-                                  className="bg-primary h-2 rounded-full" 
-                                  style={{ width: `${phase.progress}%` }}
-                                ></div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground">No phases have been created for this project.</p>
-                    )}
+                  <TabsContent value="in_progress">
+                    <TaskList 
+                      tasks={inProgressTasks} 
+                      title="In Progress Tasks" 
+                      onTaskStatusChange={handleTaskStatusChange}
+                    />
+                  </TabsContent>
+                  <TabsContent value="completed">
+                    <TaskList 
+                      tasks={completedTasks} 
+                      title="Completed Tasks" 
+                      onTaskStatusChange={handleTaskStatusChange}
+                    />
                   </TabsContent>
                 </Tabs>
               </CardContent>
