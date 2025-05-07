@@ -36,14 +36,16 @@ interface ProjectFileManagerProps {
   projectId: string;
 }
 
+// Updated interface to match Supabase response structure
 interface FileObject {
   id: string;
   name: string;
   size: number;
   created_at: string;
   metadata: {
-    mimetype: string;
-    size: number;
+    mimetype?: string;
+    size?: number;
+    [key: string]: any;
   };
 }
 
@@ -82,7 +84,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
           name: item.name,
           size: item.metadata?.size || 0,
           created_at: item.created_at,
-          metadata: item.metadata
+          metadata: item.metadata || {}
         }));
 
       setFiles(fileObjects);
@@ -109,17 +111,28 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     setUploading(true);
     
     try {
+      // Log to debug
+      console.log("Starting file upload for project:", projectId);
+      console.log("Current authenticated user:", currentEmployee);
+      
       const uploadPromises = Array.from(selectedFiles).map(async (file) => {
         const filePath = `${projectFolderPath}${file.name}`;
+        
+        // Log detailed request info
+        console.log("Uploading file:", file.name);
+        console.log("To path:", filePath);
         
         const { data, error } = await supabase
           .storage
           .from('project_files')
           .upload(filePath, file, {
             upsert: true,
+            // Adding cacheControl for appropriate caching
+            cacheControl: '3600',
           });
 
         if (error) {
+          console.error("Upload error details:", error);
           throw error;
         }
         

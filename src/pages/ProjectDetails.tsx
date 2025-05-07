@@ -191,7 +191,7 @@ const ProjectDetails = () => {
           </div>
           
           {activeTab === 'files' ? (
-            <ProjectFileManager projectId={projectId} />
+            <ProjectFileManager projectId={projectId!} />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Project Summary Card */}
