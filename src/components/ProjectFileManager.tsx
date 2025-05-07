@@ -70,7 +70,10 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
       const { data, error } = await supabase
         .storage
         .from('project_files')
-        .list(projectFolderPath);
+        .list(projectFolderPath, {
+          limit: 100,
+          offset: 0
+        });
 
       if (error) {
         throw error;
@@ -78,14 +81,16 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
 
       // Filter out folders and format file data
       const fileObjects = data
-        .filter(item => !item.id.endsWith('/'))
-        .map(item => ({
-          id: item.id,
-          name: item.name,
-          size: item.metadata?.size || 0,
-          created_at: item.created_at,
-          metadata: item.metadata || {}
-        }));
+        ? data
+            .filter(item => !item.id.endsWith('/') && item.name !== '.folder')
+            .map(item => ({
+              id: item.id,
+              name: item.name,
+              size: item.metadata?.size || 0,
+              created_at: item.created_at,
+              metadata: item.metadata || {}
+            }))
+        : [];
 
       setFiles(fileObjects);
     } catch (error: any) {
@@ -100,6 +105,28 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     }
   };
 
+  const ensureProjectFolderExists = async () => {
+    try {
+      // Create a hidden .folder file to ensure the project folder exists
+      const { error } = await supabase
+        .storage
+        .from('project_files')
+        .upload(`${projectId}/.folder`, new Blob(['']), {
+          upsert: true,
+          contentType: 'application/json'
+        });
+      
+      if (error && error.message !== 'The resource already exists') {
+        console.error("Error creating project folder:", error);
+        return false;
+      }
+      return true;
+    } catch (error: any) {
+      console.error("Error ensuring project folder exists:", error);
+      return false;
+    }
+  };
+
   const handleUploadClick = () => {
     fileInputRef.current?.click();
   };
@@ -111,21 +138,18 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     setUploading(true);
     
     try {
-      // Create the project folder path if it doesn't exist
-      const { error: folderError } = await supabase
-        .storage
-        .from('project_files')
-        .upload(`${projectId}/.folder`, new Blob([''], { type: 'application/json' }), {
-          upsert: true,
+      // Ensure project folder exists before uploading
+      const folderExists = await ensureProjectFolderExists();
+      if (!folderExists) {
+        toast({
+          title: "Error",
+          description: "Failed to prepare upload directory",
+          variant: "destructive"
         });
-        
-      if (folderError && folderError.message !== 'The resource already exists') {
-        console.error("Error creating folder:", folderError);
+        return;
       }
       
       console.log("Starting file uploads for project:", projectId);
-      console.log("Current user:", currentEmployee);
-      console.log("Using bucket: project_files");
       
       const uploadPromises = Array.from(selectedFiles).map(async (file) => {
         const filePath = `${projectFolderPath}${file.name}`;
