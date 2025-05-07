@@ -111,14 +111,24 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     setUploading(true);
     
     try {
-      // Log to debug
-      console.log("Starting file upload for project:", projectId);
-      console.log("Current authenticated user:", currentEmployee);
+      // Create the project folder path if it doesn't exist
+      const { error: folderError } = await supabase
+        .storage
+        .from('project_files')
+        .upload(`${projectId}/.folder`, new Blob([''], { type: 'application/json' }), {
+          upsert: true,
+        });
+        
+      if (folderError && folderError.message !== 'The resource already exists') {
+        console.error("Error creating folder:", folderError);
+      }
+      
+      console.log("Starting file uploads for project:", projectId);
+      console.log("Current user:", currentEmployee);
+      console.log("Using bucket: project_files");
       
       const uploadPromises = Array.from(selectedFiles).map(async (file) => {
         const filePath = `${projectFolderPath}${file.name}`;
-        
-        // Log detailed request info
         console.log("Uploading file:", file.name);
         console.log("To path:", filePath);
         
@@ -127,7 +137,6 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
           .from('project_files')
           .upload(filePath, file, {
             upsert: true,
-            // Adding cacheControl for appropriate caching
             cacheControl: '3600',
           });
 
@@ -136,6 +145,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
           throw error;
         }
         
+        console.log("Upload successful:", data);
         return data;
       });
 
