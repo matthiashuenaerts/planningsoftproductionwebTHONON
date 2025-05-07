@@ -13,10 +13,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Calendar, CalendarDays, Clock, Package } from 'lucide-react';
+import { ArrowLeft, Calendar, CalendarDays, Clock, Package, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { projectService, Project, Task, taskService } from '@/services/dataService';
 import TaskList from '@/components/TaskList';
+import ProjectFileManager from '@/components/ProjectFileManager';
 
 const ProjectDetails = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -25,6 +26,7 @@ const ProjectDetails = () => {
   const [project, setProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('tasks');
 
   useEffect(() => {
     const fetchProjectData = async () => {
@@ -178,89 +180,99 @@ const ProjectDetails = () => {
                 >
                   <Package className="mr-2 h-4 w-4" /> Orders
                 </Button>
+                <Button 
+                  variant={activeTab === 'files' ? 'default' : 'outline'}
+                  onClick={() => setActiveTab('files')}
+                >
+                  <FileText className="mr-2 h-4 w-4" /> Files
+                </Button>
               </div>
             </div>
           </div>
           
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Project Summary Card */}
-            <Card className="lg:col-span-1">
-              <CardHeader>
-                <CardTitle>Project Summary</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <h4 className="text-sm font-medium mb-1">Status</h4>
-                  <div>{getStatusBadge(project.status)}</div>
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium mb-1">Project Progress</h4>
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Completion</span>
-                      <span className="font-medium">{project.progress}%</span>
+          {activeTab === 'files' ? (
+            <ProjectFileManager projectId={projectId} />
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Project Summary Card */}
+              <Card className="lg:col-span-1">
+                <CardHeader>
+                  <CardTitle>Project Summary</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-medium mb-1">Status</h4>
+                    <div>{getStatusBadge(project.status)}</div>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium mb-1">Project Progress</h4>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Completion</span>
+                        <span className="font-medium">{project.progress}%</span>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-2.5">
+                        <div 
+                          className="bg-primary h-2.5 rounded-full" 
+                          style={{ width: `${project.progress}%` }}
+                        ></div>
+                      </div>
                     </div>
-                    <div className="w-full bg-muted rounded-full h-2.5">
-                      <div 
-                        className="bg-primary h-2.5 rounded-full" 
-                        style={{ width: `${project.progress}%` }}
-                      ></div>
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium">Important Dates</h4>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Start Date:</span>
+                      <span>{formatDate(project.start_date)}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Installation Date:</span>
+                      <span>{formatDate(project.installation_date)}</span>
                     </div>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <h4 className="text-sm font-medium">Important Dates</h4>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Start Date:</span>
-                    <span>{formatDate(project.start_date)}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Installation Date:</span>
-                    <span>{formatDate(project.installation_date)}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            {/* Project Tasks Card */}
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle>Project Tasks</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="todo">
-                  <TabsList className="mb-4">
-                    <TabsTrigger value="todo">To Do ({todoTasks.length})</TabsTrigger>
-                    <TabsTrigger value="in_progress">In Progress ({inProgressTasks.length})</TabsTrigger>
-                    <TabsTrigger value="completed">Completed ({completedTasks.length})</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="todo">
-                    <TaskList 
-                      tasks={todoTasks} 
-                      title="To Do Tasks" 
-                      onTaskStatusChange={handleTaskStatusChange}
-                    />
-                  </TabsContent>
-                  <TabsContent value="in_progress">
-                    <TaskList 
-                      tasks={inProgressTasks} 
-                      title="In Progress Tasks" 
-                      onTaskStatusChange={handleTaskStatusChange}
-                    />
-                  </TabsContent>
-                  <TabsContent value="completed">
-                    <TaskList 
-                      tasks={completedTasks} 
-                      title="Completed Tasks" 
-                      onTaskStatusChange={handleTaskStatusChange}
-                    />
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-          </div>
+                </CardContent>
+              </Card>
+              
+              {/* Project Tasks Card */}
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle>Project Tasks</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Tabs defaultValue="todo">
+                    <TabsList className="mb-4">
+                      <TabsTrigger value="todo">To Do ({todoTasks.length})</TabsTrigger>
+                      <TabsTrigger value="in_progress">In Progress ({inProgressTasks.length})</TabsTrigger>
+                      <TabsTrigger value="completed">Completed ({completedTasks.length})</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="todo">
+                      <TaskList 
+                        tasks={todoTasks} 
+                        title="To Do Tasks" 
+                        onTaskStatusChange={handleTaskStatusChange}
+                      />
+                    </TabsContent>
+                    <TabsContent value="in_progress">
+                      <TaskList 
+                        tasks={inProgressTasks} 
+                        title="In Progress Tasks" 
+                        onTaskStatusChange={handleTaskStatusChange}
+                      />
+                    </TabsContent>
+                    <TabsContent value="completed">
+                      <TaskList 
+                        tasks={completedTasks} 
+                        title="Completed Tasks" 
+                        onTaskStatusChange={handleTaskStatusChange}
+                      />
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
     </div>
