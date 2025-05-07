@@ -36,7 +36,7 @@ interface ProjectFileManagerProps {
   projectId: string;
 }
 
-// Updated interface to match Supabase response structure
+// Interface to match Supabase response structure
 interface FileObject {
   id: string;
   name: string;
