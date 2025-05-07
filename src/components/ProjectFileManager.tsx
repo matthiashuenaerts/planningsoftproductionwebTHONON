@@ -13,14 +13,6 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Trash2, FileUp, File, Download } from 'lucide-react';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogClose
-} from '@/components/ui/dialog';
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -72,17 +64,18 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
         .from('project_files')
         .list(projectFolderPath, {
           limit: 100,
-          offset: 0
+          sortBy: { column: 'name', order: 'asc' }
         });
 
       if (error) {
+        console.error("Error listing files:", error);
         throw error;
       }
 
       // Filter out folders and format file data
       const fileObjects = data
         ? data
-            .filter(item => !item.id.endsWith('/') && item.name !== '.folder')
+            .filter(item => !item.name.endsWith('/') && item.name !== '.folder')
             .map(item => ({
               id: item.id,
               name: item.name,
@@ -91,7 +84,8 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
               metadata: item.metadata || {}
             }))
         : [];
-
+      
+      console.log("Files fetched:", fileObjects.length);
       setFiles(fileObjects);
     } catch (error: any) {
       console.error('Error fetching files:', error);
@@ -107,19 +101,25 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
 
   const ensureProjectFolderExists = async () => {
     try {
+      console.log("Ensuring project folder exists:", projectFolderPath);
       // Create a hidden .folder file to ensure the project folder exists
       const { error } = await supabase
         .storage
         .from('project_files')
-        .upload(`${projectId}/.folder`, new Blob(['']), {
+        .upload(`${projectId}/.folder`, new Blob([''], { type: 'application/json' }), {
           upsert: true,
-          contentType: 'application/json'
+          cacheControl: '3600'
         });
       
-      if (error && error.message !== 'The resource already exists') {
+      if (error) {
+        if (error.message === 'The resource already exists') {
+          console.log("Project folder already exists");
+          return true;
+        }
         console.error("Error creating project folder:", error);
         return false;
       }
+      console.log("Project folder created successfully");
       return true;
     } catch (error: any) {
       console.error("Error ensuring project folder exists:", error);
@@ -156,12 +156,16 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
         console.log("Uploading file:", file.name);
         console.log("To path:", filePath);
         
+        // Generate a unique file name to avoid conflicts
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${file.name.split('.')[0]}_${Date.now()}.${fileExt}`;
+        const uniqueFilePath = `${projectFolderPath}${fileName}`;
+        
         const { data, error } = await supabase
           .storage
           .from('project_files')
-          .upload(filePath, file, {
-            upsert: true,
-            cacheControl: '3600',
+          .upload(uniqueFilePath, file, {
+            cacheControl: '3600'
           });
 
         if (error) {
