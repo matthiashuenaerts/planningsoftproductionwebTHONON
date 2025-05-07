@@ -50,7 +50,8 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
   const [fileToDelete, setFileToDelete] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const projectFolderPath = `${projectId}/`;
+  // Don't include a trailing slash in the folder path to fix RLS issues
+  const projectFolderPath = projectId;
 
   useEffect(() => {
     fetchFiles();
@@ -59,6 +60,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
   const fetchFiles = async () => {
     setLoading(true);
     try {
+      // First ensure the bucket exists by trying to list files
       const { data, error } = await supabase
         .storage
         .from('project_files')
@@ -68,6 +70,13 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
         });
 
       if (error) {
+        // If error is not found, it's likely the folder doesn't exist yet
+        if (error.message.includes('not found')) {
+          console.log('Project folder does not exist yet, showing empty list');
+          setFiles([]);
+          setLoading(false);
+          return;
+        }
         console.error("Error listing files:", error);
         throw error;
       }
@@ -99,34 +108,6 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     }
   };
 
-  const ensureProjectFolderExists = async () => {
-    try {
-      console.log("Ensuring project folder exists:", projectFolderPath);
-      // Create a hidden .folder file to ensure the project folder exists
-      const { error } = await supabase
-        .storage
-        .from('project_files')
-        .upload(`${projectId}/.folder`, new Blob([''], { type: 'application/json' }), {
-          upsert: true,
-          cacheControl: '3600'
-        });
-      
-      if (error) {
-        if (error.message === 'The resource already exists') {
-          console.log("Project folder already exists");
-          return true;
-        }
-        console.error("Error creating project folder:", error);
-        return false;
-      }
-      console.log("Project folder created successfully");
-      return true;
-    } catch (error: any) {
-      console.error("Error ensuring project folder exists:", error);
-      return false;
-    }
-  };
-
   const handleUploadClick = () => {
     fileInputRef.current?.click();
   };
@@ -137,34 +118,23 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
 
     setUploading(true);
     
-    try {
-      // Ensure project folder exists before uploading
-      const folderExists = await ensureProjectFolderExists();
-      if (!folderExists) {
-        toast({
-          title: "Error",
-          description: "Failed to prepare upload directory",
-          variant: "destructive"
-        });
-        return;
-      }
-      
+    try {      
       console.log("Starting file uploads for project:", projectId);
       
       const uploadPromises = Array.from(selectedFiles).map(async (file) => {
-        const filePath = `${projectFolderPath}${file.name}`;
-        console.log("Uploading file:", file.name);
-        console.log("To path:", filePath);
-        
         // Generate a unique file name to avoid conflicts
         const fileExt = file.name.split('.').pop();
+        // Use original name + timestamp for uniqueness
         const fileName = `${file.name.split('.')[0]}_${Date.now()}.${fileExt}`;
-        const uniqueFilePath = `${projectFolderPath}${fileName}`;
+        const filePath = `${projectFolderPath}/${fileName}`;
+        
+        console.log("Uploading file:", fileName);
+        console.log("To path:", filePath);
         
         const { data, error } = await supabase
           .storage
           .from('project_files')
-          .upload(uniqueFilePath, file, {
+          .upload(filePath, file, {
             cacheControl: '3600'
           });
 
@@ -201,9 +171,45 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     }
   };
 
+  const confirmDeleteFile = () => {
+    if (!fileToDelete) return;
+    
+    deleteFile(fileToDelete);
+    setFileToDelete(null);
+  };
+
+  const deleteFile = async (fileName: string) => {
+    try {
+      const filePath = `${projectFolderPath}/${fileName}`;
+      
+      const { error } = await supabase
+        .storage
+        .from('project_files')
+        .remove([filePath]);
+
+      if (error) {
+        throw error;
+      }
+
+      setFiles(prevFiles => prevFiles.filter(file => file.name !== fileName));
+      
+      toast({
+        title: "Success",
+        description: "File deleted successfully",
+      });
+    } catch (error: any) {
+      console.error('Error deleting file:', error);
+      toast({
+        title: "Error",
+        description: `Failed to delete file: ${error.message}`,
+        variant: "destructive"
+      });
+    }
+  };
+
   const downloadFile = async (fileName: string) => {
     try {
-      const filePath = `${projectFolderPath}${fileName}`;
+      const filePath = `${projectFolderPath}/${fileName}`;
       
       const { data, error } = await supabase
         .storage
@@ -228,42 +234,6 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
       toast({
         title: "Error",
         description: `Failed to download file: ${error.message}`,
-        variant: "destructive"
-      });
-    }
-  };
-
-  const confirmDeleteFile = () => {
-    if (!fileToDelete) return;
-    
-    deleteFile(fileToDelete);
-    setFileToDelete(null);
-  };
-
-  const deleteFile = async (fileName: string) => {
-    try {
-      const filePath = `${projectFolderPath}${fileName}`;
-      
-      const { error } = await supabase
-        .storage
-        .from('project_files')
-        .remove([filePath]);
-
-      if (error) {
-        throw error;
-      }
-
-      setFiles(prevFiles => prevFiles.filter(file => file.name !== fileName));
-      
-      toast({
-        title: "Success",
-        description: "File deleted successfully",
-      });
-    } catch (error: any) {
-      console.error('Error deleting file:', error);
-      toast({
-        title: "Error",
-        description: `Failed to delete file: ${error.message}`,
         variant: "destructive"
       });
     }
