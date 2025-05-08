@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
@@ -27,6 +26,7 @@ const ProjectDetails = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('tasks');
+  const [currentEmployee, setCurrentEmployee] = useState<any>(null);
 
   useEffect(() => {
     const fetchProjectData = async () => {
@@ -63,13 +63,37 @@ const ProjectDetails = () => {
   }, [projectId, toast]);
 
   const handleTaskStatusChange = async (taskId: string, status: Task['status']) => {
+    if (!currentEmployee) {
+      toast({
+        title: "Authentication Error",
+        description: "You must be logged in to update tasks.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     try {
-      await taskService.update(taskId, { status });
+      const updateData: Partial<Task> = { status };
+      
+      // Add completion info if task is being marked as completed
+      if (status === 'COMPLETED') {
+        updateData.completed_at = new Date().toISOString();
+        updateData.completed_by = currentEmployee.id;
+      }
+      
+      await taskService.update(taskId, updateData);
       
       // Update local state
       setTasks(prevTasks => 
         prevTasks.map(task => 
-          task.id === taskId ? { ...task, status } : task
+          task.id === taskId ? { 
+            ...task, 
+            status,
+            ...(status === 'COMPLETED' ? {
+              completed_at: updateData.completed_at,
+              completed_by: currentEmployee.id
+            } : {})
+          } : task
         )
       );
       

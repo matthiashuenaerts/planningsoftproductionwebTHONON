@@ -113,14 +113,31 @@ const PersonalTasks = () => {
   }, [currentEmployee, toast]);
 
   const handleTaskStatusChange = async (taskId: string, status: Task['status']) => {
+    if (!currentEmployee) {
+      toast({
+        title: "Authentication Error",
+        description: "You must be logged in to update tasks.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     try {
+      const updateData: Partial<Task> = { 
+        status,
+        updated_at: new Date().toISOString(),
+        assignee_id: currentEmployee?.id
+      };
+      
+      // Add completion info if task is being marked as completed
+      if (status === 'COMPLETED') {
+        updateData.completed_at = new Date().toISOString();
+        updateData.completed_by = currentEmployee.id;
+      }
+      
       const { error } = await supabase
         .from('tasks')
-        .update({ 
-          status,
-          updated_at: new Date().toISOString(),
-          assignee_id: currentEmployee?.id // Assign to the current employee when updating
-        })
+        .update(updateData)
         .eq('id', taskId);
         
       if (error) throw error;
@@ -128,7 +145,15 @@ const PersonalTasks = () => {
       // Update local state
       setTasks(prevTasks => 
         prevTasks.map(task => 
-          task.id === taskId ? { ...task, status, assignee_id: currentEmployee?.id } : task
+          task.id === taskId ? { 
+            ...task, 
+            status, 
+            assignee_id: currentEmployee?.id,
+            ...(status === 'COMPLETED' ? {
+              completed_at: updateData.completed_at,
+              completed_by: currentEmployee.id
+            } : {})
+          } : task
         )
       );
       

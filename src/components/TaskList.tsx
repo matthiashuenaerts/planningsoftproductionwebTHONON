@@ -1,11 +1,11 @@
-import React from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { Task } from '@/services/dataService';
 import { workstationService } from '@/services/workstationService';
-import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface TaskListProps {
@@ -60,6 +60,16 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
   const formatDate = (dateString: string) => {
     try {
       return format(new Date(dateString), 'MMM d, yyyy');
+    } catch (error) {
+      return 'Invalid date';
+    }
+  };
+
+  // Helper function to format datetime
+  const formatDateTime = (dateString: string | null) => {
+    if (!dateString) return '';
+    try {
+      return format(new Date(dateString), 'MMM d, yyyy HH:mm');
     } catch (error) {
       return 'Invalid date';
     }
@@ -122,6 +132,12 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
               </div>
 
               <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
+              
+              {task.status === 'COMPLETED' && task.completed_by && task.completed_at && (
+                <div className="mb-3 text-sm bg-green-50 p-2 rounded border border-green-100">
+                  <span className="font-medium text-green-700">Completed:</span> {formatDateTime(task.completed_at)} by {task.completed_by}
+                </div>
+              )}
               
               <div className="flex justify-between items-center text-xs text-muted-foreground">
                 <div className="flex items-center gap-2">

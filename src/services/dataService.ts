@@ -40,6 +40,8 @@ export interface Task {
   created_at: string;
   updated_at: string;
   project_name?: string; // Added for WorkstationView
+  completed_at?: string | null; // Time when the task was completed
+  completed_by?: string | null; // ID of the employee who completed the task
 }
 
 // Employee Types

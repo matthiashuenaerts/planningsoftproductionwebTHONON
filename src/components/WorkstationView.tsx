@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monitor, Truck, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from '@/context/AuthContext';
 
 interface WorkstationViewProps {
   workstationId: string;
@@ -18,6 +19,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { currentEmployee } = useAuth();
 
   useEffect(() => {
     const fetchWorkstationData = async () => {
@@ -96,8 +98,22 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
 
   // Function to handle completing a task
   const handleCompleteTask = async (taskId: string) => {
+    if (!currentEmployee) {
+      toast({
+        title: "Authentication Error",
+        description: "You must be logged in to complete tasks.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
-      await taskService.update(taskId, { status: 'COMPLETED' });
+      // Update task with completion information
+      await taskService.update(taskId, { 
+        status: 'COMPLETED',
+        completed_by: currentEmployee.id,
+        completed_at: new Date().toISOString()
+      });
       
       // Update local state to remove the completed task
       setTasks(tasks.filter(task => task.id !== taskId));
