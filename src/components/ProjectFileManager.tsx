@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { ensureStorageBucket } from '@/integrations/supabase/createBucket';
@@ -11,7 +12,7 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2, FileUp, File, Download, AlertCircle, Upload } from 'lucide-react';
+import { Trash2, FileUp, File, Download, AlertCircle, Upload, Eye } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,6 +27,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
+import FilePreview from '@/components/FilePreview';
 
 interface ProjectFileManagerProps {
   projectId: string;
@@ -56,6 +58,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
   const [error, setError] = useState<string | null>(null);
   const [bucketInitialized, setBucketInitialized] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewFile, setPreviewFile] = useState<string | null>(null);
 
   useEffect(() => {
     // Check if user is authenticated
@@ -344,6 +347,10 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     }
   };
 
+  const previewFile = (fileName: string) => {
+    setPreviewFile(fileName);
+  };
+
   const formatFileSize = (bytes: number): string => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     if (bytes === 0) return '0 Byte';
@@ -461,6 +468,13 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
                     <Button 
                       variant="outline" 
                       size="sm"
+                      onClick={() => previewFile(file.name)}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
                       onClick={() => downloadFile(file.name)}
                     >
                       <Download className="h-4 w-4" />
@@ -515,6 +529,16 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* File Preview Dialog */}
+      {previewFile && (
+        <FilePreview
+          isOpen={!!previewFile}
+          onClose={() => setPreviewFile(null)}
+          projectId={projectId}
+          fileName={previewFile}
+        />
+      )}
     </div>
   );
 };
