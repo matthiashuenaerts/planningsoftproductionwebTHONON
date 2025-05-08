@@ -54,12 +54,10 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Use projectId directly as the folder path without trailing slash
-  const projectFolderPath = projectId;
-
   useEffect(() => {
     // Check if user is authenticated
     if (!isAuthenticated || !currentEmployee) {
+      console.log("User not authenticated, redirecting to login");
       toast({
         title: "Authentication required",
         description: "You must be logged in to manage files",
@@ -78,12 +76,12 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     setLoading(true);
     setError(null);
     try {
-      console.log("Fetching files from bucket 'project_files' in folder:", projectFolderPath);
+      console.log("Fetching files from bucket 'project_files' in folder:", projectId);
       
       const { data, error } = await supabase
         .storage
         .from('project_files')
-        .list(projectFolderPath);
+        .list(projectId);
 
       if (error) {
         console.error("Error fetching files:", error);
@@ -125,6 +123,33 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     }
   };
 
+  const uploadFile = async (file: File) => {
+    if (!isAuthenticated || !currentEmployee) {
+      console.error("Not authenticated");
+      throw new Error("You must be logged in to upload files");
+    }
+
+    const fileName = `${Date.now()}_${file.name}`;
+    const filePath = `${projectId}/${fileName}`;
+    
+    console.log(`Uploading file: ${fileName} to path: ${filePath}`);
+    
+    const { data, error } = await supabase
+      .storage
+      .from('project_files')
+      .upload(filePath, file, {
+        upsert: true
+      });
+
+    if (error) {
+      console.error("Upload error details:", error);
+      throw error;
+    }
+    
+    console.log("Upload successful:", data);
+    return data;
+  };
+
   const handleUploadClick = () => {
     if (!isAuthenticated || !currentEmployee) {
       toast({
@@ -147,43 +172,26 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     setUploading(true);
     setError(null);
     
-    try {      
+    try {
       console.log("Starting file uploads for project:", projectId);
       console.log("Current user:", currentEmployee);
       
-      // First, check if the folder exists, if not create it (this might help with permissions)
+      // Ensure the folder exists first by uploading a placeholder if needed
       try {
-        await supabase.storage.from('project_files').list(projectFolderPath);
-      } catch (folderError) {
-        // Folder might not exist, attempt to create a placeholder
         const placeholderFile = new Blob([''], { type: 'text/plain' });
-        await supabase.storage.from('project_files')
-          .upload(`${projectFolderPath}/.folder`, placeholderFile);
+        await supabase.storage
+          .from('project_files')
+          .upload(`${projectId}/.folder`, placeholderFile, { upsert: true });
+          
+        console.log("Placeholder file uploaded to ensure folder exists");
+      } catch (folderError) {
+        // Ignore error if folder already exists
+        console.log("Folder may already exist or error creating placeholder:", folderError);
       }
       
+      // Upload each file
       const uploadPromises = Array.from(selectedFiles).map(async (file) => {
-        // Generate a unique filename to avoid conflicts
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}_${file.name}`;
-        const filePath = `${projectFolderPath}/${fileName}`;
-        
-        console.log("Uploading file:", fileName);
-        console.log("To path:", filePath);
-        
-        const { data, error } = await supabase
-          .storage
-          .from('project_files')
-          .upload(filePath, file, {
-            upsert: true // Use upsert to prevent conflicts
-          });
-
-        if (error) {
-          console.error("Upload error details:", error);
-          throw error;
-        }
-        
-        console.log("Upload successful:", data);
-        return data;
+        return await uploadFile(file);
       });
 
       await Promise.all(uploadPromises);
@@ -221,7 +229,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
   const deleteFile = async (fileName: string) => {
     setError(null);
     try {
-      const filePath = `${projectFolderPath}/${fileName}`;
+      const filePath = `${projectId}/${fileName}`;
       
       const { error } = await supabase
         .storage
@@ -252,7 +260,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
   const downloadFile = async (fileName: string) => {
     setError(null);
     try {
-      const filePath = `${projectFolderPath}/${fileName}`;
+      const filePath = `${projectId}/${fileName}`;
       
       const { data, error } = await supabase
         .storage
@@ -349,7 +357,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
             />
             <Button
               onClick={handleUploadClick}
-              disabled={uploading || !isAuthenticated || !currentEmployee}
+              disabled={uploading}
               className="w-full"
             >
               {uploading ? (
