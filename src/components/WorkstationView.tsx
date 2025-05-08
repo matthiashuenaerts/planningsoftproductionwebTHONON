@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import TaskList from './TaskList';
 import { taskService, Task, projectService } from '@/services/dataService';
+import { standardTasksService } from '@/services/standardTasksService';
 import { useToast } from '@/hooks/use-toast';
 import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monitor, Truck, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -36,49 +37,133 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
         if (workstationError) throw workstationError;
         setWorkstation(workstationData?.name || "");
         
-        // Fetch tasks for this workstation - use taskService directly
-        const workstationTasks = await taskService.getByWorkstationId(workstationId);
+        // Step 1: Get all standard tasks linked to this workstation
+        const { data: standardTaskLinks, error: linksError } = await supabase
+          .from('standard_task_workstation_links')
+          .select('standard_task_id')
+          .eq('workstation_id', workstationId);
+          
+        if (linksError) throw linksError;
         
-        // Filter out completed tasks
-        const incompleteTasks = workstationTasks.filter(
-          task => task.status !== 'COMPLETED'
+        // If no linked standard tasks, use direct task links as a fallback
+        if (!standardTaskLinks || standardTaskLinks.length === 0) {
+          const workstationTasks = await taskService.getByWorkstationId(workstationId);
+          
+          // Filter out completed tasks
+          const incompleteTasks = workstationTasks.filter(
+            task => task.status !== 'COMPLETED'
+          );
+          
+          // Fetch project information for each task's phase
+          const tasksWithProjectInfo = await Promise.all(
+            incompleteTasks.map(async (task) => {
+              try {
+                // Get the phase to get the project_id
+                const { data: phaseData, error: phaseError } = await supabase
+                  .from('phases')
+                  .select('project_id, name')
+                  .eq('id', task.phase_id)
+                  .single();
+                
+                if (phaseError) throw phaseError;
+                
+                // Get the project name
+                const { data: projectData, error: projectError } = await supabase
+                  .from('projects')
+                  .select('name')
+                  .eq('id', phaseData.project_id)
+                  .single();
+                
+                if (projectError) throw projectError;
+                
+                // Append project name to task
+                return {
+                  ...task,
+                  project_name: projectData.name
+                };
+              } catch (error) {
+                console.error('Error fetching project info for task:', error);
+                return task;
+              }
+            })
+          );
+          
+          setTasks(tasksWithProjectInfo);
+          setLoading(false);
+          return;
+        }
+        
+        // Step 2: Get the standard task details for these linked task IDs
+        const standardTaskIds = standardTaskLinks.map(link => link.standard_task_id);
+        const standardTasks = await Promise.all(
+          standardTaskIds.map(id => standardTasksService.getById(id))
         );
         
-        // Fetch project information for each task's phase
-        const tasksWithProjectInfo = await Promise.all(
-          incompleteTasks.map(async (task) => {
-            try {
-              // Get the phase to get the project_id
-              const { data: phaseData, error: phaseError } = await supabase
-                .from('phases')
-                .select('project_id, name')
-                .eq('id', task.phase_id)
-                .single();
-              
-              if (phaseError) throw phaseError;
-              
-              // Get the project name
-              const { data: projectData, error: projectError } = await supabase
-                .from('projects')
-                .select('name')
-                .eq('id', phaseData.project_id)
-                .single();
-              
-              if (projectError) throw projectError;
-              
-              // Append project name to task
-              return {
-                ...task,
-                project_name: projectData.name
-              };
-            } catch (error) {
-              console.error('Error fetching project info for task:', error);
-              return task;
-            }
-          })
+        // Step 3: Find active tasks that match these standard tasks
+        let matchedTasks: Task[] = [];
+        
+        // For each standard task, get tasks that contain its name/number in the title
+        for (const standardTask of standardTasks) {
+          if (!standardTask) continue;
+          
+          // We will search for tasks that have this standard task's number or name in the title
+          const taskNumber = standardTask.task_number;
+          const taskName = standardTask.task_name;
+          
+          // Query all active tasks
+          const { data: activeTasks, error: tasksError } = await supabase
+            .from('tasks')
+            .select('*')
+            .not('status', 'eq', 'COMPLETED')
+            .or(`title.ilike.%${taskNumber}%,title.ilike.%${taskName}%`);
+          
+          if (tasksError) {
+            console.error('Error fetching tasks matching standard task:', tasksError);
+            continue;
+          }
+          
+          if (activeTasks && activeTasks.length > 0) {
+            // Now get project info for these tasks
+            const tasksWithProjectInfo = await Promise.all(
+              activeTasks.map(async (task) => {
+                try {
+                  const { data: phaseData, error: phaseError } = await supabase
+                    .from('phases')
+                    .select('project_id, name')
+                    .eq('id', task.phase_id)
+                    .single();
+                  
+                  if (phaseError) throw phaseError;
+                  
+                  const { data: projectData, error: projectError } = await supabase
+                    .from('projects')
+                    .select('name')
+                    .eq('id', phaseData.project_id)
+                    .single();
+                  
+                  if (projectError) throw projectError;
+                  
+                  return {
+                    ...task,
+                    project_name: projectData.name
+                  };
+                } catch (error) {
+                  console.error('Error fetching project info for task:', error);
+                  return task;
+                }
+              })
+            );
+            
+            matchedTasks = [...matchedTasks, ...tasksWithProjectInfo];
+          }
+        }
+        
+        // Remove any duplicate tasks (a task might match multiple standard tasks)
+        const uniqueTasks = Array.from(
+          new Map(matchedTasks.map(task => [task.id, task])).values()
         );
         
-        setTasks(tasksWithProjectInfo);
+        setTasks(uniqueTasks);
       } catch (error: any) {
         console.error('Error fetching workstation data:', error);
         toast({

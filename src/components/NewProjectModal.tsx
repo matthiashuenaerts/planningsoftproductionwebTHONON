@@ -29,10 +29,12 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { projectService, phaseService, taskService, Task } from '@/services/dataService';
 import { workstationService } from '@/services/workstationService';
+import { standardTasksService, StandardTask } from '@/services/standardTasksService';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from './ui/scroll-area';
 import { Checkbox } from './ui/checkbox';
+import { Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
   name: z.string().min(1, { message: 'Project name is required' }),
@@ -58,59 +60,13 @@ interface NewProjectModalProps {
   onSuccess?: () => void;
 }
 
-// Standard tasks that will always be available for selection
-const STANDARD_TASKS = [
-  { id: '01', name: 'Prog. Vectorworks', workstation: 'productievoorbereiding' },
-  { id: '02', name: 'Bestellen E&S + WB', workstation: 'productievoorbereiding' },
-  { id: '03', name: 'Prog. Korpus', workstation: 'productiesturing' },
-  { id: '04', name: 'Bestellen lades', workstation: '' },
-  { id: '05', name: 'Klaarleggen', workstation: 'beslag, toebehoren, platen, kanten' },
-  { id: '06', name: 'Bestel Toebehoren', workstation: '' },
-  { id: '07', name: 'Bestel Plaatmateriaal en kanten', workstation: '' },
-  { id: '08', name: 'Bestel Fronten', workstation: '' },
-  { id: '09', name: 'Levering Kantenband', workstation: '' },
-  { id: '10', name: 'Levering Korpusmateriaal', workstation: '' },
-  { id: '11', name: 'Levering Frontmateriaal', workstation: '' },
-  { id: '12', name: 'Korpusmateriaal Zagen', workstation: 'Opdeelzaag 1' },
-  { id: '13', name: 'Korpusmateriaal Zagen', workstation: 'Opdeelzaag 2' },
-  { id: '14', name: 'Frontmateriaal Zagen', workstation: 'Opdeelzaag 1' },
-  { id: '15', name: 'Frontmateriaal Zagen', workstation: 'Opdeelzaag 2' },
-  { id: '16', name: 'Korpusmateriaal Kanten plakken', workstation: '' },
-  { id: '17', name: 'Frontmateriaal Kanten plakken', workstation: '' },
-  { id: '18', name: 'Korpusmateriaal Drevelen', workstation: 'Drevelaar' },
-  { id: '19', name: 'Korpusmateriaal Boren - frezen', workstation: 'CNC' },
-  { id: '20', name: 'Frontmateriaal Boren - frezen', workstation: 'CNC' },
-  { id: '21', name: 'Levering Lades', workstation: '' },
-  { id: '22', name: 'Levering Toebehoren', workstation: '' },
-  { id: '23', name: 'Levering Glas, Spiegel, Verstevigings kader', workstation: '' },
-  { id: '24', name: 'Levering Bestelde Fronten', workstation: '' },
-  { id: '25', name: 'Controleren Toebehoren etiketteren', workstation: '' },
-  { id: '26', name: 'Controleren Glas, Spiegel, Verstevigings kader etiketteren', workstation: '' },
-  { id: '27', name: 'Controleren Fronten etiketteren', workstation: '' },
-  { id: '28', name: 'Controleren Lak / Fineer etiketteren', workstation: '' },
-  { id: '29', name: 'Controleren Lakwerk / Fineer BESTELD etiketteren', workstation: '' },
-  { id: '30', name: 'Lakwerk / Fineer BESTELD Boren - frezen', workstation: 'CNC' },
-  { id: '31', name: 'Leggers opkuisen en controleren maatvoering + ev. programmatie', workstation: '' },
-  { id: '32', name: 'Controleren Werkblad', workstation: '' },
-  { id: '33', name: 'Monteren Korpus', workstation: 'Pers' },
-  { id: '34', name: 'Monteren Korpus Manueel / Speciaal maatwerk', workstation: '' },
-  { id: '35', name: 'Afwerken Vervolledigen checklist', workstation: '' },
-  { id: '36', name: 'Lades Plaatsen Korpus', workstation: '' },
-  { id: '37', name: 'Fronten Plaatsen Korpus', workstation: '' },
-  { id: '38', name: 'Levering Electro Controleren - etiketteren', workstation: '' },
-  { id: '39', name: 'Controleren Electo en sanitair', workstation: '' },
-  { id: '40', name: 'Project Eindcontrole Plaatsing (checklist)', workstation: '' },
-  { id: '41', name: 'Project Naar bufferzone', workstation: '' },
-  { id: '42', name: 'Project Laden vrachtwagen', workstation: '' },
-  { id: '43', name: 'Project Plaatsen project', workstation: '' },
-  { id: '44', name: 'Project Eindfactuur gemaakt', workstation: '' },
-];
-
 interface TaskItem {
   id: string;
   name: string;
   workstation: string;
   selected?: boolean;
+  task_number?: string;
+  standard_task_id?: string;
 }
 
 const NewProjectModal: React.FC<NewProjectModalProps> = ({
@@ -119,26 +75,63 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
   onSuccess
 }) => {
   const { toast } = useToast();
-  const [tasks, setTasks] = useState<TaskItem[]>(
-    STANDARD_TASKS.map(task => ({ ...task, selected: true }))
-  );
+  const [loading, setLoading] = useState(false);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [newTaskName, setNewTaskName] = useState('');
   const [newTaskWorkstation, setNewTaskWorkstation] = useState('');
   const [workstations, setWorkstations] = useState<{id: string, name: string}[]>([]);
   
-  // Fetch all workstations when component mounts
+  // Fetch all workstations and standard tasks when component mounts
   useEffect(() => {
-    const fetchWorkstations = async () => {
+    const fetchData = async () => {
       try {
+        setLoading(true);
+        
+        // Get all workstations
         const workstationData = await workstationService.getAll();
         setWorkstations(workstationData.map(w => ({ id: w.id, name: w.name })));
+        
+        // Get all standard tasks with their linked workstations
+        const standardTasks = await standardTasksService.getAll();
+        
+        const taskItems: TaskItem[] = [];
+        
+        // For each standard task, get its linked workstations
+        for (const task of standardTasks) {
+          try {
+            const links = await workstationService.getWorkstationsForStandardTask(task.id);
+            const workstationName = links && links.length > 0 ? links[0].name : '';
+            
+            taskItems.push({
+              id: task.task_number,
+              name: task.task_name,
+              workstation: workstationName,
+              selected: true,
+              task_number: task.task_number,
+              standard_task_id: task.id
+            });
+          } catch (error) {
+            console.error(`Error fetching workstation for task ${task.task_name}:`, error);
+          }
+        }
+        
+        setTasks(taskItems);
       } catch (error) {
-        console.error('Error fetching workstations:', error);
+        console.error('Error fetching data:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load standard tasks and workstations",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
       }
     };
     
-    fetchWorkstations();
-  }, []);
+    if (open) {
+      fetchData();
+    }
+  }, [open, toast]);
   
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -236,15 +229,14 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
         // Create a task name with the ID prefix
         const taskName = `${task.id} - ${task.name}`;
         
-        // Map the workstation to one of the allowed values
+        // Simple mapping of workstations to standard categories
         let workstationType: 'CUTTING' | 'WELDING' | 'PAINTING' | 'ASSEMBLY' | 'PACKAGING' | 'SHIPPING' = 'ASSEMBLY';
         
-        // Simple mapping of workstations to standard categories
-        if (task.workstation.includes('zaag')) {
+        if (task.workstation.toLowerCase().includes('zaag')) {
           workstationType = 'CUTTING';
-        } else if (task.workstation.includes('CNC')) {
+        } else if (task.workstation.toLowerCase().includes('cnc')) {
           workstationType = 'CUTTING';
-        } else if (task.workstation.includes('Pers')) {
+        } else if (task.workstation.toLowerCase().includes('pers')) {
           workstationType = 'ASSEMBLY';
         } else if (task.workstation.toLowerCase().includes('productie')) {
           workstationType = 'ASSEMBLY';
@@ -280,7 +272,6 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
       });
       
       form.reset();
-      setTasks(STANDARD_TASKS.map(task => ({ ...task, selected: true })));
       onOpenChange(false);
       if (onSuccess) onSuccess();
     } catch (error: any) {
@@ -438,29 +429,35 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
               <div className="border rounded-md p-4">
                 <h3 className="font-medium mb-2">Project Tasks</h3>
                 
-                <div className="space-y-2 mb-4 max-h-[300px] overflow-y-auto pr-2">
-                  {tasks.map((task, index) => (
-                    <div key={index} className="flex items-center space-x-2">
-                      <Checkbox 
-                        id={`task-${index}`} 
-                        checked={task.selected} 
-                        onCheckedChange={() => handleToggleTask(index)} 
-                      />
-                      <label htmlFor={`task-${index}`} className="text-sm flex-1">
-                        {task.id} - {task.name}
-                        {task.workstation && <span className="text-muted-foreground ml-1">({task.workstation})</span>}
-                      </label>
-                      <Button 
-                        type="button" 
-                        variant="ghost" 
-                        size="icon" 
-                        onClick={() => handleRemoveTask(index)}
-                      >
-                        <Trash className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
+                {loading ? (
+                  <div className="flex justify-center p-4">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : (
+                  <div className="space-y-2 mb-4 max-h-[300px] overflow-y-auto pr-2">
+                    {tasks.map((task, index) => (
+                      <div key={index} className="flex items-center space-x-2">
+                        <Checkbox 
+                          id={`task-${index}`} 
+                          checked={task.selected} 
+                          onCheckedChange={() => handleToggleTask(index)} 
+                        />
+                        <label htmlFor={`task-${index}`} className="text-sm flex-1">
+                          {task.id} - {task.name}
+                          {task.workstation && <span className="text-muted-foreground ml-1">({task.workstation})</span>}
+                        </label>
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleRemoveTask(index)}
+                        >
+                          <Trash className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 
                 <div className="grid grid-cols-1 gap-2 mt-2">
                   <div className="flex gap-2">
