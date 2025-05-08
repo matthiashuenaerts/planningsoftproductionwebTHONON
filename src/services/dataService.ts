@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 // Project Types
@@ -487,6 +488,11 @@ export const taskService = {
   },
   
   create: async (task: Partial<Task>) => {
+    // Make sure all required fields are present
+    if (!task.title || !task.phase_id || !task.due_date || !task.status || !task.priority || !task.workstation) {
+      throw new Error('Missing required task fields');
+    }
+
     const { data, error } = await supabase
       .from('tasks')
       .insert([task])
@@ -498,6 +504,38 @@ export const taskService = {
     }
 
     return data[0];
+  },
+  
+  createMultiple: async (tasks: Array<{
+    title: string;
+    phase_id: string;
+    due_date: string;
+    status: string;
+    priority: string;
+    workstation: string;
+    description?: string;
+  }>) => {
+    // Ensure all tasks have required fields
+    const validTasks = tasks.filter(task => 
+      task.title && task.phase_id && task.due_date && 
+      task.status && task.priority && task.workstation
+    );
+    
+    if (validTasks.length === 0) {
+      throw new Error('No valid tasks to create');
+    }
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert(validTasks)
+      .select();
+
+    if (error) {
+      console.error('Error creating tasks:', error);
+      throw new Error(`Failed to create tasks: ${error.message}`);
+    }
+
+    return data || [];
   }
 };
 
