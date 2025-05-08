@@ -114,21 +114,13 @@ const PersonalTasks = () => {
 
   const handleTaskStatusChange = async (taskId: string, status: Task['status']) => {
     try {
-      let updates: any = { 
-        status,
-        updated_at: new Date().toISOString(),
-        assignee_id: currentEmployee?.id // Assign to the current employee when updating
-      };
-      
-      // If status is COMPLETED, add completion information
-      if (status === 'COMPLETED') {
-        updates.completed_by = currentEmployee?.id;
-        updates.completed_at = new Date().toISOString();
-      }
-      
       const { error } = await supabase
         .from('tasks')
-        .update(updates)
+        .update({ 
+          status,
+          updated_at: new Date().toISOString(),
+          assignee_id: currentEmployee?.id // Assign to the current employee when updating
+        })
         .eq('id', taskId);
         
       if (error) throw error;
@@ -136,16 +128,7 @@ const PersonalTasks = () => {
       // Update local state
       setTasks(prevTasks => 
         prevTasks.map(task => 
-          task.id === taskId ? { 
-            ...task, 
-            status, 
-            assignee_id: currentEmployee?.id,
-            ...(status === 'COMPLETED' ? {
-              completed_by: currentEmployee?.id,
-              completed_at: new Date().toISOString(),
-              completed_by_name: currentEmployee?.name
-            } : {})
-          } : task
+          task.id === taskId ? { ...task, status, assignee_id: currentEmployee?.id } : task
         )
       );
       

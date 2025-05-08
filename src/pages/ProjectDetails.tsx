@@ -64,9 +64,6 @@ const ProjectDetails = () => {
 
   const handleTaskStatusChange = async (taskId: string, status: Task['status']) => {
     try {
-      // We don't need to modify this function because the TaskList component doesn't directly 
-      // support recording the user who completed the task. That's handled separately in 
-      // the WorkstationView component. This function remains for normal status changes.
       await taskService.update(taskId, { status });
       
       // Update local state

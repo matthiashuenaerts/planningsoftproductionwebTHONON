@@ -1,123 +1,151 @@
-
 import React from 'react';
-import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
-  CardTitle 
-} from '@/components/ui/card';
-import { Task } from '@/services/dataService';
-import { Button } from '@/components/ui/button';
-import { format } from 'date-fns';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { format } from 'date-fns';
+import { Task } from '@/services/dataService';
+import { workstationService } from '@/services/workstationService';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface TaskListProps {
   tasks: Task[];
-  title: string;
+  title?: string;
   onTaskStatusChange?: (taskId: string, status: Task['status']) => void;
 }
 
-const TaskList: React.FC<TaskListProps> = ({ tasks, title, onTaskStatusChange }) => {
-  // Function to render the task status badge
-  const renderStatusBadge = (status: Task['status']) => {
-    switch(status) {
-      case 'TODO':
-        return <Badge variant="outline" className="bg-gray-100">To Do</Badge>;
-      case 'IN_PROGRESS':
-        return <Badge className="bg-blue-100 text-blue-800 border-blue-300">In Progress</Badge>;
-      case 'COMPLETED':
-        return <Badge className="bg-green-100 text-green-800 border-green-300">Completed</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
+const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatusChange }) => {
+  const [taskWorkstations, setTaskWorkstations] = useState<Record<string, string[]>>({});
   
-  // Function to handle task status change
-  const handleStatusChange = (taskId: string, newStatus: Task['status']) => {
-    if (onTaskStatusChange) {
-      onTaskStatusChange(taskId, newStatus);
+  useEffect(() => {
+    const loadTaskWorkstations = async () => {
+      const workstationMap: Record<string, string[]> = {};
+      
+      for (const task of tasks) {
+        try {
+          const { data } = await supabase
+            .from('task_workstation_links')
+            .select('workstations(name)')
+            .eq('task_id', task.id);
+          
+          if (data && data.length > 0) {
+            workstationMap[task.id] = data.map(item => item.workstations.name);
+          } else {
+            workstationMap[task.id] = [];
+          }
+        } catch (error) {
+          console.error(`Error fetching workstations for task ${task.id}:`, error);
+          workstationMap[task.id] = [];
+        }
+      }
+      
+      setTaskWorkstations(workstationMap);
+    };
+    
+    if (tasks.length > 0) {
+      loadTaskWorkstations();
     }
-  };
-  
-  // Function to get available status transitions based on current status
-  const getAvailableTransitions = (currentStatus: Task['status']) => {
-    switch (currentStatus) {
-      case 'TODO':
-        return ['IN_PROGRESS', 'COMPLETED'];
-      case 'IN_PROGRESS':
-        return ['TODO', 'COMPLETED'];
-      case 'COMPLETED':
-        return ['TODO', 'IN_PROGRESS'];
-      default:
-        return [];
+  }, [tasks]);
+
+  if (tasks.length === 0) {
+    return (
+      <div className="mt-4">
+        <h3 className="text-lg font-medium mb-2">{title}</h3>
+        <p className="text-muted-foreground text-sm">No tasks to display.</p>
+      </div>
+    );
+  }
+
+  // Helper function to format date
+  const formatDate = (dateString: string) => {
+    try {
+      return format(new Date(dateString), 'MMM d, yyyy');
+    } catch (error) {
+      return 'Invalid date';
     }
   };
 
-  // Function to render completion info if available
-  const renderCompletionInfo = (task: Task) => {
-    if (task.status === 'COMPLETED' && task.completed_by && task.completed_at) {
-      return (
-        <div className="mt-2 text-xs text-gray-500">
-          Completed by: {task.completed_by_name || 'Unknown'} on {format(new Date(task.completed_at), 'PPpp')}
-        </div>
-      );
+  // Helper function to get status color class
+  const getTaskStatusClass = (dueDate: string) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const taskDate = new Date(dueDate);
+    taskDate.setHours(0, 0, 0, 0);
+    
+    if (taskDate < today) {
+      return 'border-l-4 border-l-red-500';
+    } else if (taskDate.getTime() === today.getTime()) {
+      return 'border-l-4 border-l-yellow-500';
     }
-    return null;
+    return '';
   };
 
   return (
-    <div>
-      {title && <h3 className="text-lg font-semibold mb-3">{title}</h3>}
-      
-      {tasks.length === 0 ? (
-        <Card>
-          <CardContent className="py-6 text-center text-gray-500">
-            No tasks found
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {tasks.map(task => (
-            <Card key={task.id} className="overflow-hidden">
-              <div className="border-l-4 border-l-blue-500 p-4">
-                <div className="flex justify-between items-start mb-2">
-                  <h4 className="font-medium text-lg">{task.title}</h4>
-                  <div>
-                    {renderStatusBadge(task.status)}
-                  </div>
+    <div className="mt-4">
+      <h3 className="text-lg font-medium mb-2">{title}</h3>
+      <div className="space-y-3">
+        {tasks.map((task) => (
+          <Card key={task.id} className={`${getTaskStatusClass(task.due_date)}`}>
+            <CardContent className="p-4">
+              <div className="flex justify-between items-start mb-2">
+                <h4 className="font-medium">{task.title}</h4>
+                <div className="flex gap-2 items-center">
+                  <Badge 
+                    variant="outline"
+                    className={`
+                      ${task.priority === 'High' || task.priority === 'Urgent' 
+                        ? 'border-red-500 text-red-500' 
+                        : 'border-gray-300 text-gray-500'
+                      }
+                    `}
+                  >
+                    {task.priority}
+                  </Badge>
+                  {onTaskStatusChange && (
+                    <div>
+                      <Select 
+                        defaultValue={task.status} 
+                        onValueChange={(value) => onTaskStatusChange(task.id, value as Task['status'])}
+                      >
+                        <SelectTrigger className="w-32 h-7 text-xs">
+                          <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="TODO" className="text-xs">TODO</SelectItem>
+                          <SelectItem value="IN_PROGRESS" className="text-xs">IN_PROGRESS</SelectItem>
+                          <SelectItem value="COMPLETED" className="text-xs">COMPLETED</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
-                
-                {task.description && (
-                  <p className="text-sm text-muted-foreground mb-2">{task.description}</p>
-                )}
-                
-                {renderCompletionInfo(task)}
-                
-                {onTaskStatusChange && (
-                  <div className="flex justify-between items-center mt-3">
-                    <div className="text-sm text-muted-foreground">
-                      Due: {new Date(task.due_date).toLocaleDateString()}
-                    </div>
-                    <div className="space-x-2">
-                      {getAvailableTransitions(task.status).map(newStatus => (
-                        <Button 
-                          key={newStatus} 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={() => handleStatusChange(task.id, newStatus as Task['status'])}
-                        >
-                          Mark as {newStatus === 'TODO' ? 'To Do' : 
-                                   newStatus === 'IN_PROGRESS' ? 'In Progress' : 'Completed'}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
-            </Card>
-          ))}
-        </div>
-      )}
+
+              <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
+              
+              <div className="flex justify-between items-center text-xs text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  {taskWorkstations[task.id]?.map(workstation => (
+                    <Badge key={workstation} variant="secondary" className="font-normal">
+                      {workstation}
+                    </Badge>
+                  ))}
+                  {task.assignee_id && (
+                    <span className="flex items-center gap-1">
+                      <div className="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+                        {/* This would be replaced with actual user data in a real implementation */}
+                        {task.assignee_id.charAt(0)}
+                      </div>
+                      {/* Ideally we'd load employee name here */}
+                    </span>
+                  )}
+                </div>
+                <span>Due: {formatDate(task.due_date)}</span>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 };

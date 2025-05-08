@@ -29,19 +29,16 @@ export interface Phase {
 // Task Types
 export interface Task {
   id: string;
-  title: string;
-  description?: string;
-  status: 'TODO' | 'IN_PROGRESS' | 'COMPLETED';
-  due_date: string;
-  priority: string;
   phase_id: string;
+  assignee_id: string | null;
+  title: string;
+  description: string | null;
   workstation: string;
-  assignee_id?: string;
+  status: 'TODO' | 'IN_PROGRESS' | 'COMPLETED';
+  priority: 'Low' | 'Medium' | 'High' | 'Urgent';
+  due_date: string;
   created_at: string;
   updated_at: string;
-  completed_by?: string;
-  completed_at?: string;
-  completed_by_name?: string;
   project_name?: string; // Added for WorkstationView
 }
 
@@ -439,20 +436,16 @@ export const taskService = {
     return data as Task;
   },
   
-  async update(taskId: string, updates: Partial<Task>): Promise<Task> {
-    try {
-      const { data, error } = await supabase
-        .from('tasks')
-        .update({ ...updates, updated_at: new Date().toISOString() })
-        .eq('id', taskId)
-        .select();
-      
-      if (error) throw error;
-      return data[0] as Task;
-    } catch (error) {
-      console.error('Error updating task:', error);
-      throw error;
-    }
+  async update(id: string, task: Partial<Task>): Promise<Task> {
+    const { data, error } = await supabase
+      .from('tasks')
+      .update(task)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data as Task;
   },
   
   async delete(id: string): Promise<void> {
