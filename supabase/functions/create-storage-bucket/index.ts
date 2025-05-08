@@ -35,7 +35,7 @@ serve(async (req) => {
     
     if (!bucketExists) {
       // Create the bucket
-      const { data, error } = await supabase
+      const { error } = await supabase
         .storage
         .createBucket('project_files', {
           public: true, // Make bucket public
@@ -49,69 +49,128 @@ serve(async (req) => {
       console.log("Created storage bucket 'project_files'");
     }
     
-    // After ensuring the bucket exists, create or update the storage policies regardless
-    // This ensures policies are set even if the bucket already existed
+    // Create direct SQL statements to set policies
+    // This approach avoids the need for a custom function
     
-    // 1. Create policy for authenticated users to upload files
-    const { error: uploadPolicyError } = await supabase
-      .rpc('create_storage_policy', {
-        bucket_name: 'project_files',
-        policy_name: 'Allow authenticated uploads',
-        definition: `(bucket_id = 'project_files'::text AND (auth.role() = 'authenticated'::text OR auth.role() = 'anon'::text))`,
-        operation: 'INSERT'
-      });
-    
-    if (uploadPolicyError) {
-      console.error("Error creating upload policy:", uploadPolicyError);
-    } else {
-      console.log("Created upload policy for project_files bucket");
-    }
-    
-    // 2. Create policy for authenticated users to select files
-    const { error: selectPolicyError } = await supabase
-      .rpc('create_storage_policy', {
-        bucket_name: 'project_files',
-        policy_name: 'Allow authenticated downloads',
-        definition: `(bucket_id = 'project_files'::text AND (auth.role() = 'authenticated'::text OR auth.role() = 'anon'::text))`,
-        operation: 'SELECT'
-      });
+    // CREATE OR REPLACE POLICY for SELECT
+    const { error: selectPolicyError } = await supabase.rpc('stored_procedure', {
+      name: `
+        CREATE POLICY IF NOT EXISTS "Everyone can view project files" 
+        ON storage.objects
+        FOR SELECT 
+        USING (bucket_id = 'project_files');
+        
+        -- If policy already exists, drop and recreate it
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM pg_policies 
+            WHERE schemaname = 'storage' 
+            AND tablename = 'objects' 
+            AND policyname = 'Everyone can view project files'
+          ) THEN
+            DROP POLICY "Everyone can view project files" ON storage.objects;
+            
+            CREATE POLICY "Everyone can view project files" 
+            ON storage.objects
+            FOR SELECT 
+            USING (bucket_id = 'project_files');
+          END IF;
+        END$$;
+      `
+    });
     
     if (selectPolicyError) {
-      console.error("Error creating select policy:", selectPolicyError);
+      console.error("Error creating/updating SELECT policy:", selectPolicyError);
     } else {
-      console.log("Created select policy for project_files bucket");
+      console.log("SELECT policy created/updated successfully");
     }
     
-    // 3. Create policy for authenticated users to update files
-    const { error: updatePolicyError } = await supabase
-      .rpc('create_storage_policy', {
-        bucket_name: 'project_files',
-        policy_name: 'Allow authenticated updates',
-        definition: `(bucket_id = 'project_files'::text AND (auth.role() = 'authenticated'::text OR auth.role() = 'anon'::text))`,
-        operation: 'UPDATE'
-      });
+    // CREATE OR REPLACE POLICY for INSERT
+    const { error: insertPolicyError } = await supabase.rpc('stored_procedure', {
+      name: `
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM pg_policies 
+            WHERE schemaname = 'storage' 
+            AND tablename = 'objects' 
+            AND policyname = 'Everyone can upload project files'
+          ) THEN
+            DROP POLICY "Everyone can upload project files" ON storage.objects;
+          END IF;
+          
+          CREATE POLICY "Everyone can upload project files" 
+          ON storage.objects
+          FOR INSERT 
+          WITH CHECK (bucket_id = 'project_files');
+        END$$;
+      `
+    });
+    
+    if (insertPolicyError) {
+      console.error("Error creating/updating INSERT policy:", insertPolicyError);
+    } else {
+      console.log("INSERT policy created/updated successfully");
+    }
+    
+    // CREATE OR REPLACE POLICY for UPDATE
+    const { error: updatePolicyError } = await supabase.rpc('stored_procedure', {
+      name: `
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM pg_policies 
+            WHERE schemaname = 'storage' 
+            AND tablename = 'objects' 
+            AND policyname = 'Everyone can update project files'
+          ) THEN
+            DROP POLICY "Everyone can update project files" ON storage.objects;
+          END IF;
+          
+          CREATE POLICY "Everyone can update project files" 
+          ON storage.objects
+          FOR UPDATE 
+          USING (bucket_id = 'project_files');
+        END$$;
+      `
+    });
     
     if (updatePolicyError) {
-      console.error("Error creating update policy:", updatePolicyError);
+      console.error("Error creating/updating UPDATE policy:", updatePolicyError);
     } else {
-      console.log("Created update policy for project_files bucket");
+      console.log("UPDATE policy created/updated successfully");
     }
     
-    // 4. Create policy for authenticated users to delete files
-    const { error: deletePolicyError } = await supabase
-      .rpc('create_storage_policy', {
-        bucket_name: 'project_files',
-        policy_name: 'Allow authenticated deletes',
-        definition: `(bucket_id = 'project_files'::text AND (auth.role() = 'authenticated'::text OR auth.role() = 'anon'::text))`,
-        operation: 'DELETE'
-      });
+    // CREATE OR REPLACE POLICY for DELETE
+    const { error: deletePolicyError } = await supabase.rpc('stored_procedure', {
+      name: `
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM pg_policies 
+            WHERE schemaname = 'storage' 
+            AND tablename = 'objects' 
+            AND policyname = 'Everyone can delete project files'
+          ) THEN
+            DROP POLICY "Everyone can delete project files" ON storage.objects;
+          END IF;
+          
+          CREATE POLICY "Everyone can delete project files" 
+          ON storage.objects
+          FOR DELETE 
+          USING (bucket_id = 'project_files');
+        END$$;
+      `
+    });
     
     if (deletePolicyError) {
-      console.error("Error creating delete policy:", deletePolicyError);
+      console.error("Error creating/updating DELETE policy:", deletePolicyError);
     } else {
-      console.log("Created delete policy for project_files bucket");
+      console.log("DELETE policy created/updated successfully");
     }
     
+    // Return success message
     return new Response(
       JSON.stringify({ 
         message: bucketExists ? "Bucket already exists, policies updated" : "Bucket created successfully with proper policies" 

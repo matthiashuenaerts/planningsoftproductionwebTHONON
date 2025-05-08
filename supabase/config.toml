@@ -186,4 +186,3 @@ url = ""
 [functions]
 [functions.create-storage-bucket]
 verify_jwt = false
-

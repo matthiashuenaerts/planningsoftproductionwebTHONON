@@ -195,6 +195,13 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
       console.log("Starting file uploads for project:", projectId);
       console.log("Current user:", currentEmployee);
       
+      // First, ensure bucket is initialized
+      if (!bucketInitialized) {
+        console.log("Bucket not initialized yet, initializing first...");
+        await ensureStorageBucket();
+        setBucketInitialized(true);
+      }
+      
       // Upload each file
       for (let i = 0; i < selectedFiles.length; i++) {
         const file = selectedFiles[i];
@@ -205,13 +212,6 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
         
         // Update progress
         setUploadProgress(Math.round((i / selectedFiles.length) * 100));
-        
-        // Check if bucket has been initialized
-        if (!bucketInitialized) {
-          console.log("Bucket not initialized yet, initializing first...");
-          await ensureStorageBucket();
-          setBucketInitialized(true);
-        }
         
         const { error: uploadError } = await supabase
           .storage
@@ -245,6 +245,14 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
       if (error.message.includes('row-level security policy') || 
           error.message.includes('Permission denied')) {
         errorMessage = 'Permission denied: You may need to log out and log back in to refresh your credentials.';
+        
+        // Try to refresh the bucket policies
+        try {
+          await ensureStorageBucket();
+          setBucketInitialized(true);
+        } catch (e) {
+          console.error("Error refreshing bucket policies:", e);
+        }
         
         toast({
           title: "Authentication issue",

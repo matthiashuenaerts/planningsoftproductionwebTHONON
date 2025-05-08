@@ -494,7 +494,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_storage_policy: {
+        Args: {
+          bucket_name: string
+          policy_name: string
+          definition: string
+          operation: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
