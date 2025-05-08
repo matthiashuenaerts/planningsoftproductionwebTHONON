@@ -45,6 +45,18 @@ export interface Task {
   project_name?: string; // Add project_name for WorkstationView
 }
 
+// Define a type for creating a task with required fields
+export type TaskCreate = {
+  title: string;
+  phase_id: string;
+  due_date: string;
+  status: string;
+  priority: string;
+  workstation: string;
+  description?: string;
+  assignee_id?: string;
+}
+
 // Employee Types
 export interface Employee {
   id: string;
@@ -487,7 +499,7 @@ export const taskService = {
     }
   },
   
-  create: async (task: Partial<Task>) => {
+  create: async (task: TaskCreate) => {
     // Make sure all required fields are present
     if (!task.title || !task.phase_id || !task.due_date || !task.status || !task.priority || !task.workstation) {
       throw new Error('Missing required task fields');
@@ -495,7 +507,7 @@ export const taskService = {
 
     const { data, error } = await supabase
       .from('tasks')
-      .insert([task])
+      .insert(task) // Using TaskCreate type ensures required fields are present
       .select();
 
     if (error) {
@@ -506,15 +518,7 @@ export const taskService = {
     return data[0];
   },
   
-  createMultiple: async (tasks: Array<{
-    title: string;
-    phase_id: string;
-    due_date: string;
-    status: string;
-    priority: string;
-    workstation: string;
-    description?: string;
-  }>) => {
+  createMultiple: async (tasks: TaskCreate[]) => {
     // Ensure all tasks have required fields
     const validTasks = tasks.filter(task => 
       task.title && task.phase_id && task.due_date && 
