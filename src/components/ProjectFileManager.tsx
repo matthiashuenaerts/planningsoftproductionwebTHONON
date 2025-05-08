@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2, FileUp, File, Download, AlertCircle } from 'lucide-react';
+import { Trash2, FileUp, File, Download, AlertCircle, Upload } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,6 +25,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
 
 interface ProjectFileManagerProps {
   projectId: string;
@@ -50,6 +51,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
   const [files, setFiles] = useState<FileObject[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [fileToDelete, setFileToDelete] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -78,21 +80,33 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     try {
       console.log("Fetching files from bucket 'project_files' in folder:", projectId);
       
+      // Ensure project folder exists by creating if needed
+      try {
+        // Create a placeholder file to ensure folder exists
+        const placeholderBlob = new Blob([''], { type: 'text/plain' });
+        const placeholderFile = new File([placeholderBlob], '.folder', { type: 'text/plain' });
+        
+        const { error: folderError } = await supabase.storage
+          .from('project_files')
+          .upload(`${projectId}/.folder`, placeholderFile, { upsert: true });
+          
+        if (folderError && !folderError.message.includes('The resource already exists')) {
+          console.warn("Warning creating folder placeholder:", folderError);
+        }
+      } catch (folderErr) {
+        console.warn("Warning checking folder:", folderErr);
+      }
+      
       const { data, error } = await supabase
         .storage
         .from('project_files')
-        .list(projectId);
+        .list(projectId, {
+          sortBy: { column: 'name', order: 'asc' }
+        });
 
       if (error) {
         console.error("Error fetching files:", error);
-        
-        // If folder doesn't exist yet, show empty state
-        if (error.message.includes('not found')) {
-          console.log('Project folder does not exist yet, showing empty list');
-          setFiles([]);
-        } else {
-          throw error;
-        }
+        throw error;
       } else {
         // Filter out folders and format file data
         const fileObjects = data
@@ -123,33 +137,6 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     }
   };
 
-  const uploadFile = async (file: File) => {
-    if (!isAuthenticated || !currentEmployee) {
-      console.error("Not authenticated");
-      throw new Error("You must be logged in to upload files");
-    }
-
-    const fileName = `${Date.now()}_${file.name}`;
-    const filePath = `${projectId}/${fileName}`;
-    
-    console.log(`Uploading file: ${fileName} to path: ${filePath}`);
-    
-    const { data, error } = await supabase
-      .storage
-      .from('project_files')
-      .upload(filePath, file, {
-        upsert: true
-      });
-
-    if (error) {
-      console.error("Upload error details:", error);
-      throw error;
-    }
-    
-    console.log("Upload successful:", data);
-    return data;
-  };
-
   const handleUploadClick = () => {
     if (!isAuthenticated || !currentEmployee) {
       toast({
@@ -171,47 +158,65 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
 
     setUploading(true);
     setError(null);
+    setUploadProgress(0);
     
     try {
       console.log("Starting file uploads for project:", projectId);
       console.log("Current user:", currentEmployee);
       
-      // Ensure the folder exists first by uploading a placeholder if needed
-      try {
-        const placeholderFile = new Blob([''], { type: 'text/plain' });
-        await supabase.storage
+      // Upload each file
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        const fileName = `${Date.now()}_${file.name}`;
+        const filePath = `${projectId}/${fileName}`;
+        
+        console.log(`Uploading ${i+1}/${selectedFiles.length}: ${fileName}`);
+        
+        // Update progress
+        setUploadProgress(Math.round((i / selectedFiles.length) * 100));
+        
+        const { error: uploadError } = await supabase
+          .storage
           .from('project_files')
-          .upload(`${projectId}/.folder`, placeholderFile, { upsert: true });
-          
-        console.log("Placeholder file uploaded to ensure folder exists");
-      } catch (folderError) {
-        // Ignore error if folder already exists
-        console.log("Folder may already exist or error creating placeholder:", folderError);
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: true
+          });
+
+        if (uploadError) {
+          console.error(`Error uploading file ${fileName}:`, uploadError);
+          throw uploadError;
+        }
       }
       
-      // Upload each file
-      const uploadPromises = Array.from(selectedFiles).map(async (file) => {
-        return await uploadFile(file);
-      });
-
-      await Promise.all(uploadPromises);
+      setUploadProgress(100);
       
       toast({
         title: "Success",
-        description: "Files uploaded successfully",
+        description: `${selectedFiles.length} file(s) uploaded successfully`,
       });
       
-      fetchFiles(); // Refresh file list
+      // Refresh file list
+      await fetchFiles(); 
     } catch (error: any) {
       console.error('Error uploading files:', error);
-      setError(`Failed to upload: ${error.message}`);
+      
+      let errorMessage = error.message;
+      
+      // Check for specific RLS policy error
+      if (error.message.includes('row-level security policy')) {
+        errorMessage = 'Permission denied: You do not have permission to upload files. Please contact your administrator.';
+      }
+      
+      setError(`Failed to upload: ${errorMessage}`);
       toast({
-        title: "Error",
-        description: `Failed to upload files: ${error.message}`,
+        title: "Upload failed",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
       setUploading(false);
+      setUploadProgress(0);
       // Clear the input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -219,17 +224,11 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     }
   };
 
-  const confirmDeleteFile = () => {
+  const confirmDeleteFile = async () => {
     if (!fileToDelete || !isAuthenticated || !currentEmployee) return;
     
-    deleteFile(fileToDelete);
-    setFileToDelete(null);
-  };
-
-  const deleteFile = async (fileName: string) => {
-    setError(null);
     try {
-      const filePath = `${projectId}/${fileName}`;
+      const filePath = `${projectId}/${fileToDelete}`;
       
       const { error } = await supabase
         .storage
@@ -240,7 +239,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
         throw error;
       }
 
-      setFiles(prevFiles => prevFiles.filter(file => file.name !== fileName));
+      setFiles(prevFiles => prevFiles.filter(file => file.name !== fileToDelete));
       
       toast({
         title: "Success",
@@ -248,12 +247,13 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
       });
     } catch (error: any) {
       console.error('Error deleting file:', error);
-      setError(`Failed to delete: ${error.message}`);
       toast({
         title: "Error",
         description: `Failed to delete file: ${error.message}`,
         variant: "destructive"
       });
+    } finally {
+      setFileToDelete(null);
     }
   };
 
@@ -354,6 +354,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
+              accept="*/*"
             />
             <Button
               onClick={handleUploadClick}
@@ -361,10 +362,10 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
               className="w-full"
             >
               {uploading ? (
-                <>
-                  <div className="animate-spin mr-2 h-4 w-4 border-b-2 border-current"></div>
-                  Uploading...
-                </>
+                <div className="flex items-center justify-center w-full">
+                  <Upload className="mr-2 h-4 w-4 animate-pulse" />
+                  <span>Uploading...</span>
+                </div>
               ) : (
                 <>
                   <FileUp className="mr-2 h-4 w-4" />
@@ -372,6 +373,15 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
                 </>
               )}
             </Button>
+            
+            {uploading && (
+              <div className="mt-2">
+                <Progress value={uploadProgress} className="h-2" />
+                <p className="text-xs text-center mt-1 text-muted-foreground">
+                  {uploadProgress}% complete
+                </p>
+              </div>
+            )}
           </div>
 
           {loading ? (
