@@ -7,6 +7,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monitor, Truck, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from '@/context/AuthContext';
+import { format } from 'date-fns';
 
 interface WorkstationViewProps {
   workstationId: string;
@@ -18,6 +20,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { currentEmployee } = useAuth();
 
   useEffect(() => {
     const fetchWorkstationData = async () => {
@@ -97,14 +100,30 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
   // Function to handle completing a task
   const handleCompleteTask = async (taskId: string) => {
     try {
-      await taskService.update(taskId, { status: 'COMPLETED' });
+      if (!currentEmployee) {
+        toast({
+          title: "Authentication required",
+          description: "You must be logged in to complete tasks.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      const completedAt = new Date();
+      
+      // Update the task with completion information
+      await taskService.update(taskId, { 
+        status: 'COMPLETED',
+        completed_by: currentEmployee.id,
+        completed_at: completedAt.toISOString()
+      });
       
       // Update local state to remove the completed task
       setTasks(tasks.filter(task => task.id !== taskId));
       
       toast({
         title: "Task completed",
-        description: "Task has been marked as completed."
+        description: `Task has been marked as completed by ${currentEmployee.name} at ${format(completedAt, 'PPpp')}`
       });
     } catch (error: any) {
       toast({
