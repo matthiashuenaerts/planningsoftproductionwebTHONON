@@ -23,6 +23,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from '@/context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 interface ProjectFileManagerProps {
   projectId: string;
@@ -44,6 +45,7 @@ interface FileObject {
 const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) => {
   const { toast } = useToast();
   const { currentEmployee } = useAuth();
+  const navigate = useNavigate();
   const [files, setFiles] = useState<FileObject[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -54,10 +56,23 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
   const projectFolderPath = projectId;
 
   useEffect(() => {
+    // Check if user is authenticated
+    if (!currentEmployee) {
+      toast({
+        title: "Authentication required",
+        description: "You must be logged in to manage files",
+        variant: "destructive"
+      });
+      navigate('/login');
+      return;
+    }
+    
     fetchFiles();
-  }, [projectId]);
+  }, [projectId, currentEmployee, navigate]);
 
   const fetchFiles = async () => {
+    if (!currentEmployee) return;
+    
     setLoading(true);
     try {
       console.log("Fetching files from bucket 'project_files' in folder:", projectFolderPath);
@@ -107,12 +122,23 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
   };
 
   const handleUploadClick = () => {
+    if (!currentEmployee) {
+      toast({
+        title: "Authentication required",
+        description: "You must be logged in to upload files",
+        variant: "destructive"
+      });
+      navigate('/login');
+      return;
+    }
+    
     fileInputRef.current?.click();
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = e.target.files;
     if (!selectedFiles || selectedFiles.length === 0) return;
+    if (!currentEmployee) return;
 
     setUploading(true);
     
@@ -167,7 +193,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
   };
 
   const confirmDeleteFile = () => {
-    if (!fileToDelete) return;
+    if (!fileToDelete || !currentEmployee) return;
     
     deleteFile(fileToDelete);
     setFileToDelete(null);
@@ -261,7 +287,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
             />
             <Button
               onClick={handleUploadClick}
-              disabled={uploading}
+              disabled={uploading || !currentEmployee}
               className="w-full"
             >
               {uploading ? (
