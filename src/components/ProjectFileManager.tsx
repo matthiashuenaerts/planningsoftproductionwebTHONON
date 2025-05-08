@@ -50,7 +50,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
   const [fileToDelete, setFileToDelete] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Don't include a trailing slash in the folder path to fix RLS issues
+  // Use projectId directly as the folder path without trailing slash
   const projectFolderPath = projectId;
 
   useEffect(() => {
@@ -60,42 +60,40 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
   const fetchFiles = async () => {
     setLoading(true);
     try {
-      // First ensure the bucket exists by trying to list files
+      console.log("Fetching files from bucket 'project_files' in folder:", projectFolderPath);
+      
       const { data, error } = await supabase
         .storage
         .from('project_files')
-        .list(projectFolderPath, {
-          limit: 100,
-          sortBy: { column: 'name', order: 'asc' }
-        });
+        .list(projectFolderPath);
 
       if (error) {
-        // If error is not found, it's likely the folder doesn't exist yet
+        console.error("Error fetching files:", error);
+        
+        // If folder doesn't exist yet, show empty state
         if (error.message.includes('not found')) {
           console.log('Project folder does not exist yet, showing empty list');
           setFiles([]);
-          setLoading(false);
-          return;
+        } else {
+          throw error;
         }
-        console.error("Error listing files:", error);
-        throw error;
+      } else {
+        // Filter out folders and format file data
+        const fileObjects = data
+          ? data
+              .filter(item => !item.name.endsWith('/') && item.name !== '.folder')
+              .map(item => ({
+                id: item.id,
+                name: item.name,
+                size: item.metadata?.size || 0,
+                created_at: item.created_at,
+                metadata: item.metadata || {}
+              }))
+          : [];
+        
+        console.log("Files fetched:", fileObjects.length);
+        setFiles(fileObjects);
       }
-
-      // Filter out folders and format file data
-      const fileObjects = data
-        ? data
-            .filter(item => !item.name.endsWith('/') && item.name !== '.folder')
-            .map(item => ({
-              id: item.id,
-              name: item.name,
-              size: item.metadata?.size || 0,
-              created_at: item.created_at,
-              metadata: item.metadata || {}
-            }))
-        : [];
-      
-      console.log("Files fetched:", fileObjects.length);
-      setFiles(fileObjects);
     } catch (error: any) {
       console.error('Error fetching files:', error);
       toast({
@@ -122,10 +120,9 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
       console.log("Starting file uploads for project:", projectId);
       
       const uploadPromises = Array.from(selectedFiles).map(async (file) => {
-        // Generate a unique file name to avoid conflicts
+        // Generate a unique filename to avoid conflicts
         const fileExt = file.name.split('.').pop();
-        // Use original name + timestamp for uniqueness
-        const fileName = `${file.name.split('.')[0]}_${Date.now()}.${fileExt}`;
+        const fileName = `${Date.now()}_${file.name}`;
         const filePath = `${projectFolderPath}/${fileName}`;
         
         console.log("Uploading file:", fileName);
@@ -134,9 +131,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
         const { data, error } = await supabase
           .storage
           .from('project_files')
-          .upload(filePath, file, {
-            cacheControl: '3600'
-          });
+          .upload(filePath, file);
 
         if (error) {
           console.error("Upload error details:", error);
