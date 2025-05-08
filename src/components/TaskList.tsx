@@ -7,15 +7,25 @@ import { Task } from '@/services/dataService';
 import { workstationService } from '@/services/workstationService';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
+import { taskService } from '@/services/dataService';
+import { useToast } from '@/components/ui/use-toast';
 
 interface TaskListProps {
   tasks: Task[];
   title?: string;
+  showProject?: boolean;
+  showWorkstation?: boolean;
   onTaskStatusChange?: (taskId: string, status: Task['status']) => void;
 }
 
-const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatusChange }) => {
+const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", showProject = false, showWorkstation = false, onTaskStatusChange }) => {
   const [taskWorkstations, setTaskWorkstations] = useState<Record<string, string[]>>({});
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [selectedPriority, setSelectedPriority] = useState<string>('');
+  const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const { toast } = useToast();
+  const { currentEmployee } = useAuth();
   
   useEffect(() => {
     const loadTaskWorkstations = async () => {
@@ -78,6 +88,31 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
       return 'border-l-4 border-l-yellow-500';
     }
     return '';
+  };
+
+  const handleStatusChange = async (taskId: string, status: string) => {
+    try {
+      // Pass the current employee ID to record who completed the task
+      await taskService.updateStatus(taskId, status, currentEmployee?.id);
+      
+      toast({
+        title: `Task ${status === 'COMPLETED' ? 'Completed' : 'Updated'}`,
+        description: status === 'COMPLETED' 
+          ? `Task marked as complete by ${currentEmployee?.name}` 
+          : `Task status updated to ${status}`
+      });
+      
+      if (onTaskStatusChange) {
+        onTaskStatusChange(taskId, status);
+      }
+    } catch (error: any) {
+      console.error('Error updating task status:', error);
+      toast({
+        title: "Error",
+        description: `Failed to update task: ${error.message}`,
+        variant: "destructive"
+      });
+    }
   };
 
   return (

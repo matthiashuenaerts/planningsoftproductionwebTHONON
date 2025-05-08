@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import WorkstationSettings from '@/components/settings/WorkstationSettings';
 import EmployeeSettings from '@/components/settings/EmployeeSettings';
+import PhaseOffsetSettings from '@/components/settings/PhaseOffsetSettings';
 import { Button } from '@/components/ui/button';
 import { Settings as SettingsIcon } from 'lucide-react';
 import { Workstation } from '@/services/workstationService';
@@ -80,6 +81,7 @@ const Settings: React.FC = () => {
             <TabsList className="mb-4">
               <TabsTrigger value="workstations">Workstations</TabsTrigger>
               <TabsTrigger value="employees">Employees</TabsTrigger>
+              <TabsTrigger value="phaseOffsets">Phase Day Offsets</TabsTrigger>
             </TabsList>
             
             <TabsContent value="workstations">
@@ -88,6 +90,10 @@ const Settings: React.FC = () => {
             
             <TabsContent value="employees">
               <EmployeeSettings />
+            </TabsContent>
+            
+            <TabsContent value="phaseOffsets">
+              <PhaseOffsetSettings />
             </TabsContent>
           </Tabs>
         </div>
