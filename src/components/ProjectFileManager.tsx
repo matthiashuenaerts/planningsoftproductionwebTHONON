@@ -149,6 +149,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     
     try {      
       console.log("Starting file uploads for project:", projectId);
+      console.log("Current user:", currentEmployee);
       
       // First, check if the folder exists, if not create it (this might help with permissions)
       try {
