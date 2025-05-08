@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2, FileUp, File, Download } from 'lucide-react';
+import { Trash2, FileUp, File, Download, AlertCircle } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface ProjectFileManagerProps {
   projectId: string;
@@ -44,12 +45,13 @@ interface FileObject {
 
 const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) => {
   const { toast } = useToast();
-  const { currentEmployee } = useAuth();
+  const { currentEmployee, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [files, setFiles] = useState<FileObject[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [fileToDelete, setFileToDelete] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Use projectId directly as the folder path without trailing slash
@@ -57,7 +59,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
 
   useEffect(() => {
     // Check if user is authenticated
-    if (!currentEmployee) {
+    if (!isAuthenticated || !currentEmployee) {
       toast({
         title: "Authentication required",
         description: "You must be logged in to manage files",
@@ -68,12 +70,13 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     }
     
     fetchFiles();
-  }, [projectId, currentEmployee, navigate]);
+  }, [projectId, currentEmployee, isAuthenticated, navigate]);
 
   const fetchFiles = async () => {
-    if (!currentEmployee) return;
+    if (!isAuthenticated || !currentEmployee) return;
     
     setLoading(true);
+    setError(null);
     try {
       console.log("Fetching files from bucket 'project_files' in folder:", projectFolderPath);
       
@@ -111,6 +114,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
       }
     } catch (error: any) {
       console.error('Error fetching files:', error);
+      setError(`Failed to fetch files: ${error.message}`);
       toast({
         title: "Error",
         description: `Failed to load files: ${error.message}`,
@@ -122,7 +126,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
   };
 
   const handleUploadClick = () => {
-    if (!currentEmployee) {
+    if (!isAuthenticated || !currentEmployee) {
       toast({
         title: "Authentication required",
         description: "You must be logged in to upload files",
@@ -138,12 +142,23 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = e.target.files;
     if (!selectedFiles || selectedFiles.length === 0) return;
-    if (!currentEmployee) return;
+    if (!isAuthenticated || !currentEmployee) return;
 
     setUploading(true);
+    setError(null);
     
     try {      
       console.log("Starting file uploads for project:", projectId);
+      
+      // First, check if the folder exists, if not create it (this might help with permissions)
+      try {
+        await supabase.storage.from('project_files').list(projectFolderPath);
+      } catch (folderError) {
+        // Folder might not exist, attempt to create a placeholder
+        const placeholderFile = new Blob([''], { type: 'text/plain' });
+        await supabase.storage.from('project_files')
+          .upload(`${projectFolderPath}/.folder`, placeholderFile);
+      }
       
       const uploadPromises = Array.from(selectedFiles).map(async (file) => {
         // Generate a unique filename to avoid conflicts
@@ -157,7 +172,9 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
         const { data, error } = await supabase
           .storage
           .from('project_files')
-          .upload(filePath, file);
+          .upload(filePath, file, {
+            upsert: true // Use upsert to prevent conflicts
+          });
 
         if (error) {
           console.error("Upload error details:", error);
@@ -178,6 +195,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
       fetchFiles(); // Refresh file list
     } catch (error: any) {
       console.error('Error uploading files:', error);
+      setError(`Failed to upload: ${error.message}`);
       toast({
         title: "Error",
         description: `Failed to upload files: ${error.message}`,
@@ -193,13 +211,14 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
   };
 
   const confirmDeleteFile = () => {
-    if (!fileToDelete || !currentEmployee) return;
+    if (!fileToDelete || !isAuthenticated || !currentEmployee) return;
     
     deleteFile(fileToDelete);
     setFileToDelete(null);
   };
 
   const deleteFile = async (fileName: string) => {
+    setError(null);
     try {
       const filePath = `${projectFolderPath}/${fileName}`;
       
@@ -220,6 +239,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
       });
     } catch (error: any) {
       console.error('Error deleting file:', error);
+      setError(`Failed to delete: ${error.message}`);
       toast({
         title: "Error",
         description: `Failed to delete file: ${error.message}`,
@@ -229,6 +249,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
   };
 
   const downloadFile = async (fileName: string) => {
+    setError(null);
     try {
       const filePath = `${projectFolderPath}/${fileName}`;
       
@@ -252,6 +273,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
       document.body.removeChild(a);
     } catch (error: any) {
       console.error('Error downloading file:', error);
+      setError(`Failed to download: ${error.message}`);
       toast({
         title: "Error",
         description: `Failed to download file: ${error.message}`,
@@ -267,6 +289,35 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     return `${Math.round(bytes / Math.pow(1024, i))} ${sizes[i]}`;
   };
 
+  // Show a message if not authenticated
+  if (!isAuthenticated || !currentEmployee) {
+    return (
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle>Project Files</CardTitle>
+          <CardDescription>
+            Authentication Required
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Authentication Required</AlertTitle>
+            <AlertDescription>
+              You must be logged in to manage project files.
+            </AlertDescription>
+          </Alert>
+          <Button 
+            className="w-full mt-4"
+            onClick={() => navigate('/login')}
+          >
+            Go to Login
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div>
       <Card className="w-full">
@@ -277,6 +328,16 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>
+                {error}
+              </AlertDescription>
+            </Alert>
+          )}
+          
           <div className="mb-4">
             <input
               type="file"
@@ -287,7 +348,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
             />
             <Button
               onClick={handleUploadClick}
-              disabled={uploading || !currentEmployee}
+              disabled={uploading || !isAuthenticated || !currentEmployee}
               className="w-full"
             >
               {uploading ? (
