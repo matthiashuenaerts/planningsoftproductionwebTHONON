@@ -39,7 +39,7 @@ import { PlusCircle, Edit, Trash, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { workstationService, Workstation } from '@/services/workstationService';
 import { useForm } from 'react-hook-form';
-import { TaskWorkstationsManager } from './TaskWorkstationsManager';
+import { WorkstationTasksManager } from './TaskWorkstationsManager';
 
 const WorkstationSettings: React.FC = () => {
   const [workstations, setWorkstations] = useState<Workstation[]>([]);
@@ -313,7 +313,7 @@ const WorkstationSettings: React.FC = () => {
               </DialogDescription>
             </DialogHeader>
             
-            <TaskWorkstationsManager 
+            <WorkstationTasksManager 
               workstationId={selectedWorkstation.id} 
               workstationName={selectedWorkstation.name} 
             />
