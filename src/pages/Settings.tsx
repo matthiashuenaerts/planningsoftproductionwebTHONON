@@ -6,10 +6,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import WorkstationSettings from '@/components/settings/WorkstationSettings';
 import EmployeeSettings from '@/components/settings/EmployeeSettings';
+import StandardTasksSettings from '@/components/settings/StandardTasksSettings';
 import { Button } from '@/components/ui/button';
 import { Settings as SettingsIcon } from 'lucide-react';
-import { Workstation } from '@/services/workstationService';
-import { employeeService } from '@/services/dataService';
 
 const Settings: React.FC = () => {
   const { currentEmployee } = useAuth();
@@ -80,6 +79,7 @@ const Settings: React.FC = () => {
             <TabsList className="mb-4">
               <TabsTrigger value="workstations">Workstations</TabsTrigger>
               <TabsTrigger value="employees">Employees</TabsTrigger>
+              <TabsTrigger value="standard-tasks">Standard Tasks</TabsTrigger>
             </TabsList>
             
             <TabsContent value="workstations">
@@ -88,6 +88,10 @@ const Settings: React.FC = () => {
             
             <TabsContent value="employees">
               <EmployeeSettings />
+            </TabsContent>
+
+            <TabsContent value="standard-tasks">
+              <StandardTasksSettings />
             </TabsContent>
           </Tabs>
         </div>
