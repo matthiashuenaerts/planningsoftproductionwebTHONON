@@ -32,10 +32,19 @@ import { taskService } from '@/services/dataService';
 import { TaskWorkstationsManager } from './TaskWorkstationsManager';
 import { Badge } from '@/components/ui/badge';
 
+// Interface for task items in the UI with additional display properties
+interface StandardTaskUI {
+  id: string;
+  name: string;
+  category: string;
+  existsInDb: boolean;
+  dbId?: string;
+}
+
 const StandardTaskSettings: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [standardTasks, setStandardTasks] = useState<StandardTask[]>([]);
+  const [standardTasks, setStandardTasks] = useState<StandardTaskUI[]>([]);
   const [dbTasks, setDbTasks] = useState<StandardTask[]>([]);
   const [managingWorkstationsTaskId, setManagingWorkstationsTaskId] = useState<string | null>(null);
   const { toast } = useToast();
@@ -45,7 +54,7 @@ const StandardTaskSettings: React.FC = () => {
     { id: "01", name: "Prog. Vectorworks", category: "productievoorbereiding" },
     { id: "02", name: "Bestellen E&S + WB", category: "productievoorbereiding" },
     { id: "03", name: "Prog. Korpus", category: "productiesturing" },
-    { id: "04", name: "Bestellen lades", category: "" },
+    { id: "04", name: "Bestellen lades", category: "productievoorbereiding" },
     { id: "05", name: "Klaarleggen", category: "beslag, toebehoren, platen, kanten" },
     { id: "06", name: "Bestel", category: "Toebehoren" },
     { id: "07", name: "Bestel", category: "Plaatmateriaal en kanten" },
@@ -72,7 +81,7 @@ const StandardTaskSettings: React.FC = () => {
     { id: "28", name: "Controleren", category: "Lak / Fineer >> etiketteren" },
     { id: "29", name: "Controleren", category: "Lakwerk / Fineer BESTELD >> etiketteren" },
     { id: "30", name: "Lakwerk / Fineer BESTELD", category: "Boren - frezen >> CNC" },
-    { id: "31", name: "Leggers opkuisen en controleren maatvoering + ev. programmatie", category: "" },
+    { id: "31", name: "Leggers opkuisen en controleren maatvoering + ev. programmatie", category: "productievoorbereiding" },
     { id: "32", name: "Controleren", category: "Werkblad" },
     { id: "33", name: "Monteren", category: "Korpus >> Pers" },
     { id: "34", name: "Monteren", category: "Korpus >> Manueel / Speciaal maatwerk" },

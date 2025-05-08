@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   CheckboxCard
 } from '@/components/settings/CheckboxCard';
 import { useToast } from '@/hooks/use-toast';
 import { taskService, Task } from '@/services/dataService';
-import { workstationService } from '@/services/workstationService';
+import { workstationService, Workstation } from '@/services/workstationService';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -26,7 +25,7 @@ export const TaskWorkstationsManager: React.FC<TaskWorkstationsManagerProps> = (
   onClose 
 }) => {
   const [loading, setLoading] = useState(true);
-  const [workstations, setWorkstations] = useState<any[]>([]);
+  const [workstations, setWorkstations] = useState<Workstation[]>([]);
   const [workstationLinks, setWorkstationLinks] = useState<Record<string, boolean>>({});
   const [processingWorkstation, setProcessingWorkstation] = useState<string | null>(null);
   const { toast } = useToast();
@@ -38,12 +37,8 @@ export const TaskWorkstationsManager: React.FC<TaskWorkstationsManagerProps> = (
         setLoading(true);
         
         // Get all workstations
-        const { data: allWorkstations, error: workstationsError } = await supabase
-          .from('workstations')
-          .select('*')
-          .order('name');
-          
-        if (workstationsError) throw workstationsError;
+        const allWorkstations = await workstationService.getAll();
+        setWorkstations(allWorkstations);
         
         // Get all task-workstation links for this task
         const { data: links, error: linksError } = await supabase
@@ -55,11 +50,12 @@ export const TaskWorkstationsManager: React.FC<TaskWorkstationsManagerProps> = (
         
         // Create a map of workstation IDs to boolean (true if linked)
         const linkMap: Record<string, boolean> = {};
-        links.forEach((link: any) => {
-          linkMap[link.workstation_id] = true;
-        });
+        if (links) {
+          links.forEach((link: any) => {
+            linkMap[link.workstation_id] = true;
+          });
+        }
         
-        setWorkstations(allWorkstations || []);
         setWorkstationLinks(linkMap);
       } catch (error: any) {
         console.error('Error loading task workstation data:', error);
@@ -139,7 +135,7 @@ export const TaskWorkstationsManager: React.FC<TaskWorkstationsManagerProps> = (
               No workstations found in the system
             </p>
           ) : (
-            workstations.map((workstation: any) => (
+            workstations.map((workstation) => (
               <CheckboxCard
                 key={workstation.id}
                 id={workstation.id}
