@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Calendar } from 'lucide-react';
 
 interface PlanningControlsProps {
   selectedDate: Date;
@@ -15,10 +15,12 @@ const PlanningControls: React.FC<PlanningControlsProps> = ({
   isGenerating
 }) => {
   return (
-    <div className="flex items-center space-x-2">
+    <div className="flex items-center">
       <Button
         onClick={onGeneratePlan}
         disabled={isGenerating}
+        variant="default"
+        className="whitespace-nowrap"
       >
         {isGenerating ? (
           <>
@@ -26,7 +28,10 @@ const PlanningControls: React.FC<PlanningControlsProps> = ({
             Generating...
           </>
         ) : (
-          'Auto-Generate Plan'
+          <>
+            <Calendar className="mr-2 h-4 w-4" />
+            Auto-Generate Plan
+          </>
         )}
       </Button>
     </div>

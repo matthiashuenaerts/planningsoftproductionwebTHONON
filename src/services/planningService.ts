@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { format } from 'date-fns';
 
@@ -200,7 +201,8 @@ export const planningService = {
         .from('tasks')
         .select('*')
         .in('status', ['TODO', 'IN_PROGRESS'])
-        .order('priority', { ascending: false });
+        .order('priority', { ascending: false })
+        .order('due_date', { ascending: true });
       
       if (tasksError) {
         console.error('Error fetching tasks:', tasksError);
@@ -349,6 +351,224 @@ export const planningService = {
     }
   },
   
+  // New function: Generate a daily plan based on personal tasks
+  async generatePlanFromPersonalTasks(employeeId: string, date: Date): Promise<void> {
+    if (!(date instanceof Date) || isNaN(date.getTime())) {
+      console.error('Invalid date provided for generating plan:', date);
+      throw new Error('Invalid date provided');
+    }
+    
+    const dateStr = format(date, 'yyyy-MM-dd');
+    
+    try {
+      // First, get the work periods for this day
+      const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
+      
+      const { data: workPeriods, error: workPeriodsError } = await supabase
+        .from('work_hours')
+        .select('*')
+        .eq('day_of_week', dayOfWeek)
+        .order('start_time');
+      
+      if (workPeriodsError) {
+        console.error('Error fetching work periods:', workPeriodsError);
+        throw workPeriodsError;
+      }
+      
+      if (!workPeriods?.length) {
+        throw new Error(`No work periods defined for ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek]}`);
+      }
+      
+      // Get employee data
+      const { data: employee, error: employeeError } = await supabase
+        .from('employees')
+        .select('*')
+        .eq('id', employeeId)
+        .single();
+      
+      if (employeeError) {
+        console.error('Error fetching employee:', employeeError);
+        throw employeeError;
+      }
+      
+      if (!employee) {
+        throw new Error('Employee not found');
+      }
+      
+      // Get employee's workstations
+      const workstations = await this.getEmployeeWorkstations(employeeId);
+      
+      if (!workstations.length) {
+        throw new Error('No workstations assigned to employee');
+      }
+      
+      // Get personal tasks for the employee's workstations
+      const personalTasks = [];
+      
+      // For each workstation, get the tasks
+      for (const workstation of workstations) {
+        // First try to get tasks via standard task links
+        const { data: standardTaskLinks, error: linksError } = await supabase
+          .from('standard_task_workstation_links')
+          .select('standard_task_id')
+          .eq('workstation_id', workstation);
+        
+        if (linksError) {
+          console.error('Error fetching standard task links:', linksError);
+          continue;
+        }
+        
+        if (standardTaskLinks && standardTaskLinks.length > 0) {
+          // Get all the standard tasks for this workstation
+          const standardTaskIds = standardTaskLinks.map(link => link.standard_task_id);
+          const { data: standardTasks, error: standardTasksError } = await supabase
+            .from('standard_tasks')
+            .select('*')
+            .in('id', standardTaskIds);
+          
+          if (standardTasksError) {
+            console.error('Error fetching standard tasks:', standardTasksError);
+            continue;
+          }
+          
+          // For each standard task, find actual tasks that match
+          for (const standardTask of (standardTasks || [])) {
+            const taskNumber = standardTask.task_number;
+            const taskName = standardTask.task_name;
+            
+            // Find tasks that match this standard task
+            const { data: matchingTasks, error: tasksError } = await supabase
+              .from('tasks')
+              .select('*')
+              .not('status', 'eq', 'COMPLETED')
+              .or(`title.ilike.%${taskNumber}%,title.ilike.%${taskName}%`);
+              
+            if (tasksError) {
+              console.error('Error fetching matching tasks:', tasksError);
+              continue;
+            }
+            
+            if (matchingTasks && matchingTasks.length > 0) {
+              // Filter for tasks assigned to current user or unassigned
+              const relevantTasks = matchingTasks.filter(task => 
+                !task.assignee_id || task.assignee_id === employeeId
+              );
+              
+              personalTasks.push(...relevantTasks);
+            }
+          }
+        } else {
+          // Fall back to traditional task-workstation links
+          const { data: workstationTasks, error: workstationTasksError } = await supabase
+            .from('task_workstation_links')
+            .select('tasks (*)')
+            .eq('workstation_id', workstation);
+            
+          if (workstationTasksError) {
+            console.error('Error fetching workstation tasks:', workstationTasksError);
+            continue;
+          }
+          
+          if (workstationTasks && workstationTasks.length > 0) {
+            const tasks = workstationTasks
+              .filter(item => item.tasks && item.tasks.status !== 'COMPLETED')
+              .map(item => item.tasks);
+              
+            // Filter for tasks assigned to current user or unassigned
+            const relevantTasks = tasks.filter(task => 
+              !task.assignee_id || task.assignee_id === employeeId
+            );
+            
+            personalTasks.push(...relevantTasks);
+          }
+        }
+      }
+      
+      // Remove duplicates
+      const uniquePersonalTasks = Array.from(
+        new Map(personalTasks.map(task => [task.id, task])).values()
+      );
+      
+      // Sort by priority and due date
+      const priorityOrder = { 'Urgent': 0, 'High': 1, 'Medium': 2, 'Low': 3 };
+      uniquePersonalTasks.sort((a, b) => {
+        const priorityA = priorityOrder[a.priority as keyof typeof priorityOrder] || 4;
+        const priorityB = priorityOrder[b.priority as keyof typeof priorityOrder] || 4;
+        
+        if (priorityA !== priorityB) return priorityA - priorityB;
+        
+        // If priority is the same, sort by due date
+        const dateA = new Date(a.due_date || '9999-12-31');
+        const dateB = new Date(b.due_date || '9999-12-31');
+        return dateA.getTime() - dateB.getTime();
+      });
+      
+      // Delete any existing auto-generated schedules for this employee and date
+      const { error: deleteError } = await supabase
+        .from('schedules')
+        .delete()
+        .eq('employee_id', employeeId)
+        .gte('start_time', `${dateStr}T00:00:00`)
+        .lte('start_time', `${dateStr}T23:59:59`)
+        .eq('is_auto_generated', true);
+      
+      if (deleteError) {
+        console.error('Error deleting existing schedules:', deleteError);
+        throw deleteError;
+      }
+      
+      const schedulesToInsert: CreateScheduleInput[] = [];
+      
+      // Distribute tasks across work periods
+      let taskIndex = 0;
+      
+      for (const period of workPeriods) {
+        if (taskIndex >= uniquePersonalTasks.length) break;
+        
+        const startTime = new Date(`${dateStr}T${period.start_time}`);
+        const endTime = new Date(`${dateStr}T${period.end_time}`);
+        
+        // Assign task to this period
+        const task = uniquePersonalTasks[taskIndex];
+        
+        schedulesToInsert.push({
+          employee_id: employeeId,
+          task_id: task.id,
+          title: task.title,
+          description: task.description || '',
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString(),
+          is_auto_generated: true
+        });
+        
+        taskIndex++;
+      }
+      
+      console.log('Personal schedules to insert:', schedulesToInsert.length);
+      
+      // Insert the generated schedules
+      if (schedulesToInsert.length > 0) {
+        const { error: insertError } = await supabase
+          .from('schedules')
+          .insert(schedulesToInsert);
+        
+        if (insertError) {
+          console.error('Error inserting schedules:', insertError);
+          throw insertError;
+        }
+      }
+      
+      if (schedulesToInsert.length === 0) {
+        throw new Error('No tasks available to schedule');
+      }
+      
+      return;
+    } catch (error: any) {
+      console.error('Error in generatePlanFromPersonalTasks:', error);
+      throw new Error(`Failed to generate personal plan: ${error.message || 'Unknown error'}`);
+    }
+  },
+  
   // Get available tasks for planning
   async getAvailableTasksForPlanning(): Promise<any[]> {
     try {
@@ -389,14 +609,25 @@ export const planningService = {
         throw employeeError;
       }
       
+      const workstations = [];
+      
       if (employeeData?.workstation) {
-        return [employeeData.workstation];
+        // Get workstation ID if it's a legacy workstation name
+        const { data: workstationData } = await supabase
+          .from('workstations')
+          .select('id')
+          .eq('name', employeeData.workstation)
+          .single();
+          
+        if (workstationData?.id) {
+          workstations.push(workstationData.id);
+        }
       }
       
-      // Otherwise check for workstation links
+      // Also check for workstation links
       const { data: links, error: linksError } = await supabase
         .from('employee_workstation_links')
-        .select('workstations(name)')
+        .select('workstation_id')
         .eq('employee_id', employeeId);
       
       if (linksError) {
@@ -404,7 +635,15 @@ export const planningService = {
         throw linksError;
       }
       
-      return links?.map(link => link.workstations.name) || [];
+      if (links && links.length > 0) {
+        links.forEach(link => {
+          if (!workstations.includes(link.workstation_id)) {
+            workstations.push(link.workstation_id);
+          }
+        });
+      }
+      
+      return workstations;
     } catch (error) {
       console.error('Error in getEmployeeWorkstations:', error);
       throw error;

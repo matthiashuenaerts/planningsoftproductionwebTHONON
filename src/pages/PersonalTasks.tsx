@@ -138,17 +138,20 @@ const PersonalTasks = () => {
                       
                       if (projectError) throw projectError;
                       
+                      // Cast task to the required Task type
                       return {
                         ...task,
                         project_name: projectData.name,
-                        status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED" // Ensure type compatibility
-                      };
+                        priority: task.priority as "Low" | "Medium" | "High" | "Urgent",
+                        status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED"
+                      } as Task;
                     } catch (error) {
                       console.error('Error fetching project info for task:', error);
                       return {
                         ...task,
-                        status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED" // Ensure type compatibility
-                      };
+                        priority: task.priority as "Low" | "Medium" | "High" | "Urgent",
+                        status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED"
+                      } as Task;
                     }
                   })
                 );
@@ -169,15 +172,16 @@ const PersonalTasks = () => {
             }
             
             if (workstationTasks.data && workstationTasks.data.length > 0) {
-              const tasks = workstationTasks.data
+              const filteredTasks = workstationTasks.data
                 .filter(item => item.tasks && item.tasks.status !== 'COMPLETED')
                 .map(item => ({
                   ...item.tasks,
-                  status: item.tasks.status as "TODO" | "IN_PROGRESS" | "COMPLETED" // Ensure type compatibility
-                }));
+                  priority: item.tasks.priority as "Low" | "Medium" | "High" | "Urgent",
+                  status: item.tasks.status as "TODO" | "IN_PROGRESS" | "COMPLETED"
+                })) as Task[];
                 
               // Filter for tasks assigned to current user or unassigned
-              const relevantTasks = tasks.filter(task => 
+              const relevantTasks = filteredTasks.filter(task => 
                 !task.assignee_id || task.assignee_id === currentEmployee.id
               );
               
