@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2, FileUp, File, Download, AlertCircle, Upload, Eye } from 'lucide-react';
+import { Trash2, FileUp, File, Download, AlertCircle, Upload, Eye, ExternalLink } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -346,6 +346,35 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     }
   };
 
+  const openFile = async (fileName: string) => {
+    setError(null);
+    try {
+      const filePath = `${projectId}/${fileName}`;
+      
+      const { data, error } = await supabase
+        .storage
+        .from('project_files')
+        .createSignedUrl(filePath, 60); // URL valid for 60 seconds
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.signedUrl) {
+        // Open the signed URL in a new tab
+        window.open(data.signedUrl, '_blank');
+      }
+    } catch (error: any) {
+      console.error('Error opening file:', error);
+      setError(`Failed to open file: ${error.message}`);
+      toast({
+        title: "Error",
+        description: `Failed to open file: ${error.message}`,
+        variant: "destructive"
+      });
+    }
+  };
+
   const handlePreviewFile = (fileName: string) => {
     setPreviewFileName(fileName);
   };
@@ -468,13 +497,23 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
                       variant="outline" 
                       size="sm"
                       onClick={() => handlePreviewFile(file.name)}
+                      title="Preview"
                     >
                       <Eye className="h-4 w-4" />
                     </Button>
                     <Button 
                       variant="outline" 
                       size="sm"
+                      onClick={() => openFile(file.name)}
+                      title="Open"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
                       onClick={() => downloadFile(file.name)}
+                      title="Download"
                     >
                       <Download className="h-4 w-4" />
                     </Button>
@@ -483,6 +522,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
                       size="sm"
                       className="text-red-600 hover:text-red-600 hover:bg-red-50"
                       onClick={() => setFileToDelete(file.name)}
+                      title="Delete"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
