@@ -80,22 +80,8 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     try {
       console.log("Fetching files from bucket 'project_files' in folder:", projectId);
       
-      // Ensure project folder exists by creating if needed
-      try {
-        // Create a placeholder file to ensure folder exists
-        const placeholderBlob = new Blob([''], { type: 'text/plain' });
-        const placeholderFile = new File([placeholderBlob], '.folder', { type: 'text/plain' });
-        
-        const { error: folderError } = await supabase.storage
-          .from('project_files')
-          .upload(`${projectId}/.folder`, placeholderFile, { upsert: true });
-          
-        if (folderError && !folderError.message.includes('The resource already exists')) {
-          console.warn("Warning creating folder placeholder:", folderError);
-        }
-      } catch (folderErr) {
-        console.warn("Warning checking folder:", folderErr);
-      }
+      // For ensuring project folder exists, we'll use a more direct approach
+      // without trying to create a placeholder file which was causing errors
       
       const { data, error } = await supabase
         .storage
@@ -105,8 +91,14 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
         });
 
       if (error) {
-        console.error("Error fetching files:", error);
-        throw error;
+        // If the error is because the folder doesn't exist yet, we can safely ignore it
+        if (error.message.includes('The resource was not found')) {
+          console.log("Project folder doesn't exist yet, will be created on first upload");
+          setFiles([]);
+        } else {
+          console.error("Error fetching files:", error);
+          throw error;
+        }
       } else {
         // Filter out folders and format file data
         const fileObjects = data
