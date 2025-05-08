@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +6,7 @@ import { format } from 'date-fns';
 import { Task } from '@/services/dataService';
 import { workstationService } from '@/services/workstationService';
 import { supabase } from '@/integrations/supabase/client';
+import { StandardTask, standardTasksService } from '@/services/standardTasksService';
 
 interface TaskListProps {
   tasks: Task[];
@@ -17,6 +17,7 @@ interface TaskListProps {
 const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatusChange }) => {
   const [taskWorkstations, setTaskWorkstations] = useState<Record<string, string[]>>({});
   const [completedByNames, setCompletedByNames] = useState<Record<string, string>>({});
+  const [standardTasksMap, setStandardTasksMap] = useState<Record<string, StandardTask>>({});
   
   useEffect(() => {
     const loadTaskWorkstations = async () => {
@@ -70,10 +71,27 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
       
       setCompletedByNames(namesMap);
     };
+
+    // Load standard tasks info for task titles that start with a task number
+    const loadStandardTasks = async () => {
+      try {
+        const standardTasks = await standardTasksService.getAll();
+        const tasksMap: Record<string, StandardTask> = {};
+        
+        standardTasks.forEach(task => {
+          tasksMap[task.task_number] = task;
+        });
+        
+        setStandardTasksMap(tasksMap);
+      } catch (error) {
+        console.error('Error loading standard tasks:', error);
+      }
+    };
     
     if (tasks.length > 0) {
       loadTaskWorkstations();
       loadCompletedByNames();
+      loadStandardTasks();
     }
   }, [tasks]);
 
@@ -120,6 +138,52 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
     return '';
   };
 
+  // Helper function to extract task number from a task title
+  const extractTaskNumber = (title: string): string | null => {
+    // Check if the title starts with a pattern like "01 - " or "01-" or just "01"
+    const match = title.match(/^(\d{2})(?:\s*[-:]\s*|\s+)/);
+    return match ? match[1] : null;
+  };
+
+  // Helper function to get the standard task information
+  const getStandardTask = (task: Task): StandardTask | null => {
+    const taskNumber = extractTaskNumber(task.title);
+    return taskNumber && standardTasksMap[taskNumber] 
+      ? standardTasksMap[taskNumber] 
+      : null;
+  };
+
+  // Helper function to render task title with standard task info if available
+  const renderTaskTitle = (task: Task) => {
+    const standardTask = getStandardTask(task);
+    
+    if (!standardTask) {
+      return task.title;
+    }
+    
+    const taskNameParts = standardTasksService.getTaskNameParts(standardTask.task_name);
+    
+    // If there's only one part or no parts, just return the original title
+    if (taskNameParts.length <= 1) {
+      return task.title;
+    }
+    
+    // Otherwise, render with the parts (category, action, location)
+    return (
+      <div>
+        <span className="font-medium">{task.title}</span>
+        <div className="text-xs text-muted-foreground mt-1">
+          {taskNameParts.map((part, index) => (
+            <span key={index} className="mr-1">
+              {index > 0 && <span className="mx-1">→</span>}
+              {part}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="mt-4">
       <h3 className="text-lg font-medium mb-2">{title}</h3>
@@ -128,7 +192,9 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
           <Card key={task.id} className={`${getTaskStatusClass(task.due_date)}`}>
             <CardContent className="p-4">
               <div className="flex justify-between items-start mb-2">
-                <h4 className="font-medium">{task.title}</h4>
+                <h4 className="font-medium">
+                  {renderTaskTitle(task)}
+                </h4>
                 <div className="flex gap-2 items-center">
                   <Badge 
                     variant="outline"
