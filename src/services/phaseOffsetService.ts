@@ -13,7 +13,7 @@ export interface PhaseOffset {
 export const initializePhaseOffsets = async () => {
   try {
     // Create the phase_offsets table if it doesn't exist
-    const { error: setupError } = await supabase.rpc('setup_phase_offsets_table');
+    const { data, error: setupError } = await supabase.rpc('setup_phase_offsets_table');
     
     if (setupError) {
       console.error("Error setting up phase_offsets table:", setupError);

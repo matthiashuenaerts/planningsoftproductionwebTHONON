@@ -7,10 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import WorkstationSettings from '@/components/settings/WorkstationSettings';
 import EmployeeSettings from '@/components/settings/EmployeeSettings';
 import PhaseOffsetSettings from '@/components/settings/PhaseOffsetSettings';
+import StandardTaskSettings from '@/components/settings/StandardTaskSettings';
 import { Button } from '@/components/ui/button';
 import { Settings as SettingsIcon } from 'lucide-react';
-import { Workstation } from '@/services/workstationService';
-import { employeeService } from '@/services/dataService';
 
 const Settings: React.FC = () => {
   const { currentEmployee } = useAuth();
@@ -82,6 +81,7 @@ const Settings: React.FC = () => {
               <TabsTrigger value="workstations">Workstations</TabsTrigger>
               <TabsTrigger value="employees">Employees</TabsTrigger>
               <TabsTrigger value="phaseOffsets">Phase Day Offsets</TabsTrigger>
+              <TabsTrigger value="standardTasks">Standard Tasks</TabsTrigger>
             </TabsList>
             
             <TabsContent value="workstations">
@@ -94,6 +94,10 @@ const Settings: React.FC = () => {
             
             <TabsContent value="phaseOffsets">
               <PhaseOffsetSettings />
+            </TabsContent>
+
+            <TabsContent value="standardTasks">
+              <StandardTaskSettings />
             </TabsContent>
           </Tabs>
         </div>
