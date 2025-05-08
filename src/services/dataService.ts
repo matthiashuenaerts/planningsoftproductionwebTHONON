@@ -41,6 +41,7 @@ export interface Task {
   completed_at?: string;
   created_at: string;
   updated_at: string;
+  project_name?: string; // Add project_name for WorkstationView
 }
 
 // Employee Types
@@ -312,6 +313,112 @@ export const taskService = {
     }
 
     return data;
+  },
+  
+  getTodaysTasks: async () => {
+    // Get today's date in ISO format (YYYY-MM-DD)
+    const today = new Date().toISOString().split('T')[0];
+    
+    const { data, error } = await supabase
+      .from('tasks')
+      .select(`
+        *,
+        phases:phase_id (
+          name,
+          projects:project_id (name)
+        )
+      `)
+      .eq('due_date', today)
+      .order('priority');
+
+    if (error) {
+      console.error('Error fetching today\'s tasks:', error);
+      throw new Error(`Failed to fetch today's tasks: ${error.message}`);
+    }
+
+    // Format the data to include project information
+    const formattedData = data?.map(task => ({
+      ...task,
+      project_name: task.phases?.projects?.name || 'Unknown Project'
+    })) || [];
+
+    return formattedData;
+  },
+
+  getByWorkstationId: async (workstationId: string) => {
+    // First get all task IDs linked to this workstation
+    const { data: linkedTasks, error: linkError } = await supabase
+      .from('task_workstation_links')
+      .select('task_id')
+      .eq('workstation_id', workstationId);
+      
+    if (linkError) {
+      console.error('Error fetching task links:', linkError);
+      throw new Error(`Failed to fetch workstation tasks: ${linkError.message}`);
+    }
+    
+    if (!linkedTasks || linkedTasks.length === 0) {
+      return [];
+    }
+    
+    // Get all task IDs
+    const taskIds = linkedTasks.map(link => link.task_id);
+    
+    // Fetch the actual tasks with project information
+    const { data, error } = await supabase
+      .from('tasks')
+      .select(`
+        *,
+        phases:phase_id (
+          name,
+          projects:project_id (name)
+        )
+      `)
+      .in('id', taskIds)
+      .order('due_date', { ascending: true });
+      
+    if (error) {
+      console.error('Error fetching tasks:', error);
+      throw new Error(`Failed to fetch tasks: ${error.message}`);
+    }
+    
+    // Format the data to include project information
+    const formattedData = data?.map(task => ({
+      ...task,
+      project_name: task.phases?.projects?.name || 'Unknown Project'
+    })) || [];
+    
+    return formattedData;
+  },
+
+  getOpenTasksByEmployeeOrWorkstation: async (employeeId: string, workstation: string | null) => {
+    // Start with a base query for incomplete tasks
+    let query = supabase
+      .from('tasks')
+      .select('*')
+      .neq('status', 'COMPLETED');
+      
+    // If employeeId is provided, add condition for assigned tasks
+    if (employeeId) {
+      query = query.eq('assignee_id', employeeId);
+    }
+    
+    // If workstation is provided, add condition for workstation
+    if (workstation) {
+      query = query.eq('workstation', workstation);
+    }
+    
+    // Order by priority and due date
+    query = query.order('due_date', { ascending: true });
+    
+    const { data, error } = await query;
+    
+    if (error) {
+      console.error('Error fetching open tasks:', error);
+      throw new Error(`Failed to fetch open tasks: ${error.message}`);
+    }
+    
+    return data || [];
   },
   
   update: async (id: string, task: Partial<Task>) => {

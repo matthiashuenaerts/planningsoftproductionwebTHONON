@@ -79,28 +79,38 @@ const PhaseOffsetSettings: React.FC = () => {
       if (phaseError) throw phaseError;
       setPhases(phaseData || []);
       
-      // Get all existing phase offsets with phase names
+      // Check if phase_offsets table exists, if not we need to handle that case
+      // We'll query phases instead and show a message to create the table
       const { data, error } = await supabase
-        .from('phase_offsets')
+        .from('phases')
         .select(`
           id, 
-          phase_id,
-          days_before_installation,
-          created_at,
-          updated_at,
-          phases:phase_id (name)
+          name,
+          days_before_installation:id
         `)
-        .order('days_before_installation', { ascending: false });
+        .limit(1);
       
-      if (error) throw error;
-      
-      // Format the data to include phase_name
-      const formattedData = (data || []).map(item => ({
-        ...item,
-        phase_name: item.phases?.name || 'Unknown Phase'
-      }));
-      
-      setPhaseOffsets(formattedData);
+      // If there's no error in the query but we get no data back
+      // or if there's a specific error about the column not existing,
+      // we'll show a message to create the table
+      if (error && error.message.includes("column") || !data) {
+        setPhaseOffsets([]);
+      } else {
+        // If phase_offsets table exists, query it
+        try {
+          const { data: offsetData, error: offsetError } = await supabase.rpc(
+            'get_phase_offsets'
+          );
+          
+          if (offsetError) throw offsetError;
+          
+          setPhaseOffsets(offsetData || []);
+        } catch (rpcError) {
+          console.error("RPC error:", rpcError);
+          // Fallback to empty array if the function doesn't exist yet
+          setPhaseOffsets([]);
+        }
+      }
     } catch (error: any) {
       console.error('Error loading phase offset data:', error);
       toast({
@@ -129,6 +139,31 @@ const PhaseOffsetSettings: React.FC = () => {
 
   const handleCreate = async (data: { phase_id: string; days_before_installation: number }) => {
     try {
+      // First check if phase_offsets table exists by getting db schema
+      const { data: tableExists, error: schemaError } = await supabase
+        .rpc('table_exists', { table_name: 'phase_offsets' });
+      
+      if (schemaError) {
+        console.error("Schema check error:", schemaError);
+        // If we can't check, assume the table doesn't exist
+        toast({
+          title: "Database Setup Required",
+          description: "The phase_offsets table needs to be created first",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // If table doesn't exist, show message
+      if (!tableExists) {
+        toast({
+          title: "Database Setup Required",
+          description: "The phase_offsets table needs to be created first",
+          variant: "destructive"
+        });
+        return;
+      }
+      
       // Check if this phase already has an offset
       const { data: existingOffset, error: checkError } = await supabase
         .from('phase_offsets')
@@ -237,6 +272,33 @@ const PhaseOffsetSettings: React.FC = () => {
     }
   };
 
+  const setupPhaseOffsetsTable = async () => {
+    try {
+      setLoading(true);
+      
+      // Create the phase_offsets table using RPC function
+      const { error } = await supabase.rpc('setup_phase_offsets_table');
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Success", 
+        description: "Phase offsets table created successfully"
+      });
+      
+      loadData();
+    } catch (error: any) {
+      console.error('Error setting up phase offsets table:', error);
+      toast({
+        title: "Error",
+        description: `Failed to setup table: ${error.message}`,
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -341,7 +403,18 @@ const PhaseOffsetSettings: React.FC = () => {
             <div className="flex justify-center p-4">
               <Loader2 className="animate-spin h-6 w-6" />
             </div>
-          ) : (
+          ) : phaseOffsets.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-8 space-y-4">
+              <p className="text-center text-muted-foreground">
+                No phase offsets configured yet. You may need to set up the phase_offsets table first.
+              </p>
+              <Button onClick={setupPhaseOffsetsTable}>
+                Setup Phase Offsets Table
+              </Button>
+            </div>
+          )}
+          
+          {phaseOffsets.length > 0 && (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -351,39 +424,31 @@ const PhaseOffsetSettings: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {phaseOffsets.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
-                      No phase offsets configured. Create your first one!
+                {phaseOffsets.map((offset) => (
+                  <TableRow key={offset.id}>
+                    <TableCell>{offset.phase_name}</TableCell>
+                    <TableCell>{offset.days_before_installation} days</TableCell>
+                    <TableCell>
+                      <div className="flex space-x-2">
+                        <Button
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => handleOpenEdit(offset)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => handleDelete(offset)}
+                          disabled={isDeleting}
+                        >
+                          <Trash className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
-                ) : (
-                  phaseOffsets.map((offset) => (
-                    <TableRow key={offset.id}>
-                      <TableCell>{offset.phase_name}</TableCell>
-                      <TableCell>{offset.days_before_installation} days</TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Button
-                            variant="ghost" 
-                            size="icon"
-                            onClick={() => handleOpenEdit(offset)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost" 
-                            size="icon"
-                            onClick={() => handleDelete(offset)}
-                            disabled={isDeleting}
-                          >
-                            <Trash className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
+                ))}
               </TableBody>
             </Table>
           )}

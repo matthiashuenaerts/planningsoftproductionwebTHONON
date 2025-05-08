@@ -14,6 +14,7 @@ import {
 import { employeeService } from '@/services/dataService';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
+import { Loader2 } from 'lucide-react';
 
 interface UserManagementProps {
   onUserAdded?: () => void;
