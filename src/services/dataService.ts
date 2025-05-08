@@ -441,13 +441,14 @@ export const taskService = {
   
   async update(taskId: string, updates: Partial<Task>): Promise<Task> {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('tasks')
         .update({ ...updates, updated_at: new Date().toISOString() })
-        .eq('id', taskId);
+        .eq('id', taskId)
+        .select();
       
       if (error) throw error;
-      return true;
+      return data[0] as Task;
     } catch (error) {
       console.error('Error updating task:', error);
       throw error;
