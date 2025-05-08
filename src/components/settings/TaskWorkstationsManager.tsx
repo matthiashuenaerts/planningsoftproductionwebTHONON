@@ -1,10 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import {
-  CheckboxCard
-} from '@/components/settings/CheckboxCard';
+import { CheckboxCard } from '@/components/settings/CheckboxCard';
 import { useToast } from '@/hooks/use-toast';
-import { taskService, Task } from '@/services/dataService';
+import { StandardTask, standardTasksService } from '@/services/standardTasksService';
 import { workstationService } from '@/services/workstationService';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,20 +18,20 @@ export const TaskWorkstationsManager: React.FC<TaskWorkstationsManagerProps> = (
   workstationName
 }) => {
   const [loading, setLoading] = useState(true);
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [standardTasks, setStandardTasks] = useState<StandardTask[]>([]);
   const [taskLinks, setTaskLinks] = useState<Record<string, boolean>>({});
   const [processingTask, setProcessingTask] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Load all tasks and the linked tasks for this workstation
+  // Load all standard tasks and the linked tasks for this workstation
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
         
-        // Get all tasks
-        const allTasks = await taskService.getAll();
-        setTasks(allTasks);
+        // Get all standard tasks
+        const allStandardTasks = await standardTasksService.getAll();
+        setStandardTasks(allStandardTasks);
         
         // Get all task-workstation links for this workstation
         const links = await supabase
@@ -111,22 +109,25 @@ export const TaskWorkstationsManager: React.FC<TaskWorkstationsManagerProps> = (
     <div className="py-4">
       <ScrollArea className="h-[400px] pr-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {tasks.length === 0 ? (
+          {standardTasks.length === 0 ? (
             <p className="col-span-full text-center text-muted-foreground py-8">
               No tasks found in the system
             </p>
           ) : (
-            tasks.map(task => (
-              <CheckboxCard
-                key={task.id}
-                id={task.id}
-                title={task.title}
-                description={task.description || 'No description'}
-                checked={!!taskLinks[task.id]}
-                onCheckedChange={(checked) => handleToggleTask(task.id, checked)}
-                disabled={processingTask === task.id}
-              />
-            ))
+            standardTasks.map(task => {
+              const taskDescription = `Task #${task.task_number}`;
+              return (
+                <CheckboxCard
+                  key={task.id}
+                  id={task.id}
+                  title={task.task_name}
+                  description={taskDescription}
+                  checked={!!taskLinks[task.id]}
+                  onCheckedChange={(checked) => handleToggleTask(task.id, checked)}
+                  disabled={processingTask === task.id}
+                />
+              );
+            })
           )}
         </div>
       </ScrollArea>
