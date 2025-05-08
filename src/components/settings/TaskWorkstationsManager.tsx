@@ -8,6 +8,7 @@ import { taskService, Task } from '@/services/dataService';
 import { workstationService } from '@/services/workstationService';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface TaskWorkstationsManagerProps {
   workstationId: string;
@@ -108,25 +109,27 @@ export const TaskWorkstationsManager: React.FC<TaskWorkstationsManagerProps> = (
 
   return (
     <div className="py-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {tasks.length === 0 ? (
-          <p className="col-span-full text-center text-muted-foreground py-8">
-            No tasks found in the system
-          </p>
-        ) : (
-          tasks.map(task => (
-            <CheckboxCard
-              key={task.id}
-              id={task.id}
-              title={task.title}
-              description={task.description || 'No description'}
-              checked={!!taskLinks[task.id]}
-              onCheckedChange={(checked) => handleToggleTask(task.id, checked)}
-              disabled={processingTask === task.id}
-            />
-          ))
-        )}
-      </div>
+      <ScrollArea className="h-[400px] pr-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {tasks.length === 0 ? (
+            <p className="col-span-full text-center text-muted-foreground py-8">
+              No tasks found in the system
+            </p>
+          ) : (
+            tasks.map(task => (
+              <CheckboxCard
+                key={task.id}
+                id={task.id}
+                title={task.title}
+                description={task.description || 'No description'}
+                checked={!!taskLinks[task.id]}
+                onCheckedChange={(checked) => handleToggleTask(task.id, checked)}
+                disabled={processingTask === task.id}
+              />
+            ))
+          )}
+        </div>
+      </ScrollArea>
     </div>
   );
 };

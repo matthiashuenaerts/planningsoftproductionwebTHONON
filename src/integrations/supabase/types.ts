@@ -198,6 +198,38 @@ export type Database = {
           },
         ]
       }
+      phase_offsets: {
+        Row: {
+          created_at: string
+          days_before_installation: number
+          id: string
+          phase_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          days_before_installation?: number
+          id?: string
+          phase_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          days_before_installation?: number
+          id?: string
+          phase_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_offsets_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "phases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       phases: {
         Row: {
           created_at: string
@@ -502,6 +534,25 @@ export type Database = {
           operation: string
         }
         Returns: undefined
+      }
+      get_phase_offsets: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          phase_id: string
+          phase_name: string
+          days_before_installation: number
+          created_at: string
+          updated_at: string
+        }[]
+      }
+      setup_phase_offsets_table: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      table_exists: {
+        Args: { table_name: string }
+        Returns: boolean
       }
     }
     Enums: {
