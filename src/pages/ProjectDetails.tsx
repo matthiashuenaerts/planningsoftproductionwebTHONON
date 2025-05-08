@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
@@ -17,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { projectService, Project, Task, taskService } from '@/services/dataService';
 import TaskList from '@/components/TaskList';
 import ProjectFileManager from '@/components/ProjectFileManager';
+import { useAuth } from '@/context/AuthContext';
 
 const ProjectDetails = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -26,7 +28,7 @@ const ProjectDetails = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('tasks');
-  const [currentEmployee, setCurrentEmployee] = useState<any>(null);
+  const { currentEmployee } = useAuth();
 
   useEffect(() => {
     const fetchProjectData = async () => {
@@ -194,8 +196,8 @@ const ProjectDetails = () => {
             
             <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
               <div>
-                <h1 className="text-3xl font-bold tracking-tight">{project.name}</h1>
-                <p className="text-muted-foreground">Client: {project.client}</p>
+                <h1 className="text-3xl font-bold tracking-tight">{project?.name}</h1>
+                <p className="text-muted-foreground">Client: {project?.client}</p>
               </div>
               <div className="flex gap-2">
                 <Button 
@@ -226,19 +228,19 @@ const ProjectDetails = () => {
                 <CardContent className="space-y-4">
                   <div>
                     <h4 className="text-sm font-medium mb-1">Status</h4>
-                    <div>{getStatusBadge(project.status)}</div>
+                    <div>{project && getStatusBadge(project.status)}</div>
                   </div>
                   <div>
                     <h4 className="text-sm font-medium mb-1">Project Progress</h4>
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Completion</span>
-                        <span className="font-medium">{project.progress}%</span>
+                        <span className="font-medium">{project?.progress}%</span>
                       </div>
                       <div className="w-full bg-muted rounded-full h-2.5">
                         <div 
                           className="bg-primary h-2.5 rounded-full" 
-                          style={{ width: `${project.progress}%` }}
+                          style={{ width: `${project?.progress}%` }}
                         ></div>
                       </div>
                     </div>
@@ -248,12 +250,12 @@ const ProjectDetails = () => {
                     <div className="flex items-center gap-2 text-sm">
                       <Clock className="h-4 w-4 text-muted-foreground" />
                       <span className="text-muted-foreground">Start Date:</span>
-                      <span>{formatDate(project.start_date)}</span>
+                      <span>{project?.start_date && formatDate(project.start_date)}</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <CalendarDays className="h-4 w-4 text-muted-foreground" />
                       <span className="text-muted-foreground">Installation Date:</span>
-                      <span>{formatDate(project.installation_date)}</span>
+                      <span>{project?.installation_date && formatDate(project.installation_date)}</span>
                     </div>
                   </div>
                 </CardContent>

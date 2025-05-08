@@ -16,6 +16,7 @@ interface TaskListProps {
 
 const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatusChange }) => {
   const [taskWorkstations, setTaskWorkstations] = useState<Record<string, string[]>>({});
+  const [completedByNames, setCompletedByNames] = useState<Record<string, string>>({});
   
   useEffect(() => {
     const loadTaskWorkstations = async () => {
@@ -41,9 +42,38 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
       
       setTaskWorkstations(workstationMap);
     };
+
+    const loadCompletedByNames = async () => {
+      const namesMap: Record<string, string> = {};
+      const completedTasks = tasks.filter(task => task.completed_by);
+      
+      for (const task of completedTasks) {
+        if (!task.completed_by) continue;
+        
+        try {
+          const { data, error } = await supabase
+            .from('employees')
+            .select('name')
+            .eq('id', task.completed_by)
+            .single();
+          
+          if (error) throw error;
+          
+          if (data) {
+            namesMap[task.id] = data.name;
+          }
+        } catch (error) {
+          console.error(`Error fetching employee name for task ${task.id}:`, error);
+          namesMap[task.id] = 'Unknown';
+        }
+      }
+      
+      setCompletedByNames(namesMap);
+    };
     
     if (tasks.length > 0) {
       loadTaskWorkstations();
+      loadCompletedByNames();
     }
   }, [tasks]);
 
@@ -135,7 +165,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
               
               {task.status === 'COMPLETED' && task.completed_by && task.completed_at && (
                 <div className="mb-3 text-sm bg-green-50 p-2 rounded border border-green-100">
-                  <span className="font-medium text-green-700">Completed:</span> {formatDateTime(task.completed_at)} by {task.completed_by}
+                  <span className="font-medium text-green-700">Completed:</span> {formatDateTime(task.completed_at)} by {completedByNames[task.id] || 'Unknown'}
                 </div>
               )}
               
