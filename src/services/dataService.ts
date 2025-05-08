@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 // Project Types
@@ -30,31 +29,17 @@ export interface Phase {
 // Task Types
 export interface Task {
   id: string;
-  title: string;
-  description?: string;
-  status: string;
-  priority: string;
-  due_date: string;
   phase_id: string;
+  assignee_id: string | null;
+  title: string;
+  description: string | null;
   workstation: string;
-  assignee_id?: string;
-  completed_by?: string;
-  completed_at?: string;
+  status: 'TODO' | 'IN_PROGRESS' | 'COMPLETED';
+  priority: 'Low' | 'Medium' | 'High' | 'Urgent';
+  due_date: string;
   created_at: string;
   updated_at: string;
-  project_name?: string; // Add project_name for WorkstationView
-}
-
-// Define a type for creating a task with required fields
-export type TaskCreate = {
-  title: string;
-  phase_id: string;
-  due_date: string;
-  status: string;
-  priority: string;
-  workstation: string;
-  description?: string;
-  assignee_id?: string;
+  project_name?: string; // Added for WorkstationView
 }
 
 // Employee Types
@@ -299,247 +284,177 @@ export const phaseService = {
 
 // Task service functions
 export const taskService = {
-  getAll: async () => {
+  async getAll(): Promise<Task[]> {
     const { data, error } = await supabase
       .from('tasks')
       .select('*')
-      .order('title');
-
-    if (error) {
-      console.error('Error fetching tasks:', error);
-      throw new Error(`Failed to fetch tasks: ${error.message}`);
-    }
-
-    return data || [];
+      .order('due_date', { ascending: true });
+    
+    if (error) throw error;
+    return data as Task[] || [];
   },
-  
-  getById: async (id: string) => {
-    const { data, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('id', id)
-      .single();
 
-    if (error) {
-      console.error('Error fetching task:', error);
-      throw new Error(`Failed to fetch task: ${error.message}`);
-    }
-
-    return data;
-  },
-  
-  getByPhase: async (phaseId: string) => {
+  async getByPhase(phaseId: string): Promise<Task[]> {
     const { data, error } = await supabase
       .from('tasks')
       .select('*')
       .eq('phase_id', phaseId)
       .order('due_date', { ascending: true });
-
-    if (error) {
-      console.error('Error fetching phase tasks:', error);
-      throw new Error(`Failed to fetch phase tasks: ${error.message}`);
-    }
-
-    return data || [];
+    
+    if (error) throw error;
+    return data as Task[] || [];
   },
   
-  getTodaysTasks: async () => {
-    // Get today's date in ISO format (YYYY-MM-DD)
+  async getByWorkstation(workstation: string): Promise<Task[]> {
+    try {
+      // First get the workstation ID
+      const { data: workstationData, error: workstationError } = await supabase
+        .from('workstations')
+        .select('id')
+        .eq('name', workstation)
+        .maybeSingle();
+      
+      if (workstationError) throw workstationError;
+      
+      if (!workstationData) {
+        console.warn(`No workstation found with name: ${workstation}`);
+        return [];
+      }
+      
+      return await this.getByWorkstationId(workstationData.id);
+    } catch (error) {
+      console.error('Error in getByWorkstation:', error);
+      throw error;
+    }
+  },
+
+  async getByWorkstationId(workstationId: string): Promise<Task[]> {
+    try {
+      // Get tasks linked to this workstation
+      const { data, error } = await supabase
+        .from('task_workstation_links')
+        .select(`
+          task_id,
+          tasks (*)
+        `)
+        .eq('workstation_id', workstationId);
+      
+      if (error) throw error;
+      
+      // Check if data exists and has tasks property
+      if (!data || data.length === 0) {
+        return [];
+      }
+      
+      // Extract tasks from the joined data and ensure they match the Task type
+      const tasks = data
+        .filter(item => item.tasks !== null) // Filter out any null tasks
+        .map(item => item.tasks as Task);
+      
+      return tasks;
+    } catch (error) {
+      console.error('Error in getByWorkstationId:', error);
+      throw error;
+    }
+  },
+  
+  async getTodaysTasks(): Promise<Task[]> {
     const today = new Date().toISOString().split('T')[0];
     
     const { data, error } = await supabase
       .from('tasks')
-      .select(`
-        *,
-        phases:phase_id (
-          name,
-          projects:project_id (name)
-        )
-      `)
+      .select('*')
       .eq('due_date', today)
-      .order('priority');
-
-    if (error) {
-      console.error('Error fetching today\'s tasks:', error);
-      throw new Error(`Failed to fetch today's tasks: ${error.message}`);
-    }
-
-    // Format the data to include project information
-    const formattedData = data?.map(task => ({
-      ...task,
-      project_name: task.phases?.projects?.name || 'Unknown Project'
-    })) || [];
-
-    return formattedData;
+      .order('priority', { ascending: false });
+    
+    if (error) throw error;
+    return data as Task[] || [];
   },
-
-  getByWorkstationId: async (workstationId: string) => {
-    // First get all task IDs linked to this workstation
-    const { data: linkedTasks, error: linkError } = await supabase
-      .from('task_workstation_links')
-      .select('task_id')
-      .eq('workstation_id', workstationId);
-      
-    if (linkError) {
-      console.error('Error fetching task links:', linkError);
-      throw new Error(`Failed to fetch workstation tasks: ${linkError.message}`);
-    }
-    
-    if (!linkedTasks || linkedTasks.length === 0) {
-      return [];
-    }
-    
-    // Get all task IDs
-    const taskIds = linkedTasks.map(link => link.task_id);
-    
-    // Fetch the actual tasks with project information
+  
+  async getByDueDate(dueDate: string): Promise<Task[]> {
     const { data, error } = await supabase
       .from('tasks')
-      .select(`
-        *,
-        phases:phase_id (
-          name,
-          projects:project_id (name)
-        )
-      `)
-      .in('id', taskIds)
-      .order('due_date', { ascending: true });
-      
-    if (error) {
-      console.error('Error fetching tasks:', error);
-      throw new Error(`Failed to fetch tasks: ${error.message}`);
-    }
-    
-    // Format the data to include project information
-    const formattedData = data?.map(task => ({
-      ...task,
-      project_name: task.phases?.projects?.name || 'Unknown Project'
-    })) || [];
-    
-    return formattedData;
-  },
-
-  getOpenTasksByEmployeeOrWorkstation: async (employeeId: string, workstation: string | null) => {
-    // Start with a base query for incomplete tasks
-    let query = supabase
-      .from('tasks')
       .select('*')
-      .neq('status', 'COMPLETED');
-      
-    // If employeeId is provided, add condition for assigned tasks
+      .eq('due_date', dueDate)
+      .order('priority', { ascending: false });
+    
+    if (error) throw error;
+    return data as Task[] || [];
+  },
+  
+  async getOpenTasksByEmployeeOrWorkstation(employeeId: string, workstation: string | null): Promise<Task[]> {
+    // Get tasks assigned to an employee
     if (employeeId) {
-      query = query.eq('assignee_id', employeeId);
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('assignee_id', employeeId)
+        .in('status', ['TODO', 'IN_PROGRESS'])
+        .order('priority', { ascending: false });
+      
+      if (error) throw error;
+      return data as Task[] || [];
+    } 
+    // Get tasks for a workstation
+    else if (workstation) {
+      // First get the workstation ID
+      const { data: workstationData, error: workstationError } = await supabase
+        .from('workstations')
+        .select('id')
+        .eq('name', workstation)
+        .single();
+      
+      if (workstationError) throw workstationError;
+      
+      // Get tasks linked to this workstation
+      const { data, error } = await supabase
+        .from('task_workstation_links')
+        .select(`
+          task_id,
+          tasks (*)
+        `)
+        .eq('workstation_id', workstationData.id);
+      
+      if (error) throw error;
+      
+      // Extract tasks from the joined data and filter for open tasks
+      const tasks = data.map(item => item.tasks) as Task[] || [];
+      return tasks.filter(task => task.status === 'TODO' || task.status === 'IN_PROGRESS');
     }
     
-    // If workstation is provided, add condition for workstation
-    if (workstation) {
-      query = query.eq('workstation', workstation);
-    }
-    
-    // Order by priority and due date
-    query = query.order('due_date', { ascending: true });
-    
-    const { data, error } = await query;
-    
-    if (error) {
-      console.error('Error fetching open tasks:', error);
-      throw new Error(`Failed to fetch open tasks: ${error.message}`);
-    }
-    
-    return data || [];
+    return [];
   },
   
-  update: async (id: string, task: Partial<Task>) => {
-    const { error } = await supabase
+  async create(task: Omit<Task, 'id' | 'created_at' | 'updated_at'>): Promise<Task> {
+    const { data, error } = await supabase
       .from('tasks')
-      .update({
-        ...task,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', id);
-
-    if (error) {
-      console.error('Error updating task:', error);
-      throw new Error(`Failed to update task: ${error.message}`);
-    }
-  },
-  
-  updateStatus: async (id: string, status: string, employeeId?: string) => {
-    const updates: Partial<Task> = {
-      status,
-      updated_at: new Date().toISOString()
-    };
+      .insert([task])
+      .select()
+      .single();
     
-    // If task is being completed, record who completed it
-    if (status === 'COMPLETED') {
-      updates.completed_by = employeeId;
-      updates.completed_at = new Date().toISOString();
-    }
-
-    const { error } = await supabase
-      .from('tasks')
-      .update(updates)
-      .eq('id', id);
-
-    if (error) {
-      console.error('Error updating task status:', error);
-      throw new Error(`Failed to update task status: ${error.message}`);
-    }
+    if (error) throw error;
+    return data as Task;
   },
   
-  delete: async (id: string) => {
+  async update(id: string, task: Partial<Task>): Promise<Task> {
+    const { data, error } = await supabase
+      .from('tasks')
+      .update(task)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data as Task;
+  },
+  
+  async delete(id: string): Promise<void> {
     const { error } = await supabase
       .from('tasks')
       .delete()
       .eq('id', id);
-
-    if (error) {
-      console.error('Error deleting task:', error);
-      throw new Error(`Failed to delete task: ${error.message}`);
-    }
-  },
-  
-  create: async (task: TaskCreate) => {
-    // Make sure all required fields are present
-    if (!task.title || !task.phase_id || !task.due_date || !task.status || !task.priority || !task.workstation) {
-      throw new Error('Missing required task fields');
-    }
-
-    const { data, error } = await supabase
-      .from('tasks')
-      .insert(task) // Using TaskCreate type ensures required fields are present
-      .select();
-
-    if (error) {
-      console.error('Error creating task:', error);
-      throw new Error(`Failed to create task: ${error.message}`);
-    }
-
-    return data[0];
-  },
-  
-  createMultiple: async (tasks: TaskCreate[]) => {
-    // Ensure all tasks have required fields
-    const validTasks = tasks.filter(task => 
-      task.title && task.phase_id && task.due_date && 
-      task.status && task.priority && task.workstation
-    );
     
-    if (validTasks.length === 0) {
-      throw new Error('No valid tasks to create');
-    }
-
-    const { data, error } = await supabase
-      .from('tasks')
-      .insert(validTasks)
-      .select();
-
-    if (error) {
-      console.error('Error creating tasks:', error);
-      throw new Error(`Failed to create tasks: ${error.message}`);
-    }
-
-    return data || [];
+    if (error) throw error;
   }
 };
 
@@ -643,6 +558,3 @@ export const seedInitialData = async () => {
     ]);
   }
 };
-
-// Export all services
-// Note: Removed duplicate export statements to fix error

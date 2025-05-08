@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Card,
@@ -26,19 +25,17 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, UserCog, UserPlus } from 'lucide-react';
+import { Loader2, UserCog } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { employeeService } from '@/services/dataService';
 import { EmployeeWorkstationsManager } from './EmployeeWorkstationsManager';
 import { Employee } from '@/services/dataService';
-import UserManagement from '../UserManagement';
 
 const EmployeeSettings: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showWorkstationMapping, setShowWorkstationMapping] = useState(false);
-  const [showAddUser, setShowAddUser] = useState(false);
   const { toast } = useToast();
 
   const loadEmployees = async () => {
@@ -74,15 +71,9 @@ const EmployeeSettings: React.FC = () => {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Employees</CardTitle>
-            <CardDescription>Manage employee workstation assignments</CardDescription>
-          </div>
-          <Button onClick={() => setShowAddUser(true)}>
-            <UserPlus className="mr-2 h-4 w-4" /> 
-            Add User
-          </Button>
+        <CardHeader>
+          <CardTitle>Employees</CardTitle>
+          <CardDescription>Manage employee workstation assignments</CardDescription>
         </CardHeader>
         
         <CardContent>
@@ -137,23 +128,6 @@ const EmployeeSettings: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Add User Dialog */}
-      <Dialog open={showAddUser} onOpenChange={setShowAddUser}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add New User</DialogTitle>
-            <DialogDescription>
-              Create a new employee account
-            </DialogDescription>
-          </DialogHeader>
-          <UserManagement onUserAdded={() => {
-            loadEmployees();
-            setShowAddUser(false);
-          }}/>
-        </DialogContent>
-      </Dialog>
-
-      {/* Workstation Mapping Dialog */}
       {selectedEmployee && (
         <Dialog open={showWorkstationMapping} onOpenChange={setShowWorkstationMapping}>
           <DialogContent className="max-w-3xl">
