@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 // Project Types
@@ -315,6 +316,21 @@ export const taskService = {
     return data;
   },
   
+  getByPhase: async (phaseId: string) => {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('phase_id', phaseId)
+      .order('due_date', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching phase tasks:', error);
+      throw new Error(`Failed to fetch phase tasks: ${error.message}`);
+    }
+
+    return data || [];
+  },
+  
   getTodaysTasks: async () => {
     // Get today's date in ISO format (YYYY-MM-DD)
     const today = new Date().toISOString().split('T')[0];
@@ -587,9 +603,5 @@ export const seedInitialData = async () => {
   }
 };
 
-export {
-  projectService,
-  phaseService,
-  taskService,
-  employeeService
-};
+// Export all services
+// Note: Removed duplicate export statements to fix error

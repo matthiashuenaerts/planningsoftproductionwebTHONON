@@ -37,17 +37,16 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { PlusCircle, Edit, Trash, Loader2 } from 'lucide-react';
-
-interface PhaseOffset {
-  id: string;
-  phase_id: string;
-  phase_name: string;
-  days_before_installation: number;
-  created_at: string;
-  updated_at: string;
-}
+import {
+  PhaseOffset,
+  initializePhaseOffsets,
+  getPhaseOffsets,
+  addPhaseOffset,
+  updatePhaseOffset,
+  deletePhaseOffset
+} from '@/services/phaseOffsetService';
+import { supabase } from '@/integrations/supabase/client';
 
 const PhaseOffsetSettings: React.FC = () => {
   const [phaseOffsets, setPhaseOffsets] = useState<PhaseOffset[]>([]);
@@ -79,36 +78,20 @@ const PhaseOffsetSettings: React.FC = () => {
       if (phaseError) throw phaseError;
       setPhases(phaseData || []);
       
-      // Check if phase_offsets table exists, if not we need to handle that case
-      // We'll query phases instead and show a message to create the table
-      const { data, error } = await supabase
-        .from('phases')
-        .select(`
-          id, 
-          name,
-          days_before_installation:id
-        `)
-        .limit(1);
-      
-      // If there's no error in the query but we get no data back
-      // or if there's a specific error about the column not existing,
-      // we'll show a message to create the table
-      if (error && error.message.includes("column") || !data) {
+      try {
+        // Try to get phase offsets
+        const offsetData = await getPhaseOffsets();
+        setPhaseOffsets(offsetData || []);
+      } catch (error: any) {
+        console.error("Error fetching phase offsets:", error);
         setPhaseOffsets([]);
-      } else {
-        // If phase_offsets table exists, query it
-        try {
-          const { data: offsetData, error: offsetError } = await supabase.rpc(
-            'get_phase_offsets'
-          );
-          
-          if (offsetError) throw offsetError;
-          
-          setPhaseOffsets(offsetData || []);
-        } catch (rpcError) {
-          console.error("RPC error:", rpcError);
-          // Fallback to empty array if the function doesn't exist yet
-          setPhaseOffsets([]);
+        // If error occurs, table might not exist yet
+        if (error.message.includes("does not exist")) {
+          toast({
+            title: "Database Setup Required",
+            description: "The phase_offsets table needs to be created first",
+            variant: "destructive"
+          });
         }
       }
     } catch (error: any) {
@@ -139,40 +122,9 @@ const PhaseOffsetSettings: React.FC = () => {
 
   const handleCreate = async (data: { phase_id: string; days_before_installation: number }) => {
     try {
-      // First check if phase_offsets table exists by getting db schema
-      const { data: tableExists, error: schemaError } = await supabase
-        .rpc('table_exists', { table_name: 'phase_offsets' });
-      
-      if (schemaError) {
-        console.error("Schema check error:", schemaError);
-        // If we can't check, assume the table doesn't exist
-        toast({
-          title: "Database Setup Required",
-          description: "The phase_offsets table needs to be created first",
-          variant: "destructive"
-        });
-        return;
-      }
-      
-      // If table doesn't exist, show message
-      if (!tableExists) {
-        toast({
-          title: "Database Setup Required",
-          description: "The phase_offsets table needs to be created first",
-          variant: "destructive"
-        });
-        return;
-      }
-      
       // Check if this phase already has an offset
-      const { data: existingOffset, error: checkError } = await supabase
-        .from('phase_offsets')
-        .select('id')
-        .eq('phase_id', data.phase_id)
-        .maybeSingle();
+      const existingOffset = phaseOffsets.find(offset => offset.phase_id === data.phase_id);
         
-      if (checkError) throw checkError;
-      
       if (existingOffset) {
         toast({
           title: "Error",
@@ -182,14 +134,7 @@ const PhaseOffsetSettings: React.FC = () => {
         return;
       }
       
-      const { error } = await supabase
-        .from('phase_offsets')
-        .insert({
-          phase_id: data.phase_id,
-          days_before_installation: data.days_before_installation
-        });
-        
-      if (error) throw error;
+      await addPhaseOffset(data.phase_id, data.days_before_installation);
       
       toast({
         title: "Success",
@@ -213,15 +158,7 @@ const PhaseOffsetSettings: React.FC = () => {
     if (!selectedOffset) return;
     
     try {
-      const { error } = await supabase
-        .from('phase_offsets')
-        .update({
-          days_before_installation: data.days_before_installation,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', selectedOffset.id);
-        
-      if (error) throw error;
+      await updatePhaseOffset(selectedOffset.id, data.days_before_installation);
       
       toast({
         title: "Success",
@@ -247,12 +184,7 @@ const PhaseOffsetSettings: React.FC = () => {
     try {
       setIsDeleting(true);
       
-      const { error } = await supabase
-        .from('phase_offsets')
-        .delete()
-        .eq('id', offset.id);
-        
-      if (error) throw error;
+      await deletePhaseOffset(offset.id);
       
       toast({
         title: "Success",
@@ -276,17 +208,17 @@ const PhaseOffsetSettings: React.FC = () => {
     try {
       setLoading(true);
       
-      // Create the phase_offsets table using RPC function
-      const { error } = await supabase.rpc('setup_phase_offsets_table');
+      // Create the phase_offsets table using our service
+      const success = await initializePhaseOffsets();
       
-      if (error) throw error;
-      
-      toast({
-        title: "Success", 
-        description: "Phase offsets table created successfully"
-      });
-      
-      loadData();
+      if (success) {
+        toast({
+          title: "Success", 
+          description: "Phase offsets table created successfully"
+        });
+        
+        loadData();
+      }
     } catch (error: any) {
       console.error('Error setting up phase offsets table:', error);
       toast({
