@@ -33,10 +33,10 @@ export const TaskWorkstationsManager: React.FC<TaskWorkstationsManagerProps> = (
         const allStandardTasks = await standardTasksService.getAll();
         setStandardTasks(allStandardTasks);
         
-        // Get all task-workstation links for this workstation
+        // Get all standard-task-workstation links for this workstation
         const links = await supabase
-          .from('task_workstation_links')
-          .select('task_id')
+          .from('standard_task_workstation_links')
+          .select('standard_task_id')
           .eq('workstation_id', workstationId);
         
         if (links.error) throw links.error;
@@ -44,7 +44,7 @@ export const TaskWorkstationsManager: React.FC<TaskWorkstationsManagerProps> = (
         // Create a map of task IDs to boolean (true if linked)
         const linkMap: Record<string, boolean> = {};
         links.data.forEach(link => {
-          linkMap[link.task_id] = true;
+          linkMap[link.standard_task_id] = true;
         });
         
         setTaskLinks(linkMap);
@@ -61,19 +61,35 @@ export const TaskWorkstationsManager: React.FC<TaskWorkstationsManagerProps> = (
     };
     
     loadData();
-  }, [workstationId]);
+  }, [workstationId, toast]);
   
   const handleToggleTask = async (taskId: string, checked: boolean) => {
     try {
       setProcessingTask(taskId);
       
       if (checked) {
-        // Link task to workstation
-        await workstationService.linkTaskToWorkstation(taskId, workstationId);
+        // Link standard task to workstation
+        const { data, error } = await supabase
+          .from('standard_task_workstation_links')
+          .insert([{
+            standard_task_id: taskId,
+            workstation_id: workstationId
+          }])
+          .select();
+          
+        if (error) throw error;
+        
         setTaskLinks(prev => ({ ...prev, [taskId]: true }));
       } else {
-        // Unlink task from workstation
-        await workstationService.unlinkTaskFromWorkstation(taskId, workstationId);
+        // Unlink standard task from workstation
+        const { error } = await supabase
+          .from('standard_task_workstation_links')
+          .delete()
+          .eq('standard_task_id', taskId)
+          .eq('workstation_id', workstationId);
+          
+        if (error) throw error;
+        
         setTaskLinks(prev => ({ ...prev, [taskId]: false }));
       }
       

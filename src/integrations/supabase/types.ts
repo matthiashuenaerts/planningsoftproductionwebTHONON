@@ -374,6 +374,42 @@ export type Database = {
           },
         ]
       }
+      standard_task_workstation_links: {
+        Row: {
+          created_at: string
+          id: string
+          standard_task_id: string | null
+          workstation_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          standard_task_id?: string | null
+          workstation_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          standard_task_id?: string | null
+          workstation_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "standard_task_workstation_links_standard_task_id_fkey"
+            columns: ["standard_task_id"]
+            isOneToOne: false
+            referencedRelation: "standard_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "standard_task_workstation_links_workstation_id_fkey"
+            columns: ["workstation_id"]
+            isOneToOne: false
+            referencedRelation: "workstations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       standard_tasks: {
         Row: {
           created_at: string

@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 // Workstation Types
@@ -11,9 +10,9 @@ export interface Workstation {
 }
 
 // Workstation Links Types
-export interface TaskWorkstationLink {
+export interface StandardTaskWorkstationLink {
   id: string;
-  task_id: string;
+  standard_task_id: string;
   workstation_id: string;
   created_at: string;
 }
@@ -21,6 +20,13 @@ export interface TaskWorkstationLink {
 export interface EmployeeWorkstationLink {
   id: string;
   employee_id: string;
+  workstation_id: string;
+  created_at: string;
+}
+
+export interface TaskWorkstationLink {
+  id: string;
+  task_id: string;
   workstation_id: string;
   created_at: string;
 }
@@ -90,7 +96,58 @@ export const workstationService = {
     if (error) throw error;
   },
 
-  // Task-Workstation Links
+  // Standard Task-Workstation Links
+  async getStandardTaskWorkstationLinks(): Promise<StandardTaskWorkstationLink[]> {
+    const { data, error } = await supabase
+      .from('standard_task_workstation_links')
+      .select('*');
+    
+    if (error) throw error;
+    return data as StandardTaskWorkstationLink[] || [];
+  },
+
+  async getWorkstationsForStandardTask(standardTaskId: string): Promise<Workstation[]> {
+    const { data, error } = await supabase
+      .from('standard_task_workstation_links')
+      .select('workstation_id, workstations(*)')
+      .eq('standard_task_id', standardTaskId);
+    
+    if (error) throw error;
+    return data.map(item => item.workstations) || [];
+  },
+
+  async getStandardTasksForWorkstation(workstationId: string): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('standard_task_workstation_links')
+      .select('standard_tasks(*)')
+      .eq('workstation_id', workstationId);
+    
+    if (error) throw error;
+    return data.map(item => item.standard_tasks) || [];
+  },
+
+  async linkStandardTaskToWorkstation(standardTaskId: string, workstationId: string): Promise<StandardTaskWorkstationLink> {
+    const { data, error } = await supabase
+      .from('standard_task_workstation_links')
+      .insert([{ standard_task_id: standardTaskId, workstation_id: workstationId }])
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data as StandardTaskWorkstationLink;
+  },
+
+  async unlinkStandardTaskFromWorkstation(standardTaskId: string, workstationId: string): Promise<void> {
+    const { error } = await supabase
+      .from('standard_task_workstation_links')
+      .delete()
+      .eq('standard_task_id', standardTaskId)
+      .eq('workstation_id', workstationId);
+    
+    if (error) throw error;
+  },
+
+  // Task-Workstation Links (Keep for backward compatibility)
   async getTaskWorkstationLinks(): Promise<TaskWorkstationLink[]> {
     const { data, error } = await supabase
       .from('task_workstation_links')
