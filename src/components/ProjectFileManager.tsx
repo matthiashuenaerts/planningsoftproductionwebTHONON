@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { ensureStorageBucket } from '@/integrations/supabase/createBucket';
@@ -58,7 +57,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
   const [error, setError] = useState<string | null>(null);
   const [bucketInitialized, setBucketInitialized] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [previewFile, setPreviewFile] = useState<string | null>(null);
+  const [previewFileName, setPreviewFileName] = useState<string | null>(null);
 
   useEffect(() => {
     // Check if user is authenticated
@@ -347,8 +346,8 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     }
   };
 
-  const previewFile = (fileName: string) => {
-    setPreviewFile(fileName);
+  const handlePreviewFile = (fileName: string) => {
+    setPreviewFileName(fileName);
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -468,7 +467,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
                     <Button 
                       variant="outline" 
                       size="sm"
-                      onClick={() => previewFile(file.name)}
+                      onClick={() => handlePreviewFile(file.name)}
                     >
                       <Eye className="h-4 w-4" />
                     </Button>
@@ -531,12 +530,12 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
       </AlertDialog>
 
       {/* File Preview Dialog */}
-      {previewFile && (
+      {previewFileName && (
         <FilePreview
-          isOpen={!!previewFile}
-          onClose={() => setPreviewFile(null)}
+          isOpen={!!previewFileName}
+          onClose={() => setPreviewFileName(null)}
           projectId={projectId}
-          fileName={previewFile}
+          fileName={previewFileName}
         />
       )}
     </div>
