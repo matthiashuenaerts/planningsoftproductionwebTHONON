@@ -374,6 +374,33 @@ export type Database = {
           },
         ]
       }
+      standard_tasks: {
+        Row: {
+          category: string | null
+          created_at: string
+          external_id: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          external_id: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          external_id?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       task_workstation_links: {
         Row: {
           created_at: string
