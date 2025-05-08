@@ -38,7 +38,7 @@ serve(async (req) => {
       const { data, error } = await supabase
         .storage
         .createBucket('project_files', {
-          public: true,
+          public: true, // Make bucket public
           fileSizeLimit: 52428800, // 50MB
         });
         
@@ -47,24 +47,74 @@ serve(async (req) => {
       }
       
       console.log("Created storage bucket 'project_files'");
-      
-      // Setup public access policy
-      const { error: policyError } = await supabase
-        .rpc('create_storage_policy', {
-          bucket_name: 'project_files',
-          policy_name: 'Public Access',
-          definition: `(auth.role() = 'authenticated'::text)`
-        });
-        
-      if (policyError) {
-        console.error("Error creating policy:", policyError);
-        // Don't throw here, as the bucket itself was created
-      }
+    }
+    
+    // After ensuring the bucket exists, create or update the storage policies regardless
+    // This ensures policies are set even if the bucket already existed
+    
+    // 1. Create policy for authenticated users to upload files
+    const { error: uploadPolicyError } = await supabase
+      .rpc('create_storage_policy', {
+        bucket_name: 'project_files',
+        policy_name: 'Allow authenticated uploads',
+        definition: `(bucket_id = 'project_files'::text AND (auth.role() = 'authenticated'::text OR auth.role() = 'anon'::text))`,
+        operation: 'INSERT'
+      });
+    
+    if (uploadPolicyError) {
+      console.error("Error creating upload policy:", uploadPolicyError);
+    } else {
+      console.log("Created upload policy for project_files bucket");
+    }
+    
+    // 2. Create policy for authenticated users to select files
+    const { error: selectPolicyError } = await supabase
+      .rpc('create_storage_policy', {
+        bucket_name: 'project_files',
+        policy_name: 'Allow authenticated downloads',
+        definition: `(bucket_id = 'project_files'::text AND (auth.role() = 'authenticated'::text OR auth.role() = 'anon'::text))`,
+        operation: 'SELECT'
+      });
+    
+    if (selectPolicyError) {
+      console.error("Error creating select policy:", selectPolicyError);
+    } else {
+      console.log("Created select policy for project_files bucket");
+    }
+    
+    // 3. Create policy for authenticated users to update files
+    const { error: updatePolicyError } = await supabase
+      .rpc('create_storage_policy', {
+        bucket_name: 'project_files',
+        policy_name: 'Allow authenticated updates',
+        definition: `(bucket_id = 'project_files'::text AND (auth.role() = 'authenticated'::text OR auth.role() = 'anon'::text))`,
+        operation: 'UPDATE'
+      });
+    
+    if (updatePolicyError) {
+      console.error("Error creating update policy:", updatePolicyError);
+    } else {
+      console.log("Created update policy for project_files bucket");
+    }
+    
+    // 4. Create policy for authenticated users to delete files
+    const { error: deletePolicyError } = await supabase
+      .rpc('create_storage_policy', {
+        bucket_name: 'project_files',
+        policy_name: 'Allow authenticated deletes',
+        definition: `(bucket_id = 'project_files'::text AND (auth.role() = 'authenticated'::text OR auth.role() = 'anon'::text))`,
+        operation: 'DELETE'
+      });
+    
+    if (deletePolicyError) {
+      console.error("Error creating delete policy:", deletePolicyError);
+    } else {
+      console.log("Created delete policy for project_files bucket");
     }
     
     return new Response(
       JSON.stringify({ 
-        message: bucketExists ? "Bucket already exists" : "Bucket created successfully" 
+        message: bucketExists ? "Bucket already exists, policies updated" : "Bucket created successfully with proper policies" 
       }),
       {
         headers: {

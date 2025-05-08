@@ -1,6 +1,6 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { ensureStorageBucket } from '@/integrations/supabase/createBucket';
 import { 
   Card, 
   CardContent, 
@@ -54,6 +54,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
   const [uploadProgress, setUploadProgress] = useState(0);
   const [fileToDelete, setFileToDelete] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [bucketInitialized, setBucketInitialized] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -69,19 +70,48 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
       return;
     }
     
-    fetchFiles();
+    // Initialize bucket and fetch files
+    initializeAndFetchFiles();
   }, [projectId, currentEmployee, isAuthenticated, navigate]);
 
-  const fetchFiles = async () => {
+  const initializeAndFetchFiles = async () => {
     if (!isAuthenticated || !currentEmployee) return;
     
     setLoading(true);
     setError(null);
+    
+    try {
+      // First ensure the storage bucket exists with proper permissions
+      console.log("Initializing storage bucket...");
+      const bucketResult = await ensureStorageBucket();
+      
+      if (!bucketResult.success) {
+        console.error("Failed to ensure storage bucket:", bucketResult.error);
+        setError(`Storage initialization error: ${bucketResult.error?.message || 'Unknown error'}`);
+        toast({
+          title: "Storage initialization failed",
+          description: "There was a problem setting up file storage. Please try again later.",
+          variant: "destructive"
+        });
+      } else {
+        console.log("Storage bucket initialized successfully:", bucketResult.data);
+        setBucketInitialized(true);
+        await fetchFiles();
+      }
+    } catch (error: any) {
+      console.error("Error in initialization:", error);
+      setError(`Initialization error: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchFiles = async () => {
+    if (!isAuthenticated || !currentEmployee) return;
+    
+    setError(null);
     try {
       console.log("Fetching files from bucket 'project_files' in folder:", projectId);
-      
-      // For ensuring project folder exists, we'll use a more direct approach
-      // without trying to create a placeholder file which was causing errors
       
       const { data, error } = await supabase
         .storage
@@ -124,8 +154,6 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
         description: `Failed to load files: ${error.message}`,
         variant: "destructive"
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -137,6 +165,17 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
         variant: "destructive"
       });
       navigate('/login');
+      return;
+    }
+    
+    if (!bucketInitialized) {
+      toast({
+        title: "Storage not ready",
+        description: "File storage is being initialized. Please try again in a moment.",
+        variant: "destructive"
+      });
+      // Try to initialize bucket again
+      initializeAndFetchFiles();
       return;
     }
     
@@ -167,6 +206,13 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
         // Update progress
         setUploadProgress(Math.round((i / selectedFiles.length) * 100));
         
+        // Check if bucket has been initialized
+        if (!bucketInitialized) {
+          console.log("Bucket not initialized yet, initializing first...");
+          await ensureStorageBucket();
+          setBucketInitialized(true);
+        }
+        
         const { error: uploadError } = await supabase
           .storage
           .from('project_files')
@@ -196,8 +242,15 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
       let errorMessage = error.message;
       
       // Check for specific RLS policy error
-      if (error.message.includes('row-level security policy')) {
-        errorMessage = 'Permission denied: You do not have permission to upload files. Please contact your administrator.';
+      if (error.message.includes('row-level security policy') || 
+          error.message.includes('Permission denied')) {
+        errorMessage = 'Permission denied: You may need to log out and log back in to refresh your credentials.';
+        
+        toast({
+          title: "Authentication issue",
+          description: "Your session may have expired. Please log out and log back in.",
+          variant: "destructive"
+        });
       }
       
       setError(`Failed to upload: ${errorMessage}`);
@@ -422,6 +475,17 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
             </div>
           )}
         </CardContent>
+        {!bucketInitialized && (
+          <CardFooter>
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={initializeAndFetchFiles}
+            >
+              Retry Storage Initialization
+            </Button>
+          </CardFooter>
+        )}
       </Card>
 
       <AlertDialog open={!!fileToDelete} onOpenChange={(open) => !open && setFileToDelete(null)}>
