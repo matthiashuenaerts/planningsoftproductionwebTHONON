@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import TaskList from './TaskList';
@@ -207,14 +206,22 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
                     
                     if (projectError) throw projectError;
                     
+                    // Validate and convert status and priority
+                    const status = validateTaskStatus(task.status);
+                    const priority = validatePriority(task.priority);
+                    
                     return {
                       ...task,
+                      status: status,
+                      priority: priority,
                       project_name: projectData.name
                     } as Task;
                   } catch (error) {
                     console.error('Error fetching project info:', error);
                     return {
                       ...task,
+                      status: validateTaskStatus(task.status),
+                      priority: validatePriority(task.priority),
                       project_name: 'Unknown Project'
                     } as Task;
                   }
@@ -227,8 +234,8 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
         }
         
         // Final fallback: If still no tasks, check direct workstation name in tasks
-        if (matchedTasks.length === 0) {
-          const workstationTasks = await taskService.getByWorkstation(workstationData?.name || "");
+        if (matchedTasks.length === 0 && workstationData?.name) {
+          const workstationTasks = await taskService.getByWorkstation(workstationData.name);
           
           // Filter out completed tasks
           const incompleteTasks = workstationTasks.filter(
@@ -257,14 +264,24 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
                 
                 if (projectError) throw projectError;
                 
+                // Validate and convert status and priority
+                const status = validateTaskStatus(task.status);
+                const priority = validatePriority(task.priority);
+                
                 // Append project name to task
                 return {
                   ...task,
+                  status: status,
+                  priority: priority,
                   project_name: projectData.name
                 };
               } catch (error) {
                 console.error('Error fetching project info for task:', error);
-                return task;
+                return {
+                  ...task,
+                  status: validateTaskStatus(task.status),
+                  priority: validatePriority(task.priority)
+                };
               }
             })
           );
