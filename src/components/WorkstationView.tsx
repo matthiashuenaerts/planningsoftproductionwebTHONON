@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import TaskList from './TaskList';
@@ -8,6 +9,25 @@ import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monito
 import { Button } from '@/components/ui/button';
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from '@/context/AuthContext';
+
+// Helper function to validate and convert task status
+const validateTaskStatus = (status: string): "TODO" | "IN_PROGRESS" | "COMPLETED" => {
+  if (status === "TODO" || status === "IN_PROGRESS" || status === "COMPLETED") {
+    return status;
+  }
+  // Default to TODO if invalid status
+  console.warn(`Invalid task status: ${status}, defaulting to TODO`);
+  return "TODO";
+};
+
+// Helper function to validate priority
+const validatePriority = (priority: string): "Low" | "Medium" | "High" | "Urgent" => {
+  if (priority === "Low" || priority === "Medium" || priority === "High" || priority === "Urgent") {
+    return priority;
+  }
+  console.warn(`Invalid task priority: ${priority}, defaulting to Medium`);
+  return "Medium";
+};
 
 interface WorkstationViewProps {
   workstationId: string;
@@ -110,10 +130,8 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
                     if (projectError) throw projectError;
                     
                     // Ensure the task status conforms to the expected type
-                    const status = 
-                      task.status === 'TODO' || task.status === 'IN_PROGRESS' || task.status === 'COMPLETED'
-                        ? task.status
-                        : 'TODO'; // Default to 'TODO' if not a valid status
+                    const status = validateTaskStatus(task.status);
+                    const priority = validatePriority(task.priority);
                     
                     // Return the task with the expected shape
                     return {
@@ -123,8 +141,8 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
                       title: task.title,
                       description: task.description || null,
                       workstation: task.workstation,
-                      status: status as "TODO" | "IN_PROGRESS" | "COMPLETED",
-                      priority: task.priority as "Low" | "Medium" | "High" | "Urgent",
+                      status: status,
+                      priority: priority,
                       due_date: task.due_date,
                       created_at: task.created_at,
                       updated_at: task.updated_at,

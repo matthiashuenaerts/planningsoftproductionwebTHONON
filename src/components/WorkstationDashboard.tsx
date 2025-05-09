@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
@@ -8,6 +9,25 @@ import { Button } from '@/components/ui/button';
 import { Package, Clock, Check, Calendar, ArrowUpRight } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format } from 'date-fns';
+
+// Helper function to validate and convert task status
+const validateTaskStatus = (status: string): "TODO" | "IN_PROGRESS" | "COMPLETED" => {
+  if (status === "TODO" || status === "IN_PROGRESS" || status === "COMPLETED") {
+    return status;
+  }
+  // Default to TODO if an invalid status is provided
+  console.warn(`Invalid task status: ${status}, defaulting to TODO`);
+  return "TODO";
+};
+
+// Helper function to validate priority
+const validatePriority = (priority: string): "Low" | "Medium" | "High" | "Urgent" => {
+  if (priority === "Low" || priority === "Medium" || priority === "High" || priority === "Urgent") {
+    return priority;
+  }
+  console.warn(`Invalid task priority: ${priority}, defaulting to Medium`);
+  return "Medium";
+};
 
 const WorkstationDashboard = () => {
   const { currentEmployee } = useAuth();
@@ -162,7 +182,15 @@ const WorkstationDashboard = () => {
             
             if (matchingTasks && matchingTasks.length > 0) {
               console.log(`Found ${matchingTasks.length} tasks matching standard task ${standardTask.task_number}`);
-              allTasks = [...allTasks, ...matchingTasks];
+              
+              // Convert each task to the correct type with validated status
+              const validatedTasks: Task[] = matchingTasks.map(task => ({
+                ...task,
+                status: validateTaskStatus(task.status),
+                priority: validatePriority(task.priority)
+              }));
+              
+              allTasks = [...allTasks, ...validatedTasks];
             }
           }
         }
@@ -201,7 +229,15 @@ const WorkstationDashboard = () => {
             
             if (linkedTasks && linkedTasks.length > 0) {
               console.log("Found linked tasks:", linkedTasks.length);
-              allTasks = [...allTasks, ...linkedTasks];
+              
+              // Convert each task to the correct type with validated status
+              const validatedTasks: Task[] = linkedTasks.map(task => ({
+                ...task,
+                status: validateTaskStatus(task.status),
+                priority: validatePriority(task.priority)
+              }));
+              
+              allTasks = [...allTasks, ...validatedTasks];
             }
           }
         }
@@ -223,7 +259,15 @@ const WorkstationDashboard = () => {
           
           if (directTasks && directTasks.length > 0) {
             console.log("Found tasks with workstation directly:", directTasks.length);
-            allTasks = [...allTasks, ...directTasks];
+            
+            // Convert each task to the correct type with validated status
+            const validatedTasks: Task[] = directTasks.map(task => ({
+              ...task,
+              status: validateTaskStatus(task.status),
+              priority: validatePriority(task.priority)
+            }));
+            
+            allTasks = [...allTasks, ...validatedTasks];
           }
         }
         
@@ -256,7 +300,7 @@ const WorkstationDashboard = () => {
   }, [currentEmployee, toast]);
 
   // Helper function to enrich tasks with project info
-  const enrichTasksWithProjectInfo = async (tasksData: any[]) => {
+  const enrichTasksWithProjectInfo = async (tasksData: Task[]): Promise<Task[]> => {
     return await Promise.all(tasksData.map(async (task) => {
       try {
         // Get the phase to find the project
@@ -273,20 +317,18 @@ const WorkstationDashboard = () => {
           .eq('id', phaseData.project_id)
           .single();
           
-        // Form the task with additional info
+        // Form the task with additional info - status is already validated
         return {
           ...task,
           project_name: projectData?.name || 'Unknown Project',
-          phase_name: phaseData?.name || 'Unknown Phase',
-          status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED"
+          phase_name: phaseData?.name || 'Unknown Phase'
         } as Task;
       } catch (error) {
         console.error('Error enriching task with project info:', error);
         return {
           ...task,
           project_name: 'Unknown Project',
-          phase_name: 'Unknown Phase',
-          status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED"
+          phase_name: 'Unknown Phase'
         } as Task;
       }
     }));
