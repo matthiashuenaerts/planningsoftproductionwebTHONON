@@ -120,6 +120,7 @@ const UserManagement = () => {
                   <SelectItem value="admin">Admin</SelectItem>
                   <SelectItem value="manager">Manager</SelectItem>
                   <SelectItem value="worker">Worker</SelectItem>
+                  <SelectItem value="workstation">Workstation</SelectItem>
                 </SelectContent>
               </Select>
             </div>

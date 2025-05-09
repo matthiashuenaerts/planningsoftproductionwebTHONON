@@ -4,9 +4,15 @@ import Dashboard from '@/components/Dashboard';
 import { useAuth } from '@/context/AuthContext';
 import UserManagement from '@/components/UserManagement';
 import Navbar from '@/components/Navbar';
+import WorkstationDashboard from '@/components/WorkstationDashboard';
 
 const Index = () => {
   const { currentEmployee } = useAuth();
+  
+  // Display dedicated workstation dashboard for workstation role
+  if (currentEmployee?.role === 'workstation') {
+    return <WorkstationDashboard />;
+  }
 
   return (
     <div className="flex min-h-screen">
