@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
@@ -8,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Package, Clock, Check, Calendar, ArrowUpRight } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format } from 'date-fns';
-import { workstationService } from '@/services/workstationService';
 
 // Helper function to validate and convert task status
 const validateTaskStatus = (status: string): "TODO" | "IN_PROGRESS" | "COMPLETED" => {
@@ -40,7 +40,6 @@ const WorkstationDashboard = () => {
     dueToday: 0
   });
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [workstationInfo, setWorkstationInfo] = useState<{id: string, name: string} | null>(null);
   const { toast } = useToast();
 
   // Add a clock that updates every second
@@ -52,73 +51,93 @@ const WorkstationDashboard = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // First, find the workstation that corresponds to this employee
-  useEffect(() => {
-    const findWorkstation = async () => {
-      if (!currentEmployee) return;
-      
-      try {
-        setLoading(true);
-        console.log("Finding workstation for:", currentEmployee.name);
-        
-        // Try to find by exact name match first
-        const { data, error } = await workstationService.getByName(currentEmployee.name);
-        
-        if (error && error.code !== 'PGRST116') {
-          throw error;
-        }
-        
-        if (data) {
-          console.log("Found workstation by exact name match:", data);
-          setWorkstationInfo({ id: data.id, name: data.name });
-          return;
-        }
-        
-        // If not found by exact match, try case-insensitive search
-        const allWorkstations = await workstationService.getAll();
-        console.log("Searching through all workstations:", allWorkstations.length);
-        
-        const match = allWorkstations.find(ws => 
-          ws.name.toLowerCase() === currentEmployee.name.toLowerCase());
-        
-        if (match) {
-          console.log("Found workstation by case-insensitive match:", match);
-          setWorkstationInfo({ id: match.id, name: match.name });
-          return;
-        }
-        
-        // Still not found, show error
-        toast({
-          title: "Error",
-          description: `No workstation found matching "${currentEmployee.name}"`,
-          variant: "destructive"
-        });
-      } catch (error: any) {
-        console.error('Error finding workstation:', error);
-        toast({
-          title: "Error",
-          description: `Failed to find workstation: ${error.message}`,
-          variant: "destructive"
-        });
-      }
-    };
-    
-    findWorkstation();
-  }, [currentEmployee, toast]);
-
-  // Once we have the workstation info, fetch its tasks
   useEffect(() => {
     const fetchTasks = async () => {
-      if (!workstationInfo) return;
-      
+      if (!currentEmployee) {
+        toast({
+          title: "Error",
+          description: "No employee information found",
+          variant: "destructive"
+        });
+        setLoading(false);
+        return;
+      }
+
       try {
-        console.log("Fetching tasks for workstation:", workstationInfo);
+        setLoading(true);
+        console.log("Current employee:", currentEmployee);
+        
+        // For workstation accounts, use their name as the workstation identifier
+        const workstationIdentifier = currentEmployee.role === 'workstation' 
+          ? currentEmployee.name 
+          : currentEmployee.workstation;
+
+        if (!workstationIdentifier) {
+          toast({
+            title: "Error",
+            description: "No workstation assigned to this account",
+            variant: "destructive"
+          });
+          setLoading(false);
+          return;
+        }
+
+        console.log("Looking for workstation with identifier:", workstationIdentifier);
+
+        // First try to get workstation by name
+        const { data: workstationData, error: workstationError } = await supabase
+          .from('workstations')
+          .select('id, name')
+          .ilike('name', workstationIdentifier)
+          .maybeSingle();
+          
+        if (workstationError && workstationError.code !== 'PGRST116') {
+          console.error('Error fetching workstation by name:', workstationError);
+          throw workstationError;
+        }
+        
+        let workstationId = null;
+        let workstationName = null;
+        
+        if (workstationData) {
+          workstationId = workstationData.id;
+          workstationName = workstationData.name;
+          console.log("Found workstation:", workstationName, "with ID:", workstationId);
+        } else {
+          // If not found by exact match, try case-insensitive search
+          const { data: workstations, error: listError } = await supabase
+            .from('workstations')
+            .select('id, name');
+            
+          if (listError) throw listError;
+          
+          // Find closest match case insensitive
+          const matchingWorkstation = workstations?.find(ws => 
+            ws.name.toLowerCase() === workstationIdentifier.toLowerCase());
+            
+          if (matchingWorkstation) {
+            workstationId = matchingWorkstation.id;
+            workstationName = matchingWorkstation.name;
+            console.log("Found workstation via case insensitive match:", workstationName, "with ID:", workstationId);
+          } else {
+            console.error('No matching workstation found for:', workstationIdentifier);
+            toast({
+              title: "Error",
+              description: `No workstation found matching "${workstationIdentifier}"`,
+              variant: "destructive"
+            });
+            setLoading(false);
+            return;
+          }
+        }
+        
+        console.log("Getting tasks for workstation ID:", workstationId);
         
         // First try to get tasks through standard task workstation links
         const { data: standardTaskLinks, error: standardLinksError } = await supabase
           .from('standard_task_workstation_links')
           .select('standard_task_id')
-          .eq('workstation_id', workstationInfo.id);
+          .eq('workstation_id', workstationId);
           
         if (standardLinksError) {
           console.error("Error fetching standard task links:", standardLinksError);
@@ -164,12 +183,12 @@ const WorkstationDashboard = () => {
             if (matchingTasks && matchingTasks.length > 0) {
               console.log(`Found ${matchingTasks.length} tasks matching standard task ${standardTask.task_number}`);
               
-              // Validate each task's status and priority
-              const validatedTasks = matchingTasks.map(task => ({
+              // Convert each task to the correct type with validated status
+              const validatedTasks: Task[] = matchingTasks.map(task => ({
                 ...task,
                 status: validateTaskStatus(task.status),
                 priority: validatePriority(task.priority)
-              })) as Task[];
+              }));
               
               allTasks = [...allTasks, ...validatedTasks];
             }
@@ -184,7 +203,7 @@ const WorkstationDashboard = () => {
           const { data: taskLinks, error: taskLinksError } = await supabase
             .from('task_workstation_links')
             .select('task_id')
-            .eq('workstation_id', workstationInfo.id);
+            .eq('workstation_id', workstationId);
             
           if (taskLinksError) {
             console.error("Error fetching task workstation links:", taskLinksError);
@@ -211,12 +230,12 @@ const WorkstationDashboard = () => {
             if (linkedTasks && linkedTasks.length > 0) {
               console.log("Found linked tasks:", linkedTasks.length);
               
-              // Validate each task's status and priority
-              const validatedTasks = linkedTasks.map(task => ({
+              // Convert each task to the correct type with validated status
+              const validatedTasks: Task[] = linkedTasks.map(task => ({
                 ...task,
                 status: validateTaskStatus(task.status),
                 priority: validatePriority(task.priority)
-              })) as Task[];
+              }));
               
               allTasks = [...allTasks, ...validatedTasks];
             }
@@ -230,7 +249,7 @@ const WorkstationDashboard = () => {
           const { data: directTasks, error: directTasksError } = await supabase
             .from('tasks')
             .select('*')
-            .ilike('workstation', workstationInfo.name)
+            .ilike('workstation', workstationName)
             .neq('status', 'COMPLETED');
             
           if (directTasksError) {
@@ -241,12 +260,12 @@ const WorkstationDashboard = () => {
           if (directTasks && directTasks.length > 0) {
             console.log("Found tasks with workstation directly:", directTasks.length);
             
-            // Validate each task's status and priority
-            const validatedTasks = directTasks.map(task => ({
+            // Convert each task to the correct type with validated status
+            const validatedTasks: Task[] = directTasks.map(task => ({
               ...task,
               status: validateTaskStatus(task.status),
               priority: validatePriority(task.priority)
-            })) as Task[];
+            }));
             
             allTasks = [...allTasks, ...validatedTasks];
           }
@@ -265,7 +284,6 @@ const WorkstationDashboard = () => {
         
         // Update stats based on these tasks
         updateStats(tasksWithDetails);
-        setLoading(false);
       } catch (error: any) {
         console.error('Error fetching workstation tasks:', error);
         toast({
@@ -273,14 +291,13 @@ const WorkstationDashboard = () => {
           description: `Failed to load tasks: ${error.message}`,
           variant: "destructive"
         });
+      } finally {
         setLoading(false);
       }
     };
 
-    if (workstationInfo) {
-      fetchTasks();
-    }
-  }, [workstationInfo, toast]);
+    fetchTasks();
+  }, [currentEmployee, toast]);
 
   // Helper function to enrich tasks with project info
   const enrichTasksWithProjectInfo = async (tasksData: Task[]): Promise<Task[]> => {
@@ -326,15 +343,22 @@ const WorkstationDashboard = () => {
       // Get completed tasks for today's stats
       let completedToday = 0;
       
-      if (workstationInfo) {
-        const { data: completedTasks } = await supabase
-          .from('tasks')
-          .select('*')
-          .ilike('workstation', workstationInfo.name)
-          .eq('status', 'COMPLETED')
-          .gte('completed_at', today.toISOString());
+      if (currentEmployee) {
+        // For workstation accounts, use their name as the workstation identifier
+        const workstationIdentifier = currentEmployee.role === 'workstation' 
+          ? currentEmployee.name 
+          : currentEmployee.workstation;
           
-        completedToday = completedTasks?.length || 0;
+        if (workstationIdentifier) {
+          const { data: completedTasks } = await supabase
+            .from('tasks')
+            .select('*')
+            .ilike('workstation', workstationIdentifier)
+            .eq('status', 'COMPLETED')
+            .gte('completed_at', today.toISOString());
+            
+          completedToday = completedTasks?.length || 0;
+        }
       }
 
       // Calculate due today
@@ -418,7 +442,7 @@ const WorkstationDashboard = () => {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
-              {workstationInfo?.name || currentEmployee?.name} Workstation
+              {currentEmployee?.workstation} Workstation
             </h1>
             <p className="text-gray-600 text-lg">
               {new Date().toLocaleDateString('en-US', { 
