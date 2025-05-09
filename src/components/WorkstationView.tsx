@@ -5,7 +5,7 @@ import TaskList from './TaskList';
 import { taskService, Task, projectService } from '@/services/dataService';
 import { standardTasksService } from '@/services/standardTasksService';
 import { useToast } from '@/hooks/use-toast';
-import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monitor, Truck, Flag } from 'lucide-react';
+import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monitor, Truck, Flag, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from '@/context/AuthContext';
@@ -19,8 +19,18 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
   const [workstation, setWorkstation] = useState<string>("");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentTime, setCurrentTime] = useState(new Date());
   const { toast } = useToast();
   const { currentEmployee } = useAuth();
+
+  // Add a clock that updates every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const fetchWorkstationData = async () => {
@@ -282,11 +292,17 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
   return (
     <Card className="h-full">
       <CardHeader className="pb-2">
-        <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-full ${getWorkstationColor(workstation)}`}>
-            {getWorkstationIcon(workstation)}
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-full ${getWorkstationColor(workstation)}`}>
+              {getWorkstationIcon(workstation)}
+            </div>
+            <CardTitle>{workstation}</CardTitle>
           </div>
-          <CardTitle>{workstation}</CardTitle>
+          <div className="text-lg font-mono font-medium">
+            <Clock className="inline-block mr-2 h-5 w-5 text-primary" />
+            {currentTime.toLocaleTimeString()}
+          </div>
         </div>
       </CardHeader>
       <CardContent>

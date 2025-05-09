@@ -20,7 +20,17 @@ const WorkstationDashboard = () => {
     inProgress: 0,
     dueToday: 0
   });
+  const [currentTime, setCurrentTime] = useState(new Date());
   const { toast } = useToast();
+
+  // Add a clock that updates every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -36,24 +46,76 @@ const WorkstationDashboard = () => {
 
       try {
         setLoading(true);
-        // Get the workstation ID from the name
+        // First try to get workstation by name
+        let workstationId = null;
+        
         const { data: workstationData, error: workstationError } = await supabase
           .from('workstations')
           .select('id')
-          .eq('name', currentEmployee.workstation)
-          .single();
+          .ilike('name', currentEmployee.workstation)
+          .maybeSingle();
           
-        if (workstationError) throw workstationError;
+        if (workstationError && workstationError.code !== 'PGRST116') {
+          console.error('Error fetching workstation by name:', workstationError);
+          throw workstationError;
+        }
+        
+        if (workstationData) {
+          workstationId = workstationData.id;
+        } else {
+          // If not found by exact match, try case-insensitive search
+          const { data: workstations, error: listError } = await supabase
+            .from('workstations')
+            .select('id, name');
+            
+          if (listError) throw listError;
+          
+          // Find closest match case insensitive
+          const matchingWorkstation = workstations?.find(ws => 
+            ws.name.toLowerCase() === currentEmployee.workstation.toLowerCase());
+            
+          if (matchingWorkstation) {
+            workstationId = matchingWorkstation.id;
+          } else {
+            console.error('No matching workstation found for:', currentEmployee.workstation);
+            toast({
+              title: "Error",
+              description: `No workstation found matching "${currentEmployee.workstation}"`,
+              variant: "destructive"
+            });
+            setLoading(false);
+            return;
+          }
+        }
         
         // Get task IDs linked to this workstation
         const { data: taskLinks, error: linksError } = await supabase
           .from('task_workstation_links')
           .select('task_id')
-          .eq('workstation_id', workstationData.id);
+          .eq('workstation_id', workstationId);
           
         if (linksError) throw linksError;
 
         if (!taskLinks || taskLinks.length === 0) {
+          // If no task links found, check if the tasks have the workstation name directly
+          const { data: directTasks, error: directTasksError } = await supabase
+            .from('tasks')
+            .select('*')
+            .ilike('workstation', currentEmployee.workstation)
+            .neq('status', 'COMPLETED')
+            .order('due_date', { ascending: true });
+            
+          if (directTasksError) throw directTasksError;
+          
+          if (directTasks && directTasks.length > 0) {
+            // Process these tasks with project details
+            const tasksWithDetails = await enrichTasksWithProjectInfo(directTasks);
+            setTasks(tasksWithDetails);
+            updateStats(tasksWithDetails);
+            setLoading(false);
+            return;
+          }
+          
           setTasks([]);
           setLoading(false);
           return;
@@ -72,59 +134,11 @@ const WorkstationDashboard = () => {
         if (tasksError) throw tasksError;
         
         // Get project and phase info for each task
-        const tasksWithDetails = await Promise.all(tasksData.map(async (task) => {
-          // Get the phase to find the project
-          const { data: phaseData } = await supabase
-            .from('phases')
-            .select('project_id, name')
-            .eq('id', task.phase_id)
-            .single();
-            
-          // Get the project name
-          const { data: projectData } = await supabase
-            .from('projects')
-            .select('name')
-            .eq('id', phaseData.project_id)
-            .single();
-            
-          // Form the task with additional info
-          return {
-            ...task,
-            project_name: projectData?.name || 'Unknown Project',
-            phase_name: phaseData?.name || 'Unknown Phase',
-            status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED"
-          } as Task;
-        }));
-        
+        const tasksWithDetails = await enrichTasksWithProjectInfo(tasksData);
         setTasks(tasksWithDetails);
-
-        // Calculate stats
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        // Get completed tasks for today's stats
-        const { data: completedToday, error: completedError } = await supabase
-          .from('tasks')
-          .select('*')
-          .in('id', taskIds)
-          .eq('status', 'COMPLETED')
-          .gte('completed_at', today.toISOString());
-          
-        if (completedError) throw completedError;
-
-        // Calculate due today
-        const dueToday = tasksWithDetails.filter(task => {
-          const taskDate = new Date(task.due_date);
-          taskDate.setHours(0, 0, 0, 0);
-          return taskDate.getTime() === today.getTime();
-        }).length;
-
-        setStats({
-          totalTasks: tasksWithDetails.length,
-          completedToday: completedToday?.length || 0,
-          inProgress: tasksWithDetails.filter(t => t.status === 'IN_PROGRESS').length,
-          dueToday
-        });
+        
+        // Update stats based on these tasks
+        updateStats(tasksWithDetails);
       } catch (error: any) {
         console.error('Error fetching workstation tasks:', error);
         toast({
@@ -139,6 +153,81 @@ const WorkstationDashboard = () => {
 
     fetchTasks();
   }, [currentEmployee, toast]);
+
+  // Helper function to enrich tasks with project info
+  const enrichTasksWithProjectInfo = async (tasksData: any[]) => {
+    return await Promise.all(tasksData.map(async (task) => {
+      try {
+        // Get the phase to find the project
+        const { data: phaseData } = await supabase
+          .from('phases')
+          .select('project_id, name')
+          .eq('id', task.phase_id)
+          .single();
+          
+        // Get the project name
+        const { data: projectData } = await supabase
+          .from('projects')
+          .select('name')
+          .eq('id', phaseData.project_id)
+          .single();
+          
+        // Form the task with additional info
+        return {
+          ...task,
+          project_name: projectData?.name || 'Unknown Project',
+          phase_name: phaseData?.name || 'Unknown Phase',
+          status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED"
+        } as Task;
+      } catch (error) {
+        console.error('Error enriching task with project info:', error);
+        return {
+          ...task,
+          project_name: 'Unknown Project',
+          phase_name: 'Unknown Phase',
+          status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED"
+        } as Task;
+      }
+    }));
+  };
+
+  // Helper function to update task statistics
+  const updateStats = async (tasksData: Task[]) => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Get completed tasks for today's stats if we have workstation info
+      let completedToday = 0;
+      
+      if (currentEmployee?.workstation) {
+        const { data: completedTasks } = await supabase
+          .from('tasks')
+          .select('*')
+          .ilike('workstation', currentEmployee.workstation)
+          .eq('status', 'COMPLETED')
+          .gte('completed_at', today.toISOString());
+          
+        completedToday = completedTasks?.length || 0;
+      }
+
+      // Calculate due today
+      const dueToday = tasksData.filter(task => {
+        const taskDate = new Date(task.due_date);
+        taskDate.setHours(0, 0, 0, 0);
+        return taskDate.getTime() === today.getTime();
+      }).length;
+      
+      setStats({
+        totalTasks: tasksData.length,
+        completedToday,
+        inProgress: tasksData.filter(t => t.status === 'IN_PROGRESS').length,
+        dueToday
+      });
+    } catch (error) {
+      console.error('Error updating task stats:', error);
+    }
+  };
 
   const handleCompleteTask = async (taskId: string) => {
     if (!currentEmployee) {
@@ -213,6 +302,12 @@ const WorkstationDashboard = () => {
                 day: 'numeric' 
               })}
             </p>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-mono font-semibold">
+              <Clock className="inline-block mr-2 h-6 w-6 text-primary" />
+              {currentTime.toLocaleTimeString()}
+            </div>
           </div>
         </div>
 
