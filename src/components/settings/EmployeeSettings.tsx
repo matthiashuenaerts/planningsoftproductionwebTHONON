@@ -81,6 +81,7 @@ const EmployeeSettings: React.FC = () => {
       case 'admin': return 'destructive';
       case 'manager': return 'default';
       case 'worker': return 'secondary';
+      case 'workstation': return 'outline';
       default: return 'outline';
     }
   };
@@ -191,6 +192,7 @@ const EmployeeSettings: React.FC = () => {
                       <SelectItem value="admin">Admin</SelectItem>
                       <SelectItem value="manager">Manager</SelectItem>
                       <SelectItem value="worker">Worker</SelectItem>
+                      <SelectItem value="workstation">Workstation</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -286,3 +288,4 @@ const EmployeeSettings: React.FC = () => {
 };
 
 export default EmployeeSettings;
+
