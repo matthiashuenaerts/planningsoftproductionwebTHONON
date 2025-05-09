@@ -5,7 +5,7 @@ import TaskList from './TaskList';
 import { taskService, Task, projectService } from '@/services/dataService';
 import { standardTasksService } from '@/services/standardTasksService';
 import { useToast } from '@/hooks/use-toast';
-import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monitor, Truck, Flag, Clock } from 'lucide-react';
+import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monitor, Truck, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from '@/context/AuthContext';
@@ -19,18 +19,8 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
   const [workstation, setWorkstation] = useState<string>("");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentTime, setCurrentTime] = useState(new Date());
   const { toast } = useToast();
   const { currentEmployee } = useAuth();
-
-  // Update clock every second
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    
-    return () => clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     const fetchWorkstationData = async () => {
@@ -57,113 +47,48 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
         
         // If no linked standard tasks, use direct task links as a fallback
         if (!standardTaskLinks || standardTaskLinks.length === 0) {
-          // Try direct workstation links first
-          const { data: taskLinks, error: taskLinksError } = await supabase
-            .from('task_workstation_links')
-            .select('task_id')
-            .eq('workstation_id', workstationId);
+          const workstationTasks = await taskService.getByWorkstationId(workstationId);
           
-          if (taskLinksError) throw taskLinksError;
+          // Filter out completed tasks
+          const incompleteTasks = workstationTasks.filter(
+            task => task.status !== 'COMPLETED'
+          );
           
-          if (!taskLinks || taskLinks.length === 0) {
-            // No direct links either, try workstation field
-            const workstationTasks = await taskService.getByWorkstationId(workstationId);
-            
-            // Filter out completed tasks
-            const incompleteTasks = workstationTasks.filter(
-              task => task.status !== 'COMPLETED'
-            );
-            
-            // Fetch project information for each task's phase
-            const tasksWithProjectInfo = await Promise.all(
-              incompleteTasks.map(async (task) => {
-                try {
-                  // Get the phase to get the project_id
-                  const { data: phaseData, error: phaseError } = await supabase
-                    .from('phases')
-                    .select('project_id, name')
-                    .eq('id', task.phase_id)
-                    .maybeSingle();
-                  
-                  if (phaseError) throw phaseError;
-                  
-                  // Get the project name
-                  const { data: projectData, error: projectError } = await supabase
-                    .from('projects')
-                    .select('name')
-                    .eq('id', phaseData?.project_id)
-                    .maybeSingle();
-                  
-                  if (projectError) throw projectError;
-                  
-                  // Append project name to task
-                  return {
-                    ...task,
-                    project_name: projectData?.name || "Unknown Project"
-                  };
-                } catch (error) {
-                  console.error('Error fetching project info for task:', error);
-                  return {
-                    ...task,
-                    project_name: "Unknown Project"
-                  };
-                }
-              })
-            );
-            
-            setTasks(tasksWithProjectInfo);
-            setLoading(false);
-            return;
-          }
+          // Fetch project information for each task's phase
+          const tasksWithProjectInfo = await Promise.all(
+            incompleteTasks.map(async (task) => {
+              try {
+                // Get the phase to get the project_id
+                const { data: phaseData, error: phaseError } = await supabase
+                  .from('phases')
+                  .select('project_id, name')
+                  .eq('id', task.phase_id)
+                  .single();
+                
+                if (phaseError) throw phaseError;
+                
+                // Get the project name
+                const { data: projectData, error: projectError } = await supabase
+                  .from('projects')
+                  .select('name')
+                  .eq('id', phaseData.project_id)
+                  .single();
+                
+                if (projectError) throw projectError;
+                
+                // Append project name to task
+                return {
+                  ...task,
+                  project_name: projectData.name
+                };
+              } catch (error) {
+                console.error('Error fetching project info for task:', error);
+                return task;
+              }
+            })
+          );
           
-          // Get tasks from task links
-          const taskIds = taskLinks.map(link => link.task_id);
-          const { data: tasksData, error: tasksError } = await supabase
-            .from('tasks')
-            .select('*')
-            .in('id', taskIds)
-            .neq('status', 'COMPLETED');
-          
-          if (tasksError) throw tasksError;
-          
-          if (!tasksData || tasksData.length === 0) {
-            setTasks([]);
-            setLoading(false);
-            return;
-          }
-          
-          // Get project info
-          const tasksWithDetails = await Promise.all(tasksData.map(async (task) => {
-            try {
-              const { data: phaseData } = await supabase
-                .from('phases')
-                .select('project_id, name')
-                .eq('id', task.phase_id)
-                .maybeSingle();
-              
-              const { data: projectData } = await supabase
-                .from('projects')
-                .select('name')
-                .eq('id', phaseData?.project_id)
-                .maybeSingle();
-              
-              return {
-                ...task,
-                project_name: projectData?.name || 'Unknown Project',
-                status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED",
-                priority: task.priority as "Low" | "Medium" | "High" | "Urgent"
-              } as Task;
-            } catch (error) {
-              return {
-                ...task,
-                project_name: 'Unknown Project',
-                status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED",
-                priority: task.priority as "Low" | "Medium" | "High" | "Urgent"
-              } as Task;
-            }
-          }));
-          
-          setTasks(tasksWithDetails);
+          setTasks(tasksWithProjectInfo);
           setLoading(false);
           return;
         }
@@ -206,15 +131,15 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
                     .from('phases')
                     .select('project_id, name')
                     .eq('id', task.phase_id)
-                    .maybeSingle();
+                    .single();
                   
                   if (phaseError) throw phaseError;
                   
                   const { data: projectData, error: projectError } = await supabase
                     .from('projects')
                     .select('name')
-                    .eq('id', phaseData?.project_id)
-                    .maybeSingle();
+                    .eq('id', phaseData.project_id)
+                    .single();
                   
                   if (projectError) throw projectError;
                   
@@ -237,7 +162,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
                     due_date: task.due_date,
                     created_at: task.created_at,
                     updated_at: task.updated_at,
-                    project_name: projectData?.name || "Unknown Project",
+                    project_name: projectData.name,
                     completed_at: task.completed_at,
                     completed_by: task.completed_by
                   } as Task;
@@ -357,17 +282,11 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
   return (
     <Card className="h-full">
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-full ${getWorkstationColor(workstation)}`}>
-              {getWorkstationIcon(workstation)}
-            </div>
-            <CardTitle>{workstation}</CardTitle>
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-full ${getWorkstationColor(workstation)}`}>
+            {getWorkstationIcon(workstation)}
           </div>
-          <div className="flex items-center bg-gray-100 px-3 py-1 rounded-md">
-            <Clock className="w-4 h-4 mr-1 text-blue-600" />
-            <span className="text-sm font-medium">{currentTime.toLocaleTimeString()}</span>
-          </div>
+          <CardTitle>{workstation}</CardTitle>
         </div>
       </CardHeader>
       <CardContent>

@@ -20,24 +20,14 @@ const WorkstationDashboard = () => {
     inProgress: 0,
     dueToday: 0
   });
-  const [currentTime, setCurrentTime] = useState(new Date());
   const { toast } = useToast();
-
-  // Update clock every second
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    
-    return () => clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     const fetchTasks = async () => {
-      if (!currentEmployee) {
+      if (!currentEmployee?.workstation) {
         toast({
           title: "Error",
-          description: "No employee information found",
+          description: "No workstation assigned to this account",
           variant: "destructive"
         });
         setLoading(false);
@@ -46,238 +36,32 @@ const WorkstationDashboard = () => {
 
       try {
         setLoading(true);
-        
-        // First check if we have a workstation name directly on the employee
-        let workstationId: string | null = null;
-        
-        if (currentEmployee.workstation) {
-          // Get workstation ID from the name
-          const { data: workstationData, error: workstationError } = await supabase
-            .from('workstations')
-            .select('id')
-            .eq('name', currentEmployee.workstation)
-            .single();
-            
-          if (workstationError) {
-            console.error("Error fetching workstation by name:", workstationError);
-          } else if (workstationData) {
-            workstationId = workstationData.id;
-          }
-        }
-        
-        // If no workstation found from name, try to get it from employee_workstation_links
-        if (!workstationId) {
-          const { data: workstationLinks, error: linksError } = await supabase
-            .from('employee_workstation_links')
-            .select('workstation_id')
-            .eq('employee_id', currentEmployee.id);
-            
-          if (linksError) {
-            console.error("Error fetching employee workstation links:", linksError);
-          } else if (workstationLinks && workstationLinks.length > 0) {
-            workstationId = workstationLinks[0].workstation_id;
-          }
-        }
-        
-        if (!workstationId) {
-          toast({
-            title: "Error",
-            description: "No workstation assigned to this account",
-            variant: "destructive"
-          });
-          setLoading(false);
-          return;
-        }
-        
-        // Fetch the workstation name for display
-        const { data: workstationData } = await supabase
+        // Get the workstation ID from the name
+        const { data: workstationData, error: workstationError } = await supabase
           .from('workstations')
-          .select('name')
-          .eq('id', workstationId)
+          .select('id')
+          .eq('name', currentEmployee.workstation)
           .single();
-        
-        const workstationName = workstationData?.name || "Unknown workstation";
-        
-        // Approach 1: Try standard task workstation links first
-        const { data: standardTaskLinks, error: standardLinksError } = await supabase
-          .from('standard_task_workstation_links')
-          .select('standard_task_id')
-          .eq('workstation_id', workstationId);
           
-        if (!standardLinksError && standardTaskLinks && standardTaskLinks.length > 0) {
-          // Get standard tasks
-          const standardTaskIds = standardTaskLinks.map(link => link.standard_task_id);
-          const { data: standardTasks } = await supabase
-            .from('standard_tasks')
-            .select('*')
-            .in('id', standardTaskIds);
-          
-          if (standardTasks && standardTasks.length > 0) {
-            // Find tasks that match these standard tasks
-            let allMatchingTasks: Task[] = [];
-            
-            for (const stdTask of standardTasks) {
-              // Search for tasks that contain this standard task number or name
-              const { data: matchingTasks, error: tasksError } = await supabase
-                .from('tasks')
-                .select('*')
-                .not('status', 'eq', 'COMPLETED')
-                .or(`title.ilike.%${stdTask.task_number}%,title.ilike.%${stdTask.task_name}%`);
-              
-              if (!tasksError && matchingTasks && matchingTasks.length > 0) {
-                // Get project info for each task
-                const tasksWithDetails = await Promise.all(matchingTasks.map(async (task) => {
-                  try {
-                    // Get phase to find project
-                    const { data: phaseData } = await supabase
-                      .from('phases')
-                      .select('project_id, name')
-                      .eq('id', task.phase_id)
-                      .single();
-                    
-                    // Get project name
-                    const { data: projectData } = await supabase
-                      .from('projects')
-                      .select('name')
-                      .eq('id', phaseData?.project_id)
-                      .maybeSingle();
-                    
-                    return {
-                      ...task,
-                      project_name: projectData?.name || 'Unknown Project',
-                      status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED",
-                      priority: task.priority as "Low" | "Medium" | "High" | "Urgent"
-                    } as Task;
-                  } catch (error) {
-                    console.error('Error getting project info:', error);
-                    return {
-                      ...task,
-                      project_name: 'Unknown Project',
-                      status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED",
-                      priority: task.priority as "Low" | "Medium" | "High" | "Urgent"
-                    } as Task;
-                  }
-                }));
-                
-                allMatchingTasks = [...allMatchingTasks, ...tasksWithDetails];
-              }
-            }
-            
-            // Remove duplicates
-            const uniqueTasks = Array.from(
-              new Map(allMatchingTasks.map(task => [task.id, task])).values()
-            );
-            
-            setTasks(uniqueTasks);
-            
-            // Calculate stats
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            
-            const dueToday = uniqueTasks.filter(task => {
-              const taskDate = new Date(task.due_date);
-              taskDate.setHours(0, 0, 0, 0);
-              return taskDate.getTime() === today.getTime();
-            }).length;
-            
-            setStats({
-              totalTasks: uniqueTasks.length,
-              completedToday: 0, // Need to fetch this separately
-              inProgress: uniqueTasks.filter(t => t.status === 'IN_PROGRESS').length,
-              dueToday
-            });
-            
-            setLoading(false);
-            return;
-          }
-        }
+        if (workstationError) throw workstationError;
         
-        // Approach 2: Fall back to direct task workstation links
-        const { data: taskLinks, error: taskLinksError } = await supabase
+        // Get task IDs linked to this workstation
+        const { data: taskLinks, error: linksError } = await supabase
           .from('task_workstation_links')
           .select('task_id')
-          .eq('workstation_id', workstationId);
+          .eq('workstation_id', workstationData.id);
           
-        if (taskLinksError) throw taskLinksError;
-        
+        if (linksError) throw linksError;
+
         if (!taskLinks || taskLinks.length === 0) {
-          // As a last resort, try the workstation field on tasks
-          const { data: directTasks, error: directTasksError } = await supabase
-            .from('tasks')
-            .select('*')
-            .eq('workstation', workstationName)
-            .neq('status', 'COMPLETED');
-            
-          if (!directTasksError && directTasks && directTasks.length > 0) {
-            // Get project info
-            const tasksWithDetails = await Promise.all(directTasks.map(async (task) => {
-              try {
-                const { data: phaseData } = await supabase
-                  .from('phases')
-                  .select('project_id, name')
-                  .eq('id', task.phase_id)
-                  .maybeSingle();
-                
-                const { data: projectData } = await supabase
-                  .from('projects')
-                  .select('name')
-                  .eq('id', phaseData?.project_id)
-                  .maybeSingle();
-                
-                return {
-                  ...task,
-                  project_name: projectData?.name || 'Unknown Project',
-                  status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED",
-                  priority: task.priority as "Low" | "Medium" | "High" | "Urgent"
-                } as Task;
-              } catch (error) {
-                return {
-                  ...task,
-                  project_name: 'Unknown Project',
-                  status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED",
-                  priority: task.priority as "Low" | "Medium" | "High" | "Urgent"
-                } as Task;
-              }
-            }));
-            
-            setTasks(tasksWithDetails);
-            
-            // Calculate stats for direct tasks
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            
-            const dueToday = tasksWithDetails.filter(task => {
-              const taskDate = new Date(task.due_date);
-              taskDate.setHours(0, 0, 0, 0);
-              return taskDate.getTime() === today.getTime();
-            }).length;
-            
-            setStats({
-              totalTasks: tasksWithDetails.length,
-              completedToday: 0,
-              inProgress: tasksWithDetails.filter(t => t.status === 'IN_PROGRESS').length,
-              dueToday
-            });
-            
-            setLoading(false);
-            return;
-          }
-          
-          // If we get here, no tasks were found
           setTasks([]);
-          setStats({
-            totalTasks: 0,
-            completedToday: 0,
-            inProgress: 0,
-            dueToday: 0
-          });
           setLoading(false);
           return;
         }
         
-        // Get tasks from links
         const taskIds = taskLinks.map(link => link.task_id);
         
+        // Get the actual tasks that are not completed
         const { data: tasksData, error: tasksError } = await supabase
           .from('tasks')
           .select('*')
@@ -287,39 +71,29 @@ const WorkstationDashboard = () => {
           
         if (tasksError) throw tasksError;
         
-        // Get project info for each task
-        const tasksWithDetails = await Promise.all((tasksData || []).map(async (task) => {
-          try {
-            // Get phase to find project
-            const { data: phaseData } = await supabase
-              .from('phases')
-              .select('project_id, name')
-              .eq('id', task.phase_id)
-              .maybeSingle();
-              
-            // Get project name
-            const { data: projectData } = await supabase
-              .from('projects')
-              .select('name')
-              .eq('id', phaseData?.project_id)
-              .maybeSingle();
-              
-            return {
-              ...task,
-              project_name: projectData?.name || 'Unknown Project',
-              phase_name: phaseData?.name || 'Unknown Phase',
-              status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED",
-              priority: task.priority as "Low" | "Medium" | "High" | "Urgent"
-            } as Task;
-          } catch (error) {
-            console.error('Error fetching project info:', error);
-            return {
-              ...task,
-              project_name: 'Unknown Project',
-              status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED",
-              priority: task.priority as "Low" | "Medium" | "High" | "Urgent"
-            } as Task;
-          }
+        // Get project and phase info for each task
+        const tasksWithDetails = await Promise.all(tasksData.map(async (task) => {
+          // Get the phase to find the project
+          const { data: phaseData } = await supabase
+            .from('phases')
+            .select('project_id, name')
+            .eq('id', task.phase_id)
+            .single();
+            
+          // Get the project name
+          const { data: projectData } = await supabase
+            .from('projects')
+            .select('name')
+            .eq('id', phaseData.project_id)
+            .single();
+            
+          // Form the task with additional info
+          return {
+            ...task,
+            project_name: projectData?.name || 'Unknown Project',
+            phase_name: phaseData?.name || 'Unknown Phase',
+            status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED"
+          } as Task;
         }));
         
         setTasks(tasksWithDetails);
@@ -357,15 +131,6 @@ const WorkstationDashboard = () => {
           title: "Error",
           description: `Failed to load tasks: ${error.message}`,
           variant: "destructive"
-        });
-        
-        // Set empty state to prevent UI errors
-        setTasks([]);
-        setStats({
-          totalTasks: 0,
-          completedToday: 0,
-          inProgress: 0,
-          dueToday: 0
         });
       } finally {
         setLoading(false);
@@ -438,23 +203,16 @@ const WorkstationDashboard = () => {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
-              {currentEmployee?.workstation || "Workstation Dashboard"} 
+              {currentEmployee?.workstation} Workstation
             </h1>
-            <div className="flex items-center space-x-2 text-gray-600 text-lg">
-              <span>
-                {new Date().toLocaleDateString('en-US', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
-                })}
-              </span>
-              <span className="text-gray-400">|</span>
-              <div className="flex items-center text-blue-600 font-medium">
-                <Clock className="h-5 w-5 mr-1" />
-                <span>{currentTime.toLocaleTimeString()}</span>
-              </div>
-            </div>
+            <p className="text-gray-600 text-lg">
+              {new Date().toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}
+            </p>
           </div>
         </div>
 
