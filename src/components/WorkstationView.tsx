@@ -143,18 +143,39 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
                   
                   if (projectError) throw projectError;
                   
+                  // Ensure the task status conforms to the expected type
+                  const status = 
+                    task.status === 'TODO' || task.status === 'IN_PROGRESS' || task.status === 'COMPLETED'
+                      ? task.status
+                      : 'TODO'; // Default to 'TODO' if not a valid status
+                  
+                  // Return the task with the expected shape that matches the Task interface
                   return {
-                    ...task,
-                    project_name: projectData.name
-                  };
+                    id: task.id,
+                    phase_id: task.phase_id,
+                    assignee_id: task.assignee_id,
+                    title: task.title,
+                    description: task.description || null,
+                    workstation: task.workstation,
+                    status: status as "TODO" | "IN_PROGRESS" | "COMPLETED",
+                    priority: task.priority as "Low" | "Medium" | "High" | "Urgent",
+                    due_date: task.due_date,
+                    created_at: task.created_at,
+                    updated_at: task.updated_at,
+                    project_name: projectData.name,
+                    completed_at: task.completed_at,
+                    completed_by: task.completed_by
+                  } as Task;
                 } catch (error) {
                   console.error('Error fetching project info for task:', error);
-                  return task;
+                  return null;
                 }
               })
             );
             
-            matchedTasks = [...matchedTasks, ...tasksWithProjectInfo];
+            // Filter out any null tasks (from errors)
+            const validTasks = tasksWithProjectInfo.filter(task => task !== null) as Task[];
+            matchedTasks = [...matchedTasks, ...validTasks];
           }
         }
         
