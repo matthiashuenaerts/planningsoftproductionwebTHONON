@@ -509,14 +509,12 @@ const WorkstationDashboard = () => {
   }
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
+    <div className="p-4 bg-gray-50 min-h-screen">
+      <div className="max-w-full mx-auto">
+        <div className="flex justify-between items-center mb-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
-              {userWorkstations.length > 0 
-                ? userWorkstations.map(ws => ws.name).join(', ')
-                : 'Workstation'} Dashboard
+              Workstation Screen: {currentEmployee?.name || 'Unknown'}
             </h1>
             <p className="text-gray-600 text-lg">
               {new Date().toLocaleDateString('en-US', { 
@@ -538,58 +536,7 @@ const WorkstationDashboard = () => {
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardContent className="p-6 flex items-center">
-              <div className="bg-blue-100 p-3 rounded-full mr-4">
-                <Package className="text-blue-700 h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">TODO Tasks</p>
-                <h3 className="text-2xl font-bold">{stats.totalTasks}</h3>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6 flex items-center">
-              <div className="bg-green-100 p-3 rounded-full mr-4">
-                <Check className="text-green-700 h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Completed Today</p>
-                <h3 className="text-2xl font-bold">{stats.completedToday}</h3>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6 flex items-center">
-              <div className="bg-amber-100 p-3 rounded-full mr-4">
-                <Calendar className="text-amber-700 h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Due Today</p>
-                <h3 className="text-2xl font-bold">{stats.dueToday}</h3>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6 flex items-center">
-              <div className="bg-purple-100 p-3 rounded-full mr-4">
-                <ArrowUpRight className="text-purple-700 h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Workstations</p>
-                <h3 className="text-2xl font-bold">{userWorkstations.length}</h3>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Tasks List - Only TODO tasks */}
+        {/* Main content - two column layout */}
         {userWorkstations.length === 0 ? (
           <Card>
             <CardHeader>
@@ -599,21 +546,92 @@ const WorkstationDashboard = () => {
               <p>No workstations are assigned to this account. Please contact an administrator to assign workstations.</p>
             </CardContent>
           </Card>
-        ) : tasks.length === 0 ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>No Tasks</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>There are no pending tasks assigned to your workstation(s).</p>
-            </CardContent>
-          </Card>
         ) : (
-          <div className="space-y-8">
-            <TaskList 
-              tasks={tasks} 
-              title="To Do Tasks" 
-            />
+          <div className="grid grid-cols-4 gap-4">
+            {/* Tasks column - takes up 3/4 of the space */}
+            <div className="col-span-3">
+              {tasks.length === 0 ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>No Tasks</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p>There are no pending tasks assigned to your workstation(s).</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <TaskList 
+                  tasks={tasks} 
+                  title="To Do Tasks" 
+                />
+              )}
+            </div>
+            
+            {/* Stats column - takes up 1/4 of the space */}
+            <div className="space-y-4">
+              <Card>
+                <CardContent className="p-6 flex items-center">
+                  <div className="bg-blue-100 p-3 rounded-full mr-4">
+                    <Package className="text-blue-700 h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">TODO Tasks</p>
+                    <h3 className="text-2xl font-bold">{stats.totalTasks}</h3>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardContent className="p-6 flex items-center">
+                  <div className="bg-green-100 p-3 rounded-full mr-4">
+                    <Check className="text-green-700 h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Completed Today</p>
+                    <h3 className="text-2xl font-bold">{stats.completedToday}</h3>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardContent className="p-6 flex items-center">
+                  <div className="bg-amber-100 p-3 rounded-full mr-4">
+                    <Calendar className="text-amber-700 h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Due Today</p>
+                    <h3 className="text-2xl font-bold">{stats.dueToday}</h3>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardContent className="p-6 flex items-center">
+                  <div className="bg-purple-100 p-3 rounded-full mr-4">
+                    <ArrowUpRight className="text-purple-700 h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Workstations</p>
+                    <h3 className="text-2xl font-bold">{userWorkstations.length}</h3>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {userWorkstations.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Assigned Workstations</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-1">
+                      {userWorkstations.map(ws => (
+                        <li key={ws.id} className="text-sm font-medium text-gray-700">{ws.name}</li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </div>
         )}
       </div>
