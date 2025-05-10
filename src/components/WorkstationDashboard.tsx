@@ -86,7 +86,7 @@ const WorkstationDashboard = () => {
         // First try to get workstation by name
         const { data: workstationData, error: workstationError } = await supabase
           .from('workstations')
-          .select('id, name, description')
+          .select('id, name, description, created_at, updated_at')
           .ilike('name', workstationIdentifier)
           .maybeSingle();
           
@@ -102,7 +102,7 @@ const WorkstationDashboard = () => {
           // If not found by exact match, try case-insensitive search
           const { data: workstations, error: listError } = await supabase
             .from('workstations')
-            .select('id, name, description');
+            .select('id, name, description, created_at, updated_at');
             
           if (listError) throw listError;
           
