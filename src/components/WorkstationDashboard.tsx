@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
@@ -364,10 +363,18 @@ const WorkstationDashboard = () => {
       
       // Get project and phase info for each task
       const tasksWithDetails = await enrichTasksWithProjectInfo(uniqueTasks);
-      setTasks(tasksWithDetails);
+      
+      // Sort tasks by due date (earliest first)
+      const sortedTasks = tasksWithDetails.sort((a, b) => {
+        const dateA = new Date(a.due_date);
+        const dateB = new Date(b.due_date);
+        return dateA.getTime() - dateB.getTime();
+      });
+      
+      setTasks(sortedTasks);
       
       // Update stats based on these tasks
-      updateStats(tasksWithDetails);
+      updateStats(sortedTasks);
       setLoading(false);
     } catch (error: any) {
       console.error('Error fetching workstation tasks:', error);
