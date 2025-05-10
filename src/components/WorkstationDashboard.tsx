@@ -7,8 +7,9 @@ import { Task } from '@/services/dataService';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Package, Clock, Check, Calendar, ArrowUpRight } from 'lucide-react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { format } from 'date-fns';
+import TaskList from '@/components/TaskList';
+import { workstationService } from '@/services/workstationService';
+import { Workstation } from '@/services/workstationService';
 
 // Helper function to validate and convert task status
 const validateTaskStatus = (status: string): "TODO" | "IN_PROGRESS" | "COMPLETED" => {
@@ -41,6 +42,7 @@ const WorkstationDashboard = () => {
   });
   const [currentTime, setCurrentTime] = useState(new Date());
   const { toast } = useToast();
+  const [workstation, setWorkstation] = useState<Workstation | null>(null);
 
   // Add a clock that updates every second
   useEffect(() => {
@@ -52,7 +54,7 @@ const WorkstationDashboard = () => {
   }, []);
 
   useEffect(() => {
-    const fetchTasks = async () => {
+    const fetchWorkstationInfo = async () => {
       if (!currentEmployee) {
         toast({
           title: "Error",
@@ -64,9 +66,6 @@ const WorkstationDashboard = () => {
       }
 
       try {
-        setLoading(true);
-        console.log("Current employee:", currentEmployee);
-        
         // For workstation accounts, use their name as the workstation identifier
         const workstationIdentifier = currentEmployee.role === 'workstation' 
           ? currentEmployee.name 
@@ -87,7 +86,7 @@ const WorkstationDashboard = () => {
         // First try to get workstation by name
         const { data: workstationData, error: workstationError } = await supabase
           .from('workstations')
-          .select('id, name')
+          .select('id, name, description')
           .ilike('name', workstationIdentifier)
           .maybeSingle();
           
@@ -96,18 +95,14 @@ const WorkstationDashboard = () => {
           throw workstationError;
         }
         
-        let workstationId = null;
-        let workstationName = null;
-        
         if (workstationData) {
-          workstationId = workstationData.id;
-          workstationName = workstationData.name;
-          console.log("Found workstation:", workstationName, "with ID:", workstationId);
+          setWorkstation(workstationData);
+          console.log("Found workstation:", workstationData.name, "with ID:", workstationData.id);
         } else {
           // If not found by exact match, try case-insensitive search
           const { data: workstations, error: listError } = await supabase
             .from('workstations')
-            .select('id, name');
+            .select('id, name, description');
             
           if (listError) throw listError;
           
@@ -116,9 +111,8 @@ const WorkstationDashboard = () => {
             ws.name.toLowerCase() === workstationIdentifier.toLowerCase());
             
           if (matchingWorkstation) {
-            workstationId = matchingWorkstation.id;
-            workstationName = matchingWorkstation.name;
-            console.log("Found workstation via case insensitive match:", workstationName, "with ID:", workstationId);
+            setWorkstation(matchingWorkstation);
+            console.log("Found workstation via case insensitive match:", matchingWorkstation.name, "with ID:", matchingWorkstation.id);
           } else {
             console.error('No matching workstation found for:', workstationIdentifier);
             toast({
@@ -130,21 +124,40 @@ const WorkstationDashboard = () => {
             return;
           }
         }
-        
-        console.log("Getting tasks for workstation ID:", workstationId);
+      } catch (error: any) {
+        console.error('Error fetching workstation:', error);
+        toast({
+          title: "Error",
+          description: `Failed to load workstation: ${error.message}`,
+          variant: "destructive"
+        });
+        setLoading(false);
+      }
+    };
+
+    fetchWorkstationInfo();
+  }, [currentEmployee, toast]);
+
+  useEffect(() => {
+    const fetchTasks = async () => {
+      if (!workstation) {
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const allTasks: Task[] = [];
         
         // First try to get tasks through standard task workstation links
         const { data: standardTaskLinks, error: standardLinksError } = await supabase
           .from('standard_task_workstation_links')
           .select('standard_task_id')
-          .eq('workstation_id', workstationId);
+          .eq('workstation_id', workstation.id);
           
         if (standardLinksError) {
           console.error("Error fetching standard task links:", standardLinksError);
           throw standardLinksError;
         }
-        
-        let allTasks: Task[] = [];
           
         if (standardTaskLinks && standardTaskLinks.length > 0) {
           console.log("Found standard task links:", standardTaskLinks.length);
@@ -172,7 +185,6 @@ const WorkstationDashboard = () => {
             const { data: matchingTasks, error: matchingTasksError } = await supabase
               .from('tasks')
               .select('*')
-              .not('status', 'eq', 'COMPLETED')
               .or(`title.ilike.%${standardTask.task_number}%,title.ilike.%${standardTask.task_name}%`);
               
             if (matchingTasksError) {
@@ -190,7 +202,7 @@ const WorkstationDashboard = () => {
                 priority: validatePriority(task.priority)
               }));
               
-              allTasks = [...allTasks, ...validatedTasks];
+              allTasks.push(...validatedTasks);
             }
           }
         }
@@ -203,7 +215,7 @@ const WorkstationDashboard = () => {
           const { data: taskLinks, error: taskLinksError } = await supabase
             .from('task_workstation_links')
             .select('task_id')
-            .eq('workstation_id', workstationId);
+            .eq('workstation_id', workstation.id);
             
           if (taskLinksError) {
             console.error("Error fetching task workstation links:", taskLinksError);
@@ -219,8 +231,7 @@ const WorkstationDashboard = () => {
             const { data: linkedTasks, error: linkedTasksError } = await supabase
               .from('tasks')
               .select('*')
-              .in('id', taskIds)
-              .neq('status', 'COMPLETED');
+              .in('id', taskIds);
               
             if (linkedTasksError) {
               console.error("Error fetching linked tasks:", linkedTasksError);
@@ -237,7 +248,7 @@ const WorkstationDashboard = () => {
                 priority: validatePriority(task.priority)
               }));
               
-              allTasks = [...allTasks, ...validatedTasks];
+              allTasks.push(...validatedTasks);
             }
           }
         }
@@ -249,8 +260,7 @@ const WorkstationDashboard = () => {
           const { data: directTasks, error: directTasksError } = await supabase
             .from('tasks')
             .select('*')
-            .ilike('workstation', workstationName)
-            .neq('status', 'COMPLETED');
+            .ilike('workstation', workstation.name);
             
           if (directTasksError) {
             console.error("Error fetching direct tasks:", directTasksError);
@@ -267,7 +277,7 @@ const WorkstationDashboard = () => {
               priority: validatePriority(task.priority)
             }));
             
-            allTasks = [...allTasks, ...validatedTasks];
+            allTasks.push(...validatedTasks);
           }
         }
         
@@ -297,7 +307,7 @@ const WorkstationDashboard = () => {
     };
 
     fetchTasks();
-  }, [currentEmployee, toast]);
+  }, [workstation, toast]);
 
   // Helper function to enrich tasks with project info
   const enrichTasksWithProjectInfo = async (tasksData: Task[]): Promise<Task[]> => {
@@ -343,22 +353,15 @@ const WorkstationDashboard = () => {
       // Get completed tasks for today's stats
       let completedToday = 0;
       
-      if (currentEmployee) {
-        // For workstation accounts, use their name as the workstation identifier
-        const workstationIdentifier = currentEmployee.role === 'workstation' 
-          ? currentEmployee.name 
-          : currentEmployee.workstation;
-          
-        if (workstationIdentifier) {
-          const { data: completedTasks } = await supabase
-            .from('tasks')
-            .select('*')
-            .ilike('workstation', workstationIdentifier)
-            .eq('status', 'COMPLETED')
-            .gte('completed_at', today.toISOString());
+      if (workstation) {
+        const { data: completedTasks } = await supabase
+          .from('tasks')
+          .select('*')
+          .ilike('workstation', workstation.name)
+          .eq('status', 'COMPLETED')
+          .gte('completed_at', today.toISOString());
             
-          completedToday = completedTasks?.length || 0;
-        }
+        completedToday = completedTasks?.length || 0;
       }
 
       // Calculate due today
@@ -379,11 +382,11 @@ const WorkstationDashboard = () => {
     }
   };
 
-  const handleCompleteTask = async (taskId: string) => {
+  const handleTaskStatusChange = async (taskId: string, status: Task['status']) => {
     if (!currentEmployee) {
       toast({
         title: "Authentication Error",
-        description: "You must be logged in to complete tasks.",
+        description: "You must be logged in to update tasks.",
         variant: "destructive"
       });
       return;
@@ -391,41 +394,68 @@ const WorkstationDashboard = () => {
 
     try {
       // Update task in Supabase
+      const updateData: Partial<Task> = { 
+        status,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Add completion info if task is being marked as completed
+      if (status === 'COMPLETED') {
+        updateData.completed_at = new Date().toISOString();
+        updateData.completed_by = currentEmployee.id;
+      }
+      
       const { error } = await supabase
         .from('tasks')
-        .update({
-          status: 'COMPLETED',
-          completed_by: currentEmployee.id,
-          completed_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', taskId);
       
       if (error) throw error;
       
       // Update local state
-      setTasks(tasks.filter(task => task.id !== taskId));
+      setTasks(prevTasks => prevTasks.map(task => 
+        task.id === taskId ? { 
+          ...task, 
+          status,
+          ...(status === 'COMPLETED' ? {
+            completed_at: updateData.completed_at,
+            completed_by: currentEmployee.id
+          } : {})
+        } : task
+      ));
       
       // Update stats
-      setStats(prev => ({
-        ...prev,
-        completedToday: prev.completedToday + 1,
-        totalTasks: prev.totalTasks - 1,
-        inProgress: tasks.find(t => t.id === taskId)?.status === 'IN_PROGRESS' 
-          ? prev.inProgress - 1 
-          : prev.inProgress
-      }));
+      if (status === 'COMPLETED') {
+        setStats(prev => ({
+          ...prev,
+          completedToday: prev.completedToday + 1,
+          totalTasks: prev.totalTasks - 1,
+          inProgress: tasks.find(t => t.id === taskId)?.status === 'IN_PROGRESS' 
+            ? prev.inProgress - 1 
+            : prev.inProgress
+        }));
+      } else {
+        // Update other stats if needed
+        updateStats(tasks.map(task => 
+          task.id === taskId ? { ...task, status } : task
+        ));
+      }
       
       toast({
-        title: "Task completed",
-        description: "Task has been marked as completed."
+        title: "Task Updated",
+        description: `Task status changed to ${status}`,
       });
     } catch (error: any) {
       toast({
         title: "Error",
-        description: `Failed to complete task: ${error.message}`,
+        description: `Failed to update task: ${error.message}`,
         variant: "destructive"
       });
     }
+  };
+
+  const getTasksByStatus = (status: Task['status']) => {
+    return tasks.filter(task => task.status === status);
   };
 
   if (loading) {
@@ -442,7 +472,7 @@ const WorkstationDashboard = () => {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
-              {currentEmployee?.workstation} Workstation
+              {workstation?.name || currentEmployee?.workstation || 'Workstation'} Dashboard
             </h1>
             <p className="text-gray-600 text-lg">
               {new Date().toLocaleDateString('en-US', { 
@@ -512,88 +542,35 @@ const WorkstationDashboard = () => {
           </Card>
         </div>
 
-        {/* Tasks Table */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="text-xl flex items-center">
-              <Clock className="mr-2 h-5 w-5" /> Pending Tasks
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {tasks.length === 0 ? (
-              <div className="text-center py-8">
-                <Check className="mx-auto h-12 w-12 text-green-500 mb-4" />
-                <h3 className="text-lg font-medium">All caught up!</h3>
-                <p className="text-muted-foreground">No pending tasks for this workstation.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Project</TableHead>
-                      <TableHead>Task</TableHead>
-                      <TableHead>Due Date</TableHead>
-                      <TableHead>Priority</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {tasks.map((task) => {
-                      const isOverdue = new Date(task.due_date) < new Date();
-                      const isDueToday = new Date(task.due_date).toDateString() === new Date().toDateString();
-                      
-                      return (
-                        <TableRow key={task.id}>
-                          <TableCell className="font-medium">{task.project_name}</TableCell>
-                          <TableCell>{task.title}</TableCell>
-                          <TableCell>
-                            <span className={`${
-                              isOverdue ? 'text-red-600 font-semibold' : 
-                              isDueToday ? 'text-amber-600 font-semibold' : ''
-                            }`}>
-                              {format(new Date(task.due_date), 'MMM d, yyyy')}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <span className={`inline-flex px-2 py-1 rounded text-xs font-medium ${
-                              task.priority === 'High' || task.priority === 'Urgent' 
-                                ? 'bg-red-100 text-red-800' 
-                                : task.priority === 'Medium'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-gray-100 text-gray-800'
-                            }`}>
-                              {task.priority}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <span className={`inline-flex px-2 py-1 rounded text-xs font-medium ${
-                              task.status === 'IN_PROGRESS' 
-                                ? 'bg-blue-100 text-blue-800' 
-                                : 'bg-gray-100 text-gray-800'
-                            }`}>
-                              {task.status === 'IN_PROGRESS' ? 'In Progress' : 'To Do'}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              onClick={() => handleCompleteTask(task.id)}
-                              className="bg-green-500 hover:bg-green-600"
-                              size="sm"
-                            >
-                              <Check className="mr-1 h-4 w-4" /> Complete
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* Tasks Lists by Status */}
+        {tasks.length === 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>No Tasks</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p>There are no pending tasks assigned to this workstation.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-8">
+            <TaskList 
+              tasks={getTasksByStatus('TODO')} 
+              title="To Do" 
+              onTaskStatusChange={handleTaskStatusChange}
+            />
+            <TaskList 
+              tasks={getTasksByStatus('IN_PROGRESS')} 
+              title="In Progress" 
+              onTaskStatusChange={handleTaskStatusChange}
+            />
+            <TaskList 
+              tasks={getTasksByStatus('COMPLETED')} 
+              title="Recently Completed" 
+              onTaskStatusChange={handleTaskStatusChange}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
