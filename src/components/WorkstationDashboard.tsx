@@ -1,13 +1,12 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Task } from '@/services/dataService';
 import { useToast } from '@/hooks/use-toast';
-import { Button } from '@/components/ui/button';
 import { Package, Clock, Check, Calendar, ArrowUpRight } from 'lucide-react';
 import TaskList from '@/components/TaskList';
-import { workstationService } from '@/services/workstationService';
 import { Workstation } from '@/services/workstationService';
 
 // Helper function to validate and convert task status
@@ -15,7 +14,6 @@ const validateTaskStatus = (status: string): "TODO" | "IN_PROGRESS" | "COMPLETED
   if (status === "TODO" || status === "IN_PROGRESS" || status === "COMPLETED") {
     return status;
   }
-  // Default to TODO if an invalid status is provided
   console.warn(`Invalid task status: ${status}, defaulting to TODO`);
   return "TODO";
 };
@@ -28,6 +26,8 @@ const validatePriority = (priority: string): "Low" | "Medium" | "High" | "Urgent
   console.warn(`Invalid task priority: ${priority}, defaulting to Medium`);
   return "Medium";
 };
+
+const AUTO_REFRESH_INTERVAL = 60000; // Refresh every 60 seconds
 
 const WorkstationDashboard = () => {
   const { currentEmployee } = useAuth();
@@ -42,6 +42,7 @@ const WorkstationDashboard = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const { toast } = useToast();
   const [userWorkstations, setUserWorkstations] = useState<Workstation[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   // Add a clock that updates every second
   useEffect(() => {
@@ -52,304 +53,272 @@ const WorkstationDashboard = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch the workstations assigned to this user
+  // Auto-refresh data at regular intervals for TV display
   useEffect(() => {
-    const fetchUserWorkstations = async () => {
-      if (!currentEmployee) {
-        toast({
-          title: "Error",
-          description: "No employee information found",
-          variant: "destructive"
-        });
-        setLoading(false);
-        return;
-      }
+    // Initial fetch
+    fetchUserWorkstations();
+    
+    // Set up auto-refresh
+    const refreshTimer = setInterval(() => {
+      console.log(`Auto-refreshing data at ${new Date().toLocaleTimeString()}`);
+      fetchUserWorkstations();
+      setLastUpdated(new Date());
+    }, AUTO_REFRESH_INTERVAL);
+    
+    return () => clearInterval(refreshTimer);
+  }, []);
 
-      try {
-        setLoading(true);
+  // Fetch the workstations assigned to this user
+  const fetchUserWorkstations = async () => {
+    if (!currentEmployee) {
+      toast({
+        title: "Error",
+        description: "No employee information found",
+        variant: "destructive"
+      });
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // First check employee_workstation_links table
+      const { data: workstationLinks, error: linksError } = await supabase
+        .from('employee_workstation_links')
+        .select('workstation_id')
+        .eq('employee_id', currentEmployee.id);
+      
+      if (linksError) {
+        console.error("Error fetching employee workstation links:", linksError);
+        throw linksError;
+      }
+      
+      const workstations: Workstation[] = [];
+      
+      // If there are workstation links, fetch each workstation
+      if (workstationLinks && workstationLinks.length > 0) {
+        console.log(`Found ${workstationLinks.length} workstation links for employee ${currentEmployee.id}`);
         
-        // First check employee_workstation_links table
-        const { data: workstationLinks, error: linksError } = await supabase
-          .from('employee_workstation_links')
-          .select('workstation_id')
-          .eq('employee_id', currentEmployee.id);
-        
-        if (linksError) {
-          console.error("Error fetching employee workstation links:", linksError);
-          throw linksError;
-        }
-        
-        const workstations: Workstation[] = [];
-        
-        // If there are workstation links, fetch each workstation
-        if (workstationLinks && workstationLinks.length > 0) {
-          console.log(`Found ${workstationLinks.length} workstation links for employee ${currentEmployee.id}`);
-          
-          for (const link of workstationLinks) {
-            const { data: workstationData, error: workstationError } = await supabase
-              .from('workstations')
-              .select('id, name, description, created_at, updated_at')
-              .eq('id', link.workstation_id)
-              .single();
-              
-            if (workstationError) {
-              console.error(`Error fetching workstation ${link.workstation_id}:`, workstationError);
-              continue;
-            }
+        for (const link of workstationLinks) {
+          const { data: workstationData, error: workstationError } = await supabase
+            .from('workstations')
+            .select('id, name, description, created_at, updated_at')
+            .eq('id', link.workstation_id)
+            .single();
             
-            if (workstationData) {
-              workstations.push(workstationData as Workstation);
-            }
+          if (workstationError) {
+            console.error(`Error fetching workstation ${link.workstation_id}:`, workstationError);
+            continue;
           }
-        } else {
-          // Fallback to legacy workstation field in employees table
-          if (currentEmployee.workstation) {
-            const { data: workstationData, error: workstationError } = await supabase
+          
+          if (workstationData) {
+            workstations.push(workstationData as Workstation);
+          }
+        }
+      } else {
+        // Fallback to legacy workstation field in employees table
+        if (currentEmployee.workstation) {
+          const { data: workstationData, error: workstationError } = await supabase
+            .from('workstations')
+            .select('id, name, description, created_at, updated_at')
+            .ilike('name', currentEmployee.workstation)
+            .maybeSingle();
+            
+          if (workstationError && workstationError.code !== 'PGRST116') {
+            console.error('Error fetching workstation by name:', workstationError);
+          } else if (workstationData) {
+            workstations.push(workstationData as Workstation);
+          } else {
+            // Try to find workstation case-insensitively
+            const { data: allWorkstations, error: listError } = await supabase
               .from('workstations')
-              .select('id, name, description, created_at, updated_at')
-              .ilike('name', currentEmployee.workstation)
-              .maybeSingle();
+              .select('id, name, description, created_at, updated_at');
               
-            if (workstationError && workstationError.code !== 'PGRST116') {
-              console.error('Error fetching workstation by name:', workstationError);
-            } else if (workstationData) {
-              workstations.push(workstationData as Workstation);
-            } else {
-              // Try to find workstation case-insensitively
-              const { data: allWorkstations, error: listError } = await supabase
-                .from('workstations')
-                .select('id, name, description, created_at, updated_at');
-                
-              if (listError) {
-                console.error('Error fetching all workstations:', listError);
-              } else if (allWorkstations) {
-                const matchingWorkstation = allWorkstations.find(ws => 
-                  ws.name.toLowerCase() === currentEmployee.workstation?.toLowerCase()
-                );
-                
-                if (matchingWorkstation) {
-                  workstations.push(matchingWorkstation as Workstation);
-                }
+            if (listError) {
+              console.error('Error fetching all workstations:', listError);
+            } else if (allWorkstations) {
+              const matchingWorkstation = allWorkstations.find(ws => 
+                ws.name.toLowerCase() === currentEmployee.workstation?.toLowerCase()
+              );
+              
+              if (matchingWorkstation) {
+                workstations.push(matchingWorkstation as Workstation);
               }
             }
           }
         }
-        
-        // Special handling for workstation account type
-        if (currentEmployee.role === 'workstation') {
-          // For workstation accounts, use the name to find the matching workstation
-          const { data: matchByName, error: matchError } = await supabase
-            .from('workstations')
-            .select('id, name, description, created_at, updated_at')
-            .ilike('name', currentEmployee.name)
-            .maybeSingle();
-            
-          if (matchError && matchError.code !== 'PGRST116') {
-            console.error('Error finding workstation by employee name:', matchError);
-          } else if (matchByName) {
-            // Check if this workstation is already in our list
-            const exists = workstations.some(ws => ws.id === matchByName.id);
-            if (!exists) {
-              workstations.push(matchByName as Workstation);
+      }
+      
+      // Special handling for workstation account type
+      if (currentEmployee.role === 'workstation') {
+        // For workstation accounts, use the name to find the matching workstation
+        const { data: matchByName, error: matchError } = await supabase
+          .from('workstations')
+          .select('id, name, description, created_at, updated_at')
+          .ilike('name', currentEmployee.name)
+          .maybeSingle();
+          
+        if (matchError && matchError.code !== 'PGRST116') {
+          console.error('Error finding workstation by employee name:', matchError);
+        } else if (matchByName) {
+          // Check if this workstation is already in our list
+          const exists = workstations.some(ws => ws.id === matchByName.id);
+          if (!exists) {
+            workstations.push(matchByName as Workstation);
+          }
+        }
+      }
+      
+      if (workstations.length > 0) {
+        console.log(`Found ${workstations.length} workstations for user:`, workstations.map(ws => ws.name));
+        setUserWorkstations(workstations);
+        fetchTasks(workstations);
+      } else {
+        console.warn("No workstations found for this user");
+        setLoading(false);
+      }
+    } catch (error: any) {
+      console.error('Error fetching workstations:', error);
+      setLoading(false);
+    }
+  };
+
+  const fetchTasks = async (workstations: Workstation[]) => {
+    if (!workstations.length) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const allTasks: Task[] = [];
+      
+      // For each workstation, get the tasks
+      for (const workstation of workstations) {
+        // First try to get tasks through standard task workstation links
+        const { data: standardTaskLinks, error: standardLinksError } = await supabase
+          .from('standard_task_workstation_links')
+          .select('standard_task_id')
+          .eq('workstation_id', workstation.id);
+          
+        if (standardLinksError) {
+          console.error("Error fetching standard task links:", standardLinksError);
+          continue;
+        }
+          
+        if (standardTaskLinks && standardTaskLinks.length > 0) {
+          console.log("Found standard task links:", standardTaskLinks.length);
+          
+          // Get the standard task details for these linked task IDs
+          const standardTaskIds = standardTaskLinks.map(link => link.standard_task_id);
+          
+          // For each standard task, get tasks that contain its number in the title
+          for (const standardTaskId of standardTaskIds) {
+            // Get the standard task details
+            const { data: standardTask, error: standardTaskError } = await supabase
+              .from('standard_tasks')
+              .select('task_number, task_name')
+              .eq('id', standardTaskId)
+              .single();
+              
+            if (standardTaskError) {
+              console.error("Error fetching standard task:", standardTaskError);
+              continue;
             }
-          }
-        }
-        
-        if (workstations.length > 0) {
-          console.log(`Found ${workstations.length} workstations for user:`, workstations.map(ws => ws.name));
-          setUserWorkstations(workstations);
-        } else {
-          console.warn("No workstations found for this user");
-          toast({
-            title: "Warning",
-            description: "No workstations assigned to this account",
-            variant: "destructive"
-          });
-        }
-      } catch (error: any) {
-        console.error('Error fetching workstations:', error);
-        toast({
-          title: "Error",
-          description: `Failed to load workstation information: ${error.message}`,
-          variant: "destructive"
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUserWorkstations();
-  }, [currentEmployee, toast]);
-
-  useEffect(() => {
-    const fetchTasks = async () => {
-      if (!userWorkstations.length) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        const allTasks: Task[] = [];
-        
-        // For each workstation, get the tasks
-        for (const workstation of userWorkstations) {
-          // First try to get tasks through standard task workstation links
-          const { data: standardTaskLinks, error: standardLinksError } = await supabase
-            .from('standard_task_workstation_links')
-            .select('standard_task_id')
-            .eq('workstation_id', workstation.id);
             
-          if (standardLinksError) {
-            console.error("Error fetching standard task links:", standardLinksError);
-            continue;
-          }
+            if (!standardTask) continue;
             
-          if (standardTaskLinks && standardTaskLinks.length > 0) {
-            console.log("Found standard task links:", standardTaskLinks.length);
-            
-            // Get the standard task details for these linked task IDs
-            const standardTaskIds = standardTaskLinks.map(link => link.standard_task_id);
-            
-            // For each standard task, get tasks that contain its number in the title
-            for (const standardTaskId of standardTaskIds) {
-              // Get the standard task details
-              const { data: standardTask, error: standardTaskError } = await supabase
-                .from('standard_tasks')
-                .select('task_number, task_name')
-                .eq('id', standardTaskId)
-                .single();
+            try {
+              // Search for active tasks containing this standard task number or name
+              const { data: matchingTasks, error: matchingTasksError } = await supabase
+                .from('tasks')
+                .select('*')
+                .ilike('title', `%${standardTask.task_number}%`)
+                .eq('status', 'TODO');
                 
-              if (standardTaskError) {
-                console.error("Error fetching standard task:", standardTaskError);
+              if (matchingTasksError) {
+                console.error("Error fetching matching tasks:", matchingTasksError);
                 continue;
               }
               
-              if (!standardTask) continue;
-              
-              try {
-                // Search for active tasks containing this standard task number or name
-                // Use proper OR syntax for PostgreSQL to avoid SQL injection
-                const { data: matchingTasks, error: matchingTasksError } = await supabase
-                  .from('tasks')
-                  .select('*')
-                  .or(`title.ilike.%${standardTask.task_number}%`)
-                  .eq('status', 'TODO'); // Only fetch TODO tasks
-                  
-                if (matchingTasksError) {
-                  console.error("Error fetching matching tasks:", matchingTasksError);
-                  continue;
-                }
+              if (matchingTasks && matchingTasks.length > 0) {
+                console.log(`Found ${matchingTasks.length} tasks matching standard task ${standardTask.task_number}`);
                 
-                if (matchingTasks && matchingTasks.length > 0) {
-                  console.log(`Found ${matchingTasks.length} tasks matching standard task ${standardTask.task_number}`);
-                  
-                  // Convert each task to the correct type with validated status
-                  const validatedTasks: Task[] = matchingTasks.map(task => ({
-                    ...task,
-                    status: validateTaskStatus(task.status),
-                    priority: validatePriority(task.priority)
-                  }));
-                  
-                  allTasks.push(...validatedTasks);
-                }
-              } catch (error) {
-                console.error(`Error querying tasks for standard task ${standardTask.task_number}:`, error);
+                const validatedTasks: Task[] = matchingTasks.map(task => ({
+                  ...task,
+                  status: validateTaskStatus(task.status),
+                  priority: validatePriority(task.priority)
+                }));
+                
+                allTasks.push(...validatedTasks);
               }
+            } catch (error) {
+              console.error(`Error querying tasks for standard task ${standardTask.task_number}:`, error);
+            }
 
-              // Try a second query for the task name if needed
-              try {
-                const { data: matchingNameTasks, error: matchingNameTasksError } = await supabase
-                  .from('tasks')
-                  .select('*')
-                  .ilike('title', `%${standardTask.task_name}%`)
-                  .eq('status', 'TODO'); // Only fetch TODO tasks
-                  
-                if (matchingNameTasksError) {
-                  console.error("Error fetching tasks by name:", matchingNameTasksError);
-                  continue;
-                }
+            // Try a second query for the task name if needed
+            try {
+              const { data: matchingNameTasks, error: matchingNameTasksError } = await supabase
+                .from('tasks')
+                .select('*')
+                .ilike('title', `%${standardTask.task_name}%`)
+                .eq('status', 'TODO');
                 
-                if (matchingNameTasks && matchingNameTasks.length > 0) {
-                  // Convert each task to the correct type with validated status
-                  const validatedTasks: Task[] = matchingNameTasks.map(task => ({
-                    ...task,
-                    status: validateTaskStatus(task.status),
-                    priority: validatePriority(task.priority)
-                  }));
-                  
-                  allTasks.push(...validatedTasks);
-                }
-              } catch (error) {
-                console.error(`Error querying tasks by name for standard task ${standardTask.task_name}:`, error);
+              if (matchingNameTasksError) {
+                console.error("Error fetching tasks by name:", matchingNameTasksError);
+                continue;
               }
+              
+              if (matchingNameTasks && matchingNameTasks.length > 0) {
+                const validatedTasks: Task[] = matchingNameTasks.map(task => ({
+                  ...task,
+                  status: validateTaskStatus(task.status),
+                  priority: validatePriority(task.priority)
+                }));
+                
+                allTasks.push(...validatedTasks);
+              }
+            } catch (error) {
+              console.error(`Error querying tasks by name for standard task ${standardTask.task_name}:`, error);
             }
           }
+        }
+        
+        // Check direct task workstation links
+        console.log("Checking direct task links for workstation", workstation.name);
+        
+        // Get direct task workstation links
+        const { data: taskLinks, error: taskLinksError } = await supabase
+          .from('task_workstation_links')
+          .select('task_id')
+          .eq('workstation_id', workstation.id);
           
-          // Check direct task workstation links
-          console.log("Checking direct task links for workstation", workstation.name);
+        if (taskLinksError) {
+          console.error("Error fetching task workstation links:", taskLinksError);
+          continue;
+        }
+        
+        if (taskLinks && taskLinks.length > 0) {
+          console.log("Found direct task links:", taskLinks.length);
           
-          // Get direct task workstation links
-          const { data: taskLinks, error: taskLinksError } = await supabase
-            .from('task_workstation_links')
-            .select('task_id')
-            .eq('workstation_id', workstation.id);
-            
-          if (taskLinksError) {
-            console.error("Error fetching task workstation links:", taskLinksError);
-            continue;
-          }
+          const taskIds = taskLinks.map(link => link.task_id);
           
-          if (taskLinks && taskLinks.length > 0) {
-            console.log("Found direct task links:", taskLinks.length);
-            
-            const taskIds = taskLinks.map(link => link.task_id);
-            
-            // Get the actual tasks
-            const { data: linkedTasks, error: linkedTasksError } = await supabase
-              .from('tasks')
-              .select('*')
-              .in('id', taskIds)
-              .eq('status', 'TODO'); // Only fetch TODO tasks
-              
-            if (linkedTasksError) {
-              console.error("Error fetching linked tasks:", linkedTasksError);
-              continue;
-            }
-            
-            if (linkedTasks && linkedTasks.length > 0) {
-              console.log("Found linked tasks:", linkedTasks.length);
-              
-              // Convert each task to the correct type with validated status
-              const validatedTasks: Task[] = linkedTasks.map(task => ({
-                ...task,
-                status: validateTaskStatus(task.status),
-                priority: validatePriority(task.priority)
-              }));
-              
-              allTasks.push(...validatedTasks);
-            }
-          }
-          
-          // Final fallback: check if tasks have workstation name directly
-          console.log("Checking for tasks with workstation name:", workstation.name);
-          
-          const { data: directTasks, error: directTasksError } = await supabase
+          // Get the actual tasks
+          const { data: linkedTasks, error: linkedTasksError } = await supabase
             .from('tasks')
             .select('*')
-            .ilike('workstation', workstation.name)
-            .eq('status', 'TODO'); // Only fetch TODO tasks
+            .in('id', taskIds)
+            .eq('status', 'TODO');
             
-          if (directTasksError) {
-            console.error("Error fetching direct tasks:", directTasksError);
+          if (linkedTasksError) {
+            console.error("Error fetching linked tasks:", linkedTasksError);
             continue;
           }
           
-          if (directTasks && directTasks.length > 0) {
-            console.log("Found tasks with workstation directly:", directTasks.length);
+          if (linkedTasks && linkedTasks.length > 0) {
+            console.log("Found linked tasks:", linkedTasks.length);
             
-            // Convert each task to the correct type with validated status
-            const validatedTasks: Task[] = directTasks.map(task => ({
+            const validatedTasks: Task[] = linkedTasks.map(task => ({
               ...task,
               status: validateTaskStatus(task.status),
               priority: validatePriority(task.priority)
@@ -359,35 +328,52 @@ const WorkstationDashboard = () => {
           }
         }
         
-        // Remove any duplicate tasks
-        const uniqueTasks = Array.from(
-          new Map(allTasks.map(task => [task.id, task])).values()
-        );
+        // Final fallback: check if tasks have workstation name directly
+        console.log("Checking for tasks with workstation name:", workstation.name);
         
-        console.log("Total unique tasks found:", uniqueTasks.length);
+        const { data: directTasks, error: directTasksError } = await supabase
+          .from('tasks')
+          .select('*')
+          .ilike('workstation', workstation.name)
+          .eq('status', 'TODO');
+          
+        if (directTasksError) {
+          console.error("Error fetching direct tasks:", directTasksError);
+          continue;
+        }
         
-        // Get project and phase info for each task
-        const tasksWithDetails = await enrichTasksWithProjectInfo(uniqueTasks);
-        setTasks(tasksWithDetails);
-        
-        // Update stats based on these tasks
-        updateStats(tasksWithDetails);
-      } catch (error: any) {
-        console.error('Error fetching workstation tasks:', error);
-        toast({
-          title: "Error",
-          description: `Failed to load tasks: ${error.message}`,
-          variant: "destructive"
-        });
-      } finally {
-        setLoading(false);
+        if (directTasks && directTasks.length > 0) {
+          console.log("Found tasks with workstation directly:", directTasks.length);
+          
+          const validatedTasks: Task[] = directTasks.map(task => ({
+            ...task,
+            status: validateTaskStatus(task.status),
+            priority: validatePriority(task.priority)
+          }));
+          
+          allTasks.push(...validatedTasks);
+        }
       }
-    };
-
-    if (userWorkstations.length > 0) {
-      fetchTasks();
+      
+      // Remove any duplicate tasks
+      const uniqueTasks = Array.from(
+        new Map(allTasks.map(task => [task.id, task])).values()
+      );
+      
+      console.log("Total unique tasks found:", uniqueTasks.length);
+      
+      // Get project and phase info for each task
+      const tasksWithDetails = await enrichTasksWithProjectInfo(uniqueTasks);
+      setTasks(tasksWithDetails);
+      
+      // Update stats based on these tasks
+      updateStats(tasksWithDetails);
+      setLoading(false);
+    } catch (error: any) {
+      console.error('Error fetching workstation tasks:', error);
+      setLoading(false);
     }
-  }, [userWorkstations, toast]);
+  };
 
   // Helper function to enrich tasks with project info
   const enrichTasksWithProjectInfo = async (tasksData: Task[]): Promise<Task[]> => {
@@ -430,21 +416,6 @@ const WorkstationDashboard = () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       
-      // Count completed tasks for today
-      let completedToday = 0;
-      
-      if (userWorkstations.length > 0) {
-        const workstationNames = userWorkstations.map(ws => ws.name);
-        const { data: completedTasks } = await supabase
-          .from('tasks')
-          .select('*')
-          .in('workstation', workstationNames)
-          .eq('status', 'COMPLETED')
-          .gte('completed_at', today.toISOString());
-            
-        completedToday = completedTasks?.length || 0;
-      }
-
       // Calculate due today
       const dueToday = tasksData.filter(task => {
         const taskDate = new Date(task.due_date);
@@ -452,74 +423,74 @@ const WorkstationDashboard = () => {
         return taskDate.getTime() === today.getTime();
       }).length;
       
+      // Fetch completed tasks for today from the database
+      let completedToday = 0;
+      let now = new Date();
+      let todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
+      if (userWorkstations.length > 0) {
+        // First approach: Get tasks completed today via task_workstation_links
+        const workstationIds = userWorkstations.map(ws => ws.id);
+        let completedTaskIds: string[] = [];
+        
+        // Get tasks linked to these workstations
+        const { data: linkedTaskIds, error: linkError } = await supabase
+          .from('task_workstation_links')
+          .select('task_id')
+          .in('workstation_id', workstationIds);
+          
+        if (linkError) {
+          console.error("Error fetching linked task IDs:", linkError);
+        } else if (linkedTaskIds && linkedTaskIds.length > 0) {
+          const taskIds = linkedTaskIds.map(link => link.task_id);
+          
+          // Get completed tasks for these IDs from today
+          const { data: completedTasks, error: completedError } = await supabase
+            .from('tasks')
+            .select('id')
+            .in('id', taskIds)
+            .eq('status', 'COMPLETED')
+            .gte('completed_at', todayStart.toISOString());
+            
+          if (completedError) {
+            console.error("Error fetching completed tasks:", completedError);
+          } else if (completedTasks) {
+            completedTaskIds = completedTasks.map(task => task.id);
+          }
+        }
+        
+        // Second approach: Get tasks completed today via workstation name
+        const workstationNames = userWorkstations.map(ws => ws.name);
+        const { data: namedCompletedTasks, error: namedError } = await supabase
+          .from('tasks')
+          .select('id')
+          .in('workstation', workstationNames)
+          .eq('status', 'COMPLETED')
+          .gte('completed_at', todayStart.toISOString());
+          
+        if (namedError) {
+          console.error("Error fetching completed tasks by name:", namedError);
+        } else if (namedCompletedTasks) {
+          // Add these IDs to our tracked completions
+          namedCompletedTasks.forEach(task => {
+            if (!completedTaskIds.includes(task.id)) {
+              completedTaskIds.push(task.id);
+            }
+          });
+        }
+        
+        // Count unique completed tasks
+        completedToday = completedTaskIds.length;
+      }
+      
       setStats({
         totalTasks: tasksData.length,
         completedToday,
-        inProgress: 0, // We're only showing TODO tasks, so inProgress is always 0
+        inProgress: 0,
         dueToday
       });
     } catch (error) {
       console.error('Error updating task stats:', error);
-    }
-  };
-
-  const handleTaskStatusChange = async (taskId: string, status: Task['status']) => {
-    if (!currentEmployee) {
-      toast({
-        title: "Authentication Error",
-        description: "You must be logged in to update tasks.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      // Update task in Supabase
-      const updateData: Partial<Task> = { 
-        status,
-        updated_at: new Date().toISOString()
-      };
-      
-      // Add completion info if task is being marked as completed
-      if (status === 'COMPLETED') {
-        updateData.completed_at = new Date().toISOString();
-        updateData.completed_by = currentEmployee.id;
-      }
-      
-      const { error } = await supabase
-        .from('tasks')
-        .update(updateData)
-        .eq('id', taskId);
-      
-      if (error) throw error;
-      
-      // Update local state - if task is no longer TODO, remove it from the list
-      if (status !== 'TODO') {
-        setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
-        
-        // Update stats
-        setStats(prev => ({
-          ...prev,
-          totalTasks: prev.totalTasks - 1,
-          completedToday: status === 'COMPLETED' ? prev.completedToday + 1 : prev.completedToday
-        }));
-      } else {
-        // Just update the status but keep the task in the list
-        setTasks(prevTasks => prevTasks.map(task => 
-          task.id === taskId ? { ...task, status } : task
-        ));
-      }
-      
-      toast({
-        title: "Task Updated",
-        description: `Task status changed to ${status}`,
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: `Failed to update task: ${error.message}`,
-        variant: "destructive"
-      });
     }
   };
 
@@ -548,6 +519,9 @@ const WorkstationDashboard = () => {
                 month: 'long', 
                 day: 'numeric' 
               })}
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              Last updated: {lastUpdated.toLocaleTimeString()} (auto-refreshes every minute)
             </p>
           </div>
           <div className="text-right">
@@ -633,7 +607,6 @@ const WorkstationDashboard = () => {
             <TaskList 
               tasks={tasks} 
               title="To Do Tasks" 
-              onTaskStatusChange={handleTaskStatusChange}
             />
           </div>
         )}
