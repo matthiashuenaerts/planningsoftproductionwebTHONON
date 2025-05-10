@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
@@ -228,28 +227,61 @@ const WorkstationDashboard = () => {
               
               if (!standardTask) continue;
               
-              // Search for active tasks containing this standard task number or name
-              const { data: matchingTasks, error: matchingTasksError } = await supabase
-                .from('tasks')
-                .select('*')
-                .or(`title.ilike.%${standardTask.task_number}%,title.ilike.%${standardTask.task_name}%`);
+              try {
+                // Search for active tasks containing this standard task number or name
+                // Use proper OR syntax for PostgreSQL to avoid SQL injection
+                const { data: matchingTasks, error: matchingTasksError } = await supabase
+                  .from('tasks')
+                  .select('*')
+                  .or(`title.ilike.%${standardTask.task_number}%`)
+                  .eq('status', 'TODO'); // Only fetch TODO tasks
+                  
+                if (matchingTasksError) {
+                  console.error("Error fetching matching tasks:", matchingTasksError);
+                  continue;
+                }
                 
-              if (matchingTasksError) {
-                console.error("Error fetching matching tasks:", matchingTasksError);
-                continue;
+                if (matchingTasks && matchingTasks.length > 0) {
+                  console.log(`Found ${matchingTasks.length} tasks matching standard task ${standardTask.task_number}`);
+                  
+                  // Convert each task to the correct type with validated status
+                  const validatedTasks: Task[] = matchingTasks.map(task => ({
+                    ...task,
+                    status: validateTaskStatus(task.status),
+                    priority: validatePriority(task.priority)
+                  }));
+                  
+                  allTasks.push(...validatedTasks);
+                }
+              } catch (error) {
+                console.error(`Error querying tasks for standard task ${standardTask.task_number}:`, error);
               }
-              
-              if (matchingTasks && matchingTasks.length > 0) {
-                console.log(`Found ${matchingTasks.length} tasks matching standard task ${standardTask.task_number}`);
+
+              // Try a second query for the task name if needed
+              try {
+                const { data: matchingNameTasks, error: matchingNameTasksError } = await supabase
+                  .from('tasks')
+                  .select('*')
+                  .ilike('title', `%${standardTask.task_name}%`)
+                  .eq('status', 'TODO'); // Only fetch TODO tasks
+                  
+                if (matchingNameTasksError) {
+                  console.error("Error fetching tasks by name:", matchingNameTasksError);
+                  continue;
+                }
                 
-                // Convert each task to the correct type with validated status
-                const validatedTasks: Task[] = matchingTasks.map(task => ({
-                  ...task,
-                  status: validateTaskStatus(task.status),
-                  priority: validatePriority(task.priority)
-                }));
-                
-                allTasks.push(...validatedTasks);
+                if (matchingNameTasks && matchingNameTasks.length > 0) {
+                  // Convert each task to the correct type with validated status
+                  const validatedTasks: Task[] = matchingNameTasks.map(task => ({
+                    ...task,
+                    status: validateTaskStatus(task.status),
+                    priority: validatePriority(task.priority)
+                  }));
+                  
+                  allTasks.push(...validatedTasks);
+                }
+              } catch (error) {
+                console.error(`Error querying tasks by name for standard task ${standardTask.task_name}:`, error);
               }
             }
           }
@@ -277,7 +309,8 @@ const WorkstationDashboard = () => {
             const { data: linkedTasks, error: linkedTasksError } = await supabase
               .from('tasks')
               .select('*')
-              .in('id', taskIds);
+              .in('id', taskIds)
+              .eq('status', 'TODO'); // Only fetch TODO tasks
               
             if (linkedTasksError) {
               console.error("Error fetching linked tasks:", linkedTasksError);
@@ -304,7 +337,8 @@ const WorkstationDashboard = () => {
           const { data: directTasks, error: directTasksError } = await supabase
             .from('tasks')
             .select('*')
-            .ilike('workstation', workstation.name);
+            .ilike('workstation', workstation.name)
+            .eq('status', 'TODO'); // Only fetch TODO tasks
             
           if (directTasksError) {
             console.error("Error fetching direct tasks:", directTasksError);
@@ -419,9 +453,9 @@ const WorkstationDashboard = () => {
       }).length;
       
       setStats({
-        totalTasks: tasksData.filter(t => t.status !== 'COMPLETED').length,
+        totalTasks: tasksData.length,
         completedToday,
-        inProgress: tasksData.filter(t => t.status === 'IN_PROGRESS').length,
+        inProgress: 0, // We're only showing TODO tasks, so inProgress is always 0
         dueToday
       });
     } catch (error) {
@@ -459,31 +493,19 @@ const WorkstationDashboard = () => {
       
       if (error) throw error;
       
-      // Update local state
-      setTasks(prevTasks => prevTasks.map(task => 
-        task.id === taskId ? { 
-          ...task, 
-          status,
-          ...(status === 'COMPLETED' ? {
-            completed_at: updateData.completed_at,
-            completed_by: currentEmployee.id
-          } : {})
-        } : task
-      ));
-      
-      // Update stats
-      if (status === 'COMPLETED') {
+      // Update local state - if task is no longer TODO, remove it from the list
+      if (status !== 'TODO') {
+        setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
+        
+        // Update stats
         setStats(prev => ({
           ...prev,
-          completedToday: prev.completedToday + 1,
           totalTasks: prev.totalTasks - 1,
-          inProgress: tasks.find(t => t.id === taskId)?.status === 'IN_PROGRESS' 
-            ? prev.inProgress - 1 
-            : prev.inProgress
+          completedToday: status === 'COMPLETED' ? prev.completedToday + 1 : prev.completedToday
         }));
       } else {
-        // Update other stats if needed
-        updateStats(tasks.map(task => 
+        // Just update the status but keep the task in the list
+        setTasks(prevTasks => prevTasks.map(task => 
           task.id === taskId ? { ...task, status } : task
         ));
       }
@@ -499,10 +521,6 @@ const WorkstationDashboard = () => {
         variant: "destructive"
       });
     }
-  };
-
-  const getTasksByStatus = (status: Task['status']) => {
-    return tasks.filter(task => task.status === status);
   };
 
   if (loading) {
@@ -548,7 +566,7 @@ const WorkstationDashboard = () => {
                 <Package className="text-blue-700 h-6 w-6" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">Open Tasks</p>
+                <p className="text-sm text-gray-500">TODO Tasks</p>
                 <h3 className="text-2xl font-bold">{stats.totalTasks}</h3>
               </div>
             </CardContent>
@@ -568,18 +586,6 @@ const WorkstationDashboard = () => {
           
           <Card>
             <CardContent className="p-6 flex items-center">
-              <div className="bg-purple-100 p-3 rounded-full mr-4">
-                <ArrowUpRight className="text-purple-700 h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">In Progress</p>
-                <h3 className="text-2xl font-bold">{stats.inProgress}</h3>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6 flex items-center">
               <div className="bg-amber-100 p-3 rounded-full mr-4">
                 <Calendar className="text-amber-700 h-6 w-6" />
               </div>
@@ -589,9 +595,21 @@ const WorkstationDashboard = () => {
               </div>
             </CardContent>
           </Card>
+          
+          <Card>
+            <CardContent className="p-6 flex items-center">
+              <div className="bg-purple-100 p-3 rounded-full mr-4">
+                <ArrowUpRight className="text-purple-700 h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Workstations</p>
+                <h3 className="text-2xl font-bold">{userWorkstations.length}</h3>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Tasks Lists by Status */}
+        {/* Tasks List - Only TODO tasks */}
         {userWorkstations.length === 0 ? (
           <Card>
             <CardHeader>
@@ -613,20 +631,9 @@ const WorkstationDashboard = () => {
         ) : (
           <div className="space-y-8">
             <TaskList 
-              tasks={getTasksByStatus('TODO')} 
-              title="To Do" 
+              tasks={tasks} 
+              title="To Do Tasks" 
               onTaskStatusChange={handleTaskStatusChange}
-            />
-            <TaskList 
-              tasks={getTasksByStatus('IN_PROGRESS')} 
-              title="In Progress" 
-              onTaskStatusChange={handleTaskStatusChange}
-            />
-            <TaskList 
-              tasks={getTasksByStatus('COMPLETED')} 
-              title="Recently Completed" 
-              onTaskStatusChange={handleTaskStatusChange}
-              limit={10}
             />
           </div>
         )}

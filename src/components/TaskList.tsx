@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,9 +13,10 @@ interface TaskListProps {
   tasks: Task[];
   title?: string;
   onTaskStatusChange?: (taskId: string, status: Task['status']) => void;
+  limit?: number;
 }
 
-const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatusChange }) => {
+const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatusChange, limit }) => {
   const [taskWorkstations, setTaskWorkstations] = useState<Record<string, string[]>>({});
   const [completedByNames, setCompletedByNames] = useState<Record<string, string>>({});
   const [standardTasksMap, setStandardTasksMap] = useState<Record<string, StandardTask>>({});
@@ -95,6 +97,9 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
     }
   }, [tasks]);
 
+  // If limit is set, only show that many tasks
+  const displayTasks = limit ? tasks.slice(0, limit) : tasks;
+
   if (tasks.length === 0) {
     return (
       <div className="mt-4">
@@ -153,33 +158,27 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
       : null;
   };
 
-  // Helper function to render task title with standard task info if available
+  // Helper function to render task title with project name and standard task info
   const renderTaskTitle = (task: Task) => {
-    const standardTask = getStandardTask(task);
-    
-    if (!standardTask) {
-      return task.title;
-    }
-    
-    const taskNameParts = standardTasksService.getTaskNameParts(standardTask.task_name);
-    
-    // If there's only one part or no parts, just return the original title
-    if (taskNameParts.length <= 1) {
-      return task.title;
-    }
-    
-    // Otherwise, render with the parts (category, action, location)
     return (
       <div>
-        <span className="font-medium">{task.title}</span>
-        <div className="text-xs text-muted-foreground mt-1">
-          {taskNameParts.map((part, index) => (
-            <span key={index} className="mr-1">
-              {index > 0 && <span className="mx-1">→</span>}
-              {part}
-            </span>
-          ))}
-        </div>
+        {/* Display project name as main title */}
+        <span className="font-medium text-primary">{task.project_name || 'Unknown Project'}</span>
+        
+        {/* Display task title as subtitle */}
+        <div className="text-sm mt-1 font-medium">{task.title}</div>
+        
+        {/* If there's standard task info, display it */}
+        {getStandardTask(task) && (
+          <div className="text-xs text-muted-foreground mt-1">
+            {standardTasksService.getTaskNameParts(getStandardTask(task)?.task_name || '').map((part, index) => (
+              <span key={index} className="mr-1">
+                {index > 0 && <span className="mx-1">→</span>}
+                {part}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     );
   };
@@ -188,7 +187,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
     <div className="mt-4">
       <h3 className="text-lg font-medium mb-2">{title}</h3>
       <div className="space-y-3">
-        {tasks.map((task) => (
+        {displayTasks.map((task) => (
           <Card key={task.id} className={`${getTaskStatusClass(task.due_date)}`}>
             <CardContent className="p-4">
               <div className="flex justify-between items-start mb-2">
@@ -248,7 +247,6 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
                         {/* This would be replaced with actual user data in a real implementation */}
                         {task.assignee_id.charAt(0)}
                       </div>
-                      {/* Ideally we'd load employee name here */}
                     </span>
                   )}
                 </div>
