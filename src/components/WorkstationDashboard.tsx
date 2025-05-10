@@ -423,45 +423,45 @@ const WorkstationDashboard = () => {
         return taskDate.getTime() === today.getTime();
       }).length;
       
-      // Fetch completed tasks for today from the database
+      // Count completed tasks for today by checking the completed_at field
       let completedToday = 0;
-      let now = new Date();
-      let todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      let todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
       
       if (userWorkstations.length > 0) {
-        // First approach: Get tasks completed today via task_workstation_links
+        // Get workstation IDs and names for queries
         const workstationIds = userWorkstations.map(ws => ws.id);
-        let completedTaskIds: string[] = [];
+        const workstationNames = userWorkstations.map(ws => ws.name);
         
-        // Get tasks linked to these workstations
-        const { data: linkedTaskIds, error: linkError } = await supabase
+        // Tasks completed today via task_workstation_links
+        const { data: completedLinkedTasks, error: linkError } = await supabase
           .from('task_workstation_links')
-          .select('task_id')
-          .in('workstation_id', workstationIds);
+          .select(`
+            task_id,
+            tasks!inner (id, completed_at, status)
+          `)
+          .in('workstation_id', workstationIds)
+          .gte('tasks.completed_at', todayStart.toISOString())
+          .eq('tasks.status', 'COMPLETED');
           
         if (linkError) {
-          console.error("Error fetching linked task IDs:", linkError);
-        } else if (linkedTaskIds && linkedTaskIds.length > 0) {
-          const taskIds = linkedTaskIds.map(link => link.task_id);
-          
-          // Get completed tasks for these IDs from today
-          const { data: completedTasks, error: completedError } = await supabase
-            .from('tasks')
-            .select('id')
-            .in('id', taskIds)
-            .eq('status', 'COMPLETED')
-            .gte('completed_at', todayStart.toISOString());
-            
-          if (completedError) {
-            console.error("Error fetching completed tasks:", completedError);
-          } else if (completedTasks) {
-            completedTaskIds = completedTasks.map(task => task.id);
+          console.error("Error fetching completed linked tasks:", linkError);
+        } else {
+          console.log("Completed linked tasks:", completedLinkedTasks?.length || 0);
+          // Count unique tasks from the linked results
+          if (completedLinkedTasks) {
+            const uniqueCompletedIds = new Set<string>();
+            completedLinkedTasks.forEach(item => {
+              if (item.tasks && item.task_id) {
+                uniqueCompletedIds.add(item.task_id);
+              }
+            });
+            completedToday += uniqueCompletedIds.size;
           }
         }
         
-        // Second approach: Get tasks completed today via workstation name
-        const workstationNames = userWorkstations.map(ws => ws.name);
-        const { data: namedCompletedTasks, error: namedError } = await supabase
+        // Tasks completed today via workstation name
+        const { data: completedNamedTasks, error: namedError } = await supabase
           .from('tasks')
           .select('id')
           .in('workstation', workstationNames)
@@ -470,18 +470,24 @@ const WorkstationDashboard = () => {
           
         if (namedError) {
           console.error("Error fetching completed tasks by name:", namedError);
-        } else if (namedCompletedTasks) {
-          // Add these IDs to our tracked completions
-          namedCompletedTasks.forEach(task => {
-            if (!completedTaskIds.includes(task.id)) {
-              completedTaskIds.push(task.id);
-            }
-          });
+        } else {
+          console.log("Completed tasks by workstation name:", completedNamedTasks?.length || 0);
+          // Add to our count, accounting for any potential overlap with the previous query
+          const completedNamedIds = new Set(completedNamedTasks?.map(task => task.id) || []);
+          const linkTaskIds = new Set(completedLinkedTasks?.map(item => item.task_id) || []);
+          
+          // Count tasks that are in completedNamedIds but not in linkTaskIds
+          if (completedNamedTasks) {
+            completedNamedTasks.forEach(task => {
+              if (!linkTaskIds.has(task.id)) {
+                completedToday++;
+              }
+            });
+          }
         }
-        
-        // Count unique completed tasks
-        completedToday = completedTaskIds.length;
       }
+      
+      console.log(`Stats update: ${tasksData.length} total tasks, ${completedToday} completed today, ${dueToday} due today`);
       
       setStats({
         totalTasks: tasksData.length,
