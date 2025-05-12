@@ -4,10 +4,14 @@ import { StandardTask, standardTasksService } from '@/services/standardTasksServ
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Save } from 'lucide-react';
 
 const StandardTasksSettings: React.FC = () => {
   const [standardTasks, setStandardTasks] = useState<StandardTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
 
   useEffect(() => {
@@ -34,6 +38,36 @@ const StandardTasksSettings: React.FC = () => {
     return standardTasksService.getTaskNameParts(taskName);
   };
 
+  const handleCoefficientChange = (taskId: string, value: string) => {
+    const updatedTasks = standardTasks.map(task => {
+      if (task.id === taskId) {
+        return { ...task, time_coefficient: parseFloat(value) || 0 };
+      }
+      return task;
+    });
+    setStandardTasks(updatedTasks);
+  };
+
+  const saveTimeCoefficient = async (task: StandardTask) => {
+    setSaving(prev => ({ ...prev, [task.id]: true }));
+    try {
+      await standardTasksService.updateTimeCoefficient(task.id, task.time_coefficient);
+      toast({
+        title: 'Success',
+        description: `Time coefficient for ${task.task_number} updated successfully`,
+      });
+    } catch (error) {
+      console.error('Error updating time coefficient:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update time coefficient. Please try again.',
+        variant: 'destructive'
+      });
+    } finally {
+      setSaving(prev => ({ ...prev, [task.id]: false }));
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center p-8">
@@ -54,6 +88,8 @@ const StandardTasksSettings: React.FC = () => {
                 <TableHead className="w-20">Task #</TableHead>
                 <TableHead>Task Name</TableHead>
                 <TableHead>Details</TableHead>
+                <TableHead className="w-32">Time Coefficient</TableHead>
+                <TableHead className="w-20">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -75,6 +111,31 @@ const StandardTasksSettings: React.FC = () => {
                           ))}
                         </div>
                       ) : null}
+                    </TableCell>
+                    <TableCell>
+                      <Input 
+                        type="number" 
+                        step="0.1"
+                        min="0"
+                        value={task.time_coefficient} 
+                        onChange={(e) => handleCoefficientChange(task.id, e.target.value)}
+                        className="w-full"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => saveTimeCoefficient(task)} 
+                        disabled={saving[task.id]}
+                        className="w-full"
+                      >
+                        {saving[task.id] ? (
+                          <div className="animate-spin h-4 w-4 border-2 border-b-transparent rounded-full"></div>
+                        ) : (
+                          <Save className="h-4 w-4" />
+                        )}
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );

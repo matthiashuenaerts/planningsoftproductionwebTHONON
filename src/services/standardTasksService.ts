@@ -5,6 +5,7 @@ export interface StandardTask {
   id: string;
   task_number: string;
   task_name: string;
+  time_coefficient: number;
   created_at: string;
   updated_at: string;
 }
@@ -36,6 +37,18 @@ export const standardTasksService = {
       .from('standard_tasks')
       .select('*')
       .eq('task_number', taskNumber)
+      .maybeSingle();
+    
+    if (error) throw error;
+    return data as StandardTask;
+  },
+
+  async updateTimeCoefficient(id: string, timeCoefficient: number): Promise<StandardTask | null> {
+    const { data, error } = await supabase
+      .from('standard_tasks')
+      .update({ time_coefficient: timeCoefficient })
+      .eq('id', id)
+      .select()
       .maybeSingle();
     
     if (error) throw error;

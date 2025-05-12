@@ -416,6 +416,7 @@ export type Database = {
           id: string
           task_name: string
           task_number: string
+          time_coefficient: number
           updated_at: string
         }
         Insert: {
@@ -423,6 +424,7 @@ export type Database = {
           id?: string
           task_name: string
           task_number: string
+          time_coefficient?: number
           updated_at?: string
         }
         Update: {
@@ -430,6 +432,7 @@ export type Database = {
           id?: string
           task_name?: string
           task_number?: string
+          time_coefficient?: number
           updated_at?: string
         }
         Relationships: []
