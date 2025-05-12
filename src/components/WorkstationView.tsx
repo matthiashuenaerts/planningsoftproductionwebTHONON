@@ -332,13 +332,13 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
     }
   };
 
-  // Helper to get progress value for in-progress tasks (mock for now)
+  // Helper to get progress value for in-progress tasks
   const getTaskProgress = (task: Task): number => {
-    // For now, return a random progress value between 10 and 90 for in-progress tasks
-    // In a real implementation, this could be based on real task progress data
+    // Only return progress for tasks explicitly marked as IN_PROGRESS
     if (task.status === 'IN_PROGRESS') {
-      // Return a random progress value for demonstration
-      return Math.floor(Math.random() * 80) + 10; // Random between 10-90%
+      // Start with a small progress (10%) when task is first moved to in-progress
+      // In a real app, this should be stored in the database and updated based on actual progress
+      return 10;
     }
     return 0;
   };
@@ -447,11 +447,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
                           <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
                         )}
                         
-                        {task.status === 'IN_PROGRESS' && (
-                          <div className="mb-3">
-                            <Progress value={getTaskProgress(task)} className="h-1.5" />
-                          </div>
-                        )}
+                        {/* Remove the visible progress bar, keep only the background progress indicator */}
                         
                         <div className="flex justify-between items-center mt-4">
                           <div className="text-sm text-muted-foreground">

@@ -101,7 +101,7 @@ const ProjectDetails = () => {
       
       toast({
         title: "Task updated",
-        description: "Task status has been updated successfully.",
+        description: `Task status has been updated to ${status}.`,
       });
     } catch (error: any) {
       toast({
