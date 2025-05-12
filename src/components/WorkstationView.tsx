@@ -39,6 +39,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [assigneeNames, setAssigneeNames] = useState<Record<string, string>>({});
   const { toast } = useToast();
   const { currentEmployee } = useAuth();
 
@@ -279,6 +280,42 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
           new Map(matchedTasks.map(task => [task.id, task])).values()
         );
         
+        // Add code to fetch assignee names
+        const assigneeIds = matchedTasks
+          .filter(task => task.assignee_id)
+          .map(task => task.assignee_id);
+          
+        // Remove duplicates
+        const uniqueAssigneeIds = [...new Set(assigneeIds)];
+        
+        if (uniqueAssigneeIds.length > 0) {
+          const namesMap: Record<string, string> = {};
+          
+          // Fetch employee names for assignees
+          for (const assigneeId of uniqueAssigneeIds) {
+            if (!assigneeId) continue;
+            
+            try {
+              const { data, error } = await supabase
+                .from('employees')
+                .select('name')
+                .eq('id', assigneeId)
+                .single();
+                
+              if (error) throw error;
+              
+              if (data) {
+                namesMap[assigneeId] = data.name;
+              }
+            } catch (error) {
+              console.error(`Error fetching employee name for ID ${assigneeId}:`, error);
+              namesMap[assigneeId] = 'Unknown';
+            }
+          }
+          
+          setAssigneeNames(namesMap);
+        }
+        
         setTasks(uniqueTasks);
       } catch (error: any) {
         console.error('Error fetching workstation data:', error);
@@ -341,6 +378,19 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
       return 10;
     }
     return 0;
+  };
+
+  // Function to sort tasks with IN_PROGRESS first
+  const sortTasks = (taskList: Task[]) => {
+    return [...taskList].sort((a, b) => {
+      // First prioritize IN_PROGRESS tasks
+      if (a.status === 'IN_PROGRESS' && b.status !== 'IN_PROGRESS') return -1;
+      if (a.status !== 'IN_PROGRESS' && b.status === 'IN_PROGRESS') return 1;
+      
+      // Then sort by priority
+      const priorityOrder = { 'Urgent': 0, 'High': 1, 'Medium': 2, 'Low': 3 };
+      return (priorityOrder[a.priority] || 999) - (priorityOrder[b.priority] || 999);
+    });
   };
 
   const getWorkstationIcon = (name: string) => {
@@ -416,13 +466,13 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
               </div>
             ) : (
               <div className="space-y-4 mt-2">
-                {tasks.map((task) => (
+                {sortTasks(tasks).map((task) => (
                   <Card key={task.id} className="overflow-hidden relative">
                     <div className="border-l-4 border-l-blue-500 p-4 relative z-10">
                       {task.status === 'IN_PROGRESS' && (
                         <div className="absolute inset-0 left-0 top-0 bottom-0 z-0">
                           <div 
-                            className="h-full bg-blue-50 dark:bg-blue-900/20" 
+                            className="h-full bg-green-50 dark:bg-green-900/20" 
                             style={{ width: `${getTaskProgress(task)}%` }}
                           />
                         </div>
@@ -442,6 +492,14 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
                             </div>
                           </div>
                         </div>
+                        
+                        {/* Show assignee for IN_PROGRESS tasks */}
+                        {task.status === 'IN_PROGRESS' && task.assignee_id && (
+                          <div className="mb-2 text-sm bg-blue-50 text-blue-700 px-2 py-1 rounded inline-flex items-center">
+                            <span className="font-medium mr-1">Assigned to:</span> 
+                            {assigneeNames[task.assignee_id] || 'Unknown user'}
+                          </div>
+                        )}
                         
                         {task.description && (
                           <p className="text-sm text-muted-foreground mb-3">{task.description}</p>

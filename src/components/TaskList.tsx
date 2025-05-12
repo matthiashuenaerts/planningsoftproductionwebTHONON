@@ -204,7 +204,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
             {task.status === 'IN_PROGRESS' && (
               <div className="absolute inset-0 z-0">
                 <div 
-                  className="h-full bg-blue-50 dark:bg-blue-900/20" 
+                  className="h-full bg-green-50 dark:bg-green-900/20" 
                   style={{ width: `${getTaskProgress(task)}%` }}
                 />
               </div>
@@ -248,7 +248,13 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
 
               {!compact && <p className="text-sm text-muted-foreground mb-3">{task.description}</p>}
               
-              {/* Remove the visible progress bar, keep only the background progress indicator */}
+              {/* Show assignee for IN_PROGRESS tasks */}
+              {task.status === 'IN_PROGRESS' && task.assignee_id && !compact && (
+                <div className="mb-3 text-sm bg-blue-50 text-blue-700 px-2 py-1 rounded inline-flex items-center">
+                  <span className="font-medium mr-1">Assigned to:</span> 
+                  {completedByNames[task.id] || task.assignee_id}
+                </div>
+              )}
               
               {task.status === 'COMPLETED' && task.completed_by && task.completed_at && !compact && (
                 <div className="mb-3 text-sm bg-green-50 p-2 rounded border border-green-100">
