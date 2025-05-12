@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -71,7 +70,7 @@ interface TaskItem {
   task_number?: string;
   standard_task_id?: string;
   time_coefficient?: number;
-  duration?: number; // Duration in minutes
+  duration?: number; // Explicitly define the duration property
 }
 
 const NewProjectModal: React.FC<NewProjectModalProps> = ({
