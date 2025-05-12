@@ -21,25 +21,6 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
   const [taskWorkstations, setTaskWorkstations] = useState<Record<string, string[]>>({});
   const [completedByNames, setCompletedByNames] = useState<Record<string, string>>({});
   const [standardTasksMap, setStandardTasksMap] = useState<Record<string, StandardTask>>({});
-  const [progressValues, setProgressValues] = useState<Record<string, number>>({});
-  const [assigneeNames, setAssigneeNames] = useState<Record<string, string>>({});
-  
-  // Add a timer to update progress values every second
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const updatedProgress: Record<string, number> = {};
-      
-      tasks.forEach(task => {
-        if (task.status === 'IN_PROGRESS') {
-          updatedProgress[task.id] = getTaskProgress(task);
-        }
-      });
-      
-      setProgressValues(prev => ({...prev, ...updatedProgress}));
-    }, 1000);
-    
-    return () => clearInterval(timer);
-  }, [tasks]);
   
   useEffect(() => {
     const loadTaskWorkstations = async () => {
@@ -94,34 +75,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
       setCompletedByNames(namesMap);
     };
 
-    const loadAssigneeNames = async () => {
-      const namesMap: Record<string, string> = {};
-      const assignedTasks = tasks.filter(task => task.assignee_id);
-      
-      for (const task of assignedTasks) {
-        if (!task.assignee_id) continue;
-        
-        try {
-          const { data, error } = await supabase
-            .from('employees')
-            .select('name')
-            .eq('id', task.assignee_id)
-            .single();
-          
-          if (error) throw error;
-          
-          if (data) {
-            namesMap[task.id] = data.name;
-          }
-        } catch (error) {
-          console.error(`Error fetching employee name for task ${task.id}:`, error);
-          namesMap[task.id] = 'Unknown';
-        }
-      }
-      
-      setAssigneeNames(namesMap);
-    };
-
+    // Load standard tasks info for task titles that start with a task number
     const loadStandardTasks = async () => {
       try {
         const standardTasks = await standardTasksService.getAll();
@@ -140,7 +94,6 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
     if (tasks.length > 0) {
       loadTaskWorkstations();
       loadCompletedByNames();
-      loadAssigneeNames();
       loadStandardTasks();
     }
   }, [tasks]);
@@ -280,112 +233,90 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
     <div className="mt-4">
       <h3 className="text-lg font-medium mb-2">{title}</h3>
       <div className="space-y-3">
-        {displayTasks.map((task) => {
-          // Get current progress value from state, or calculate it
-          const progressValue = progressValues[task.id] || getTaskProgress(task);
-          
-          return (
-            <Card key={task.id} className={`${getTaskStatusClass(task.due_date)} ${compact ? 'mb-2' : ''} relative overflow-hidden`}>
-              {task.status === 'IN_PROGRESS' && (
-                <div className="absolute inset-0 z-0">
-                  <div 
-                    className="h-full bg-green-50 dark:bg-green-900/20" 
-                    style={{ width: `${progressValue}%` }}
-                  />
+        {displayTasks.map((task) => (
+          <Card key={task.id} className={`${getTaskStatusClass(task.due_date)} ${compact ? 'mb-2' : ''} relative overflow-hidden`}>
+            {task.status === 'IN_PROGRESS' && (
+              <div className="absolute inset-0 z-0">
+                <div 
+                  className="h-full bg-green-50 dark:bg-green-900/20" 
+                  style={{ width: `${getTaskProgress(task)}%` }}
+                />
+              </div>
+            )}
+            <CardContent className={`${compact ? 'p-3' : 'p-4'} relative z-10`}>
+              <div className="flex justify-between items-start mb-2">
+                <h4 className={`font-medium ${compact ? 'text-sm' : ''}`}>
+                  {renderTaskTitle(task)}
+                </h4>
+                <div className="flex gap-2 items-center">
+                  <Badge 
+                    variant="outline"
+                    className={`
+                      ${task.priority === 'High' || task.priority === 'Urgent' 
+                        ? 'border-red-500 text-red-500' 
+                        : 'border-gray-300 text-gray-500'
+                      } ${compact ? 'text-xs px-1 py-0' : ''}
+                    `}
+                  >
+                    {task.priority}
+                  </Badge>
+                  {onTaskStatusChange && (
+                    <div>
+                      <Select 
+                        defaultValue={task.status} 
+                        onValueChange={(value) => onTaskStatusChange(task.id, value as Task['status'])}
+                      >
+                        <SelectTrigger className={`${compact ? 'w-24 h-6 text-xs' : 'w-32 h-7 text-xs'}`}>
+                          <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="TODO" className="text-xs">TODO</SelectItem>
+                          <SelectItem value="IN_PROGRESS" className="text-xs">IN_PROGRESS</SelectItem>
+                          <SelectItem value="COMPLETED" className="text-xs">COMPLETED</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {!compact && <p className="text-sm text-muted-foreground mb-3">{task.description}</p>}
+              
+              {/* Show assignee for IN_PROGRESS tasks */}
+              {task.status === 'IN_PROGRESS' && task.assignee_id && !compact && (
+                <div className="mb-3 text-sm bg-blue-50 text-blue-700 px-2 py-1 rounded inline-flex items-center">
+                  <span className="font-medium mr-1">Assigned to:</span> 
+                  {completedByNames[task.id] || task.assignee_id}
                 </div>
               )}
-              <CardContent className={`${compact ? 'p-3' : 'p-4'} relative z-10`}>
-                <div className="flex justify-between items-start mb-2">
-                  <h4 className={`font-medium ${compact ? 'text-sm' : ''}`}>
-                    {renderTaskTitle(task)}
-                  </h4>
-                  <div className="flex gap-2 items-center">
-                    <Badge 
-                      variant="outline"
-                      className={`
-                        ${task.priority === 'High' || task.priority === 'Urgent' 
-                          ? 'border-red-500 text-red-500' 
-                          : 'border-gray-300 text-gray-500'
-                        } ${compact ? 'text-xs px-1 py-0' : ''}
-                      `}
-                    >
-                      {task.priority}
+              
+              {task.status === 'COMPLETED' && task.completed_by && task.completed_at && !compact && (
+                <div className="mb-3 text-sm bg-green-50 p-2 rounded border border-green-100">
+                  <span className="font-medium text-green-700">Completed:</span> {formatDateTime(task.completed_at)} by {completedByNames[task.id] || 'Unknown'}
+                </div>
+              )}
+              
+              <div className={`flex justify-between items-center ${compact ? 'text-xs' : 'text-xs'} text-muted-foreground`}>
+                <div className="flex items-center gap-2">
+                  {!compact && taskWorkstations[task.id]?.map(workstation => (
+                    <Badge key={workstation} variant="secondary" className="font-normal">
+                      {workstation}
                     </Badge>
-                    {onTaskStatusChange && (
-                      <div>
-                        <Select 
-                          defaultValue={task.status} 
-                          onValueChange={(value) => onTaskStatusChange(task.id, value as Task['status'])}
-                        >
-                          <SelectTrigger className={`${compact ? 'w-24 h-6 text-xs' : 'w-32 h-7 text-xs'}`}>
-                            <SelectValue placeholder="Status" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="TODO" className="text-xs">TODO</SelectItem>
-                            <SelectItem value="IN_PROGRESS" className="text-xs">IN_PROGRESS</SelectItem>
-                            <SelectItem value="COMPLETED" className="text-xs">COMPLETED</SelectItem>
-                          </SelectContent>
-                        </Select>
+                  ))}
+                  {task.assignee_id && !compact && (
+                    <span className="flex items-center gap-1">
+                      <div className="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+                        {/* This would be replaced with actual user data in a real implementation */}
+                        {task.assignee_id.charAt(0)}
                       </div>
-                    )}
-                  </div>
+                    </span>
+                  )}
                 </div>
-
-                {!compact && <p className="text-sm text-muted-foreground mb-3">{task.description}</p>}
-                
-                {/* Show assignee for IN_PROGRESS tasks */}
-                {task.status === 'IN_PROGRESS' && task.assignee_id && !compact && (
-                  <div className="mb-3 text-sm bg-blue-50 text-blue-700 px-2 py-1 rounded inline-flex items-center">
-                    <span className="font-medium mr-1">Assigned to:</span> 
-                    {assigneeNames[task.id] || 'Unknown user'}
-                  </div>
-                )}
-                
-                {/* Show progress bar for IN_PROGRESS tasks */}
-                {task.status === 'IN_PROGRESS' && !compact && (
-                  <div className="mb-3">
-                    <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                      <span>Progress</span>
-                      <span>{progressValue}%</span>
-                    </div>
-                    <Progress 
-                      value={progressValue} 
-                      className="h-2" 
-                      indicatorClassName={progressValue >= 100 ? "bg-green-500" : ""}
-                    />
-                  </div>
-                )}
-                
-                {task.status === 'COMPLETED' && task.completed_by && task.completed_at && !compact && (
-                  <div className="mb-3 text-sm bg-green-50 p-2 rounded border border-green-100">
-                    <span className="font-medium text-green-700">Completed:</span> {formatDateTime(task.completed_at)} by {completedByNames[task.id] || 'Unknown'}
-                  </div>
-                )}
-                
-                <div className={`flex justify-between items-center ${compact ? 'text-xs' : 'text-xs'} text-muted-foreground`}>
-                  <div className="flex items-center gap-2">
-                    {!compact && taskWorkstations[task.id]?.map(workstation => (
-                      <Badge key={workstation} variant="secondary" className="font-normal">
-                        {workstation}
-                      </Badge>
-                    ))}
-                    {task.assignee_id && compact && (
-                      <span className="flex items-center gap-1">
-                        <div className="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden text-xs">
-                          {assigneeNames[task.id]?.charAt(0) || task.assignee_id.charAt(0)}
-                        </div>
-                        <span className="text-xs truncate max-w-20">
-                          {assigneeNames[task.id]?.split(' ')[0] || 'User'}
-                        </span>
-                      </span>
-                    )}
-                  </div>
-                  <span>{compact ? format(new Date(task.due_date), 'MM/dd') : formatDate(task.due_date)}</span>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+                <span>{compact ? format(new Date(task.due_date), 'MM/dd') : formatDate(task.due_date)}</span>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     </div>
   );

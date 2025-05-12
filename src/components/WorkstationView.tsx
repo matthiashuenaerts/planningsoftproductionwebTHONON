@@ -40,7 +40,6 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [assigneeNames, setAssigneeNames] = useState<Record<string, string>>({});
-  const [progressValues, setProgressValues] = useState<Record<string, number>>({});
   const { toast } = useToast();
   const { currentEmployee } = useAuth();
 
@@ -48,22 +47,10 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-      
-      // Update progress for in-progress tasks
-      const updatedProgress: Record<string, number> = {};
-      tasks.forEach(task => {
-        if (task.status === 'IN_PROGRESS') {
-          updatedProgress[task.id] = getTaskProgress(task);
-        }
-      });
-      
-      if (Object.keys(updatedProgress).length > 0) {
-        setProgressValues(prev => ({...prev, ...updatedProgress}));
-      }
     }, 1000);
     
     return () => clearInterval(timer);
-  }, [tasks]);
+  }, []);
 
   useEffect(() => {
     const fetchWorkstationData = async () => {
@@ -421,7 +408,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
             if (standardTask && standardTask.time_coefficient > 0) {
               // We found a standard task with a valid time coefficient
               // This will be used in the next render cycle
-              taskDurationMs = standardTask.time_coefficient * 60 * 1000;
+              console.log(`Found standard task for ${taskNumber} with duration: ${standardTask.time_coefficient} minutes`);
             }
           } catch (error) {
             console.error("Error fetching standard task:", error);
@@ -531,81 +518,63 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
               </div>
             ) : (
               <div className="space-y-4 mt-2">
-                {sortTasks(tasks).map((task) => {
-                  // Get current progress value from state or calculate it
-                  const progressValue = progressValues[task.id] || getTaskProgress(task);
-                  
-                  return (
-                    <Card key={task.id} className="overflow-hidden relative">
-                      <div className="border-l-4 border-l-blue-500 p-4 relative z-10">
-                        {task.status === 'IN_PROGRESS' && (
-                          <div className="absolute inset-0 left-0 top-0 bottom-0 z-0">
-                            <div 
-                              className="h-full bg-green-50 dark:bg-green-900/20" 
-                              style={{ width: `${progressValue}%` }}
-                            />
-                          </div>
-                        )}
-                        <div className="relative z-10">
-                          <div className="flex justify-between items-start mb-2">
-                            <h4 className="font-medium text-lg">
-                              {task.project_name ? `${task.project_name} - ${task.title}` : task.title}
-                            </h4>
-                            <div className="flex items-center gap-2">
-                              <div className={`px-2 py-1 rounded text-xs font-medium ${
-                                task.priority === 'High' || task.priority === 'Urgent' 
-                                  ? 'bg-red-100 text-red-800' 
-                                  : 'bg-gray-100 text-gray-800'
-                              }`}>
-                                {task.priority}
-                              </div>
+                {sortTasks(tasks).map((task) => (
+                  <Card key={task.id} className="overflow-hidden relative">
+                    <div className="border-l-4 border-l-blue-500 p-4 relative z-10">
+                      {task.status === 'IN_PROGRESS' && (
+                        <div className="absolute inset-0 left-0 top-0 bottom-0 z-0">
+                          <div 
+                            className="h-full bg-green-50 dark:bg-green-900/20" 
+                            style={{ width: `${getTaskProgress(task)}%` }}
+                          />
+                        </div>
+                      )}
+                      <div className="relative z-10">
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="font-medium text-lg">
+                            {task.project_name ? `${task.project_name} - ${task.title}` : task.title}
+                          </h4>
+                          <div className="flex items-center gap-2">
+                            <div className={`px-2 py-1 rounded text-xs font-medium ${
+                              task.priority === 'High' || task.priority === 'Urgent' 
+                                ? 'bg-red-100 text-red-800' 
+                                : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {task.priority}
                             </div>
-                          </div>
-                          
-                          {/* Show assignee for IN_PROGRESS tasks */}
-                          {task.status === 'IN_PROGRESS' && task.assignee_id && (
-                            <div className="mb-2 text-sm bg-blue-50 text-blue-700 px-2 py-1 rounded inline-flex items-center">
-                              <span className="font-medium mr-1">Assigned to:</span> 
-                              {assigneeNames[task.assignee_id] || 'Unknown user'}
-                            </div>
-                          )}
-                          
-                          {task.description && (
-                            <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
-                          )}
-                          
-                          {/* Add visible progress bar for IN_PROGRESS tasks */}
-                          {task.status === 'IN_PROGRESS' && (
-                            <div className="mb-4">
-                              <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                                <span>Progress</span>
-                                <span>{progressValue}%</span>
-                              </div>
-                              <Progress 
-                                value={progressValue} 
-                                className="h-2" 
-                                indicatorClassName={progressValue >= 100 ? "bg-green-500" : ""}
-                              />
-                            </div>
-                          )}
-                          
-                          <div className="flex justify-between items-center mt-4">
-                            <div className="text-sm text-muted-foreground">
-                              Due: {new Date(task.due_date).toLocaleDateString()}
-                            </div>
-                            <Button 
-                              onClick={() => handleCompleteTask(task.id)}
-                              className="bg-green-500 hover:bg-green-600"
-                              size="sm"
-                            >
-                              <Check className="mr-1 h-4 w-4" /> Complete Task
-                            </Button>
                           </div>
                         </div>
+                        
+                        {/* Show assignee for IN_PROGRESS tasks */}
+                        {task.status === 'IN_PROGRESS' && task.assignee_id && (
+                          <div className="mb-2 text-sm bg-blue-50 text-blue-700 px-2 py-1 rounded inline-flex items-center">
+                            <span className="font-medium mr-1">Assigned to:</span> 
+                            {assigneeNames[task.assignee_id] || 'Unknown user'}
+                          </div>
+                        )}
+                        
+                        {task.description && (
+                          <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
+                        )}
+                        
+                        {/* Remove the visible progress bar, keep only the background progress indicator */}
+                        
+                        <div className="flex justify-between items-center mt-4">
+                          <div className="text-sm text-muted-foreground">
+                            Due: {new Date(task.due_date).toLocaleDateString()}
+                          </div>
+                          <Button 
+                            onClick={() => handleCompleteTask(task.id)}
+                            className="bg-green-500 hover:bg-green-600"
+                            size="sm"
+                          >
+                            <Check className="mr-1 h-4 w-4" /> Complete Task
+                          </Button>
+                        </div>
                       </div>
-                    </Card>
-                  );
-                })}
+                    </div>
+                  </Card>
+                ))}
               </div>
             )}
           </>
