@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,9 +13,10 @@ interface TaskListProps {
   title?: string;
   onTaskStatusChange?: (taskId: string, status: Task['status']) => void;
   limit?: number;
+  compact?: boolean; // Added this property to fix the TypeScript error
 }
 
-const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatusChange, limit }) => {
+const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatusChange, limit, compact = false }) => {
   const [taskWorkstations, setTaskWorkstations] = useState<Record<string, string[]>>({});
   const [completedByNames, setCompletedByNames] = useState<Record<string, string>>({});
   const [standardTasksMap, setStandardTasksMap] = useState<Record<string, StandardTask>>({});
@@ -188,10 +188,10 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
       <h3 className="text-lg font-medium mb-2">{title}</h3>
       <div className="space-y-3">
         {displayTasks.map((task) => (
-          <Card key={task.id} className={`${getTaskStatusClass(task.due_date)}`}>
-            <CardContent className="p-4">
+          <Card key={task.id} className={`${getTaskStatusClass(task.due_date)} ${compact ? 'mb-2' : ''}`}>
+            <CardContent className={`${compact ? 'p-3' : 'p-4'}`}>
               <div className="flex justify-between items-start mb-2">
-                <h4 className="font-medium">
+                <h4 className={`font-medium ${compact ? 'text-sm' : ''}`}>
                   {renderTaskTitle(task)}
                 </h4>
                 <div className="flex gap-2 items-center">
@@ -201,7 +201,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
                       ${task.priority === 'High' || task.priority === 'Urgent' 
                         ? 'border-red-500 text-red-500' 
                         : 'border-gray-300 text-gray-500'
-                      }
+                      } ${compact ? 'text-xs px-1 py-0' : ''}
                     `}
                   >
                     {task.priority}
@@ -212,7 +212,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
                         defaultValue={task.status} 
                         onValueChange={(value) => onTaskStatusChange(task.id, value as Task['status'])}
                       >
-                        <SelectTrigger className="w-32 h-7 text-xs">
+                        <SelectTrigger className={`${compact ? 'w-24 h-6 text-xs' : 'w-32 h-7 text-xs'}`}>
                           <SelectValue placeholder="Status" />
                         </SelectTrigger>
                         <SelectContent>
@@ -226,22 +226,22 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
                 </div>
               </div>
 
-              <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
+              {!compact && <p className="text-sm text-muted-foreground mb-3">{task.description}</p>}
               
-              {task.status === 'COMPLETED' && task.completed_by && task.completed_at && (
+              {task.status === 'COMPLETED' && task.completed_by && task.completed_at && !compact && (
                 <div className="mb-3 text-sm bg-green-50 p-2 rounded border border-green-100">
                   <span className="font-medium text-green-700">Completed:</span> {formatDateTime(task.completed_at)} by {completedByNames[task.id] || 'Unknown'}
                 </div>
               )}
               
-              <div className="flex justify-between items-center text-xs text-muted-foreground">
+              <div className={`flex justify-between items-center ${compact ? 'text-xs' : 'text-xs'} text-muted-foreground`}>
                 <div className="flex items-center gap-2">
-                  {taskWorkstations[task.id]?.map(workstation => (
+                  {!compact && taskWorkstations[task.id]?.map(workstation => (
                     <Badge key={workstation} variant="secondary" className="font-normal">
                       {workstation}
                     </Badge>
                   ))}
-                  {task.assignee_id && (
+                  {task.assignee_id && !compact && (
                     <span className="flex items-center gap-1">
                       <div className="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
                         {/* This would be replaced with actual user data in a real implementation */}
@@ -250,7 +250,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
                     </span>
                   )}
                 </div>
-                <span>Due: {formatDate(task.due_date)}</span>
+                <span>{compact ? format(new Date(task.due_date), 'MM/dd') : formatDate(task.due_date)}</span>
               </div>
             </CardContent>
           </Card>

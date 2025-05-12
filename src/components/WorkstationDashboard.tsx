@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Task } from '@/services/dataService';
 import { useToast } from '@/hooks/use-toast';
-import { Package, Clock, Check, Calendar, ArrowUpRight } from 'lucide-react';
+import { Package, Clock, Check, Calendar, ArrowUpRight, LayoutGrid, ListIcon } from 'lucide-react';
 import TaskList from '@/components/TaskList';
 import { Workstation } from '@/services/workstationService';
 
@@ -602,10 +602,19 @@ const WorkstationDashboard = () => {
 
   const overallStats = calculateOverallStats();
 
+  // Calculate grid columns based on number of workstations
+  const getGridColumns = () => {
+    const count = workstationData.length;
+    if (count <= 2) return "grid-cols-1 md:grid-cols-2";
+    if (count <= 3) return "grid-cols-1 md:grid-cols-3";
+    if (count <= 4) return "grid-cols-1 md:grid-cols-2 lg:grid-cols-4";
+    return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+  };
+
   return (
     <div className="p-4 bg-gray-50 min-h-screen relative">
       {refreshing && (
-        <div className="absolute top-2 right-2">
+        <div className="absolute top-2 right-2 z-10">
           <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
         </div>
       )}
@@ -635,7 +644,7 @@ const WorkstationDashboard = () => {
           </div>
         </div>
 
-        {/* Main content - New layout with workstations side by side and stats on the right */}
+        {/* Main content - Layout with workstations side by side and stats on the right */}
         {userWorkstations.length === 0 ? (
           <Card>
             <CardHeader>
@@ -646,34 +655,59 @@ const WorkstationDashboard = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className="flex gap-4">
+          <div className="flex flex-col md:flex-row gap-4">
             {/* Workstations section - takes 4/5 of the width */}
-            <div className="flex-grow w-4/5">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="w-full md:w-4/5">
+              <div className={`grid ${getGridColumns()} gap-4`}>
                 {workstationData.map((data) => (
-                  <div key={data.workstation.id} className="border rounded-lg p-4 bg-white shadow">
-                    <h2 className="text-xl font-bold mb-4 text-primary border-b pb-2">
+                  <div key={data.workstation.id} className="border rounded-lg p-3 bg-white shadow">
+                    <h2 className="text-lg font-bold mb-2 text-primary border-b pb-2 flex items-center">
+                      <LayoutGrid className="h-4 w-4 mr-2" />
                       {data.workstation.name}
                     </h2>
                     
                     {data.tasks.length === 0 ? (
-                      <div className="p-4 text-center text-gray-500">
-                        No pending tasks for this workstation
+                      <div className="p-3 text-center text-gray-500">
+                        No pending tasks
                       </div>
                     ) : (
-                      <TaskList 
-                        tasks={data.tasks} 
-                        title={`To Do Tasks (${data.tasks.length})`}
-                        compact={true}
-                      />
+                      <div className="max-h-[calc(100vh-250px)] overflow-y-auto pr-1">
+                        <TaskList 
+                          tasks={data.tasks} 
+                          title={`Tasks (${data.tasks.length})`}
+                          compact={true}
+                        />
+                      </div>
                     )}
+
+                    {/* Mini stats */}
+                    <div className="mt-2 grid grid-cols-3 gap-2 border-t pt-2">
+                      <div className="flex items-center text-xs">
+                        <div className="bg-blue-100 p-1 rounded-full mr-1">
+                          <ListIcon className="text-blue-700 h-3 w-3" />
+                        </div>
+                        <span>{data.stats.totalTasks}</span>
+                      </div>
+                      <div className="flex items-center text-xs">
+                        <div className="bg-green-100 p-1 rounded-full mr-1">
+                          <Check className="text-green-700 h-3 w-3" />
+                        </div>
+                        <span>{data.stats.completedToday}</span>
+                      </div>
+                      <div className="flex items-center text-xs">
+                        <div className="bg-amber-100 p-1 rounded-full mr-1">
+                          <Calendar className="text-amber-700 h-3 w-3" />
+                        </div>
+                        <span>{data.stats.dueToday}</span>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
             
             {/* Stats section - takes 1/5 of the width */}
-            <div className="w-1/5 space-y-4">
+            <div className="w-full md:w-1/5 space-y-4">
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-lg">Overall Stats</CardTitle>
