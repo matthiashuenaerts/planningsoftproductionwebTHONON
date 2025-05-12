@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
@@ -508,6 +507,20 @@ const WorkstationDashboard = () => {
     }
   };
 
+  // Calculate overall stats from all workstations
+  const calculateOverallStats = () => {
+    if (!workstationData.length) return { totalTasks: 0, completedToday: 0, inProgress: 0, dueToday: 0 };
+    
+    return workstationData.reduce((acc, current) => {
+      return {
+        totalTasks: acc.totalTasks + current.stats.totalTasks,
+        completedToday: acc.completedToday + current.stats.completedToday,
+        inProgress: acc.inProgress + current.stats.inProgress,
+        dueToday: acc.dueToday + current.stats.dueToday,
+      };
+    }, { totalTasks: 0, completedToday: 0, inProgress: 0, dueToday: 0 });
+  };
+
   // Render a single workstation section
   const renderWorkstationSection = (data: WorkstationData) => {
     return (
@@ -587,6 +600,8 @@ const WorkstationDashboard = () => {
     );
   }
 
+  const overallStats = calculateOverallStats();
+
   return (
     <div className="p-4 bg-gray-50 min-h-screen relative">
       {refreshing && (
@@ -620,7 +635,7 @@ const WorkstationDashboard = () => {
           </div>
         </div>
 
-        {/* Main content */}
+        {/* Main content - New layout with workstations side by side and stats on the right */}
         {userWorkstations.length === 0 ? (
           <Card>
             <CardHeader>
@@ -631,8 +646,84 @@ const WorkstationDashboard = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className={`grid ${workstationData.length > 1 ? 'grid-cols-1' : 'grid-cols-1'} gap-6`}>
-            {workstationData.map(renderWorkstationSection)}
+          <div className="flex gap-4">
+            {/* Workstations section - takes 4/5 of the width */}
+            <div className="flex-grow w-4/5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {workstationData.map((data) => (
+                  <div key={data.workstation.id} className="border rounded-lg p-4 bg-white shadow">
+                    <h2 className="text-xl font-bold mb-4 text-primary border-b pb-2">
+                      {data.workstation.name}
+                    </h2>
+                    
+                    {data.tasks.length === 0 ? (
+                      <div className="p-4 text-center text-gray-500">
+                        No pending tasks for this workstation
+                      </div>
+                    ) : (
+                      <TaskList 
+                        tasks={data.tasks} 
+                        title={`To Do Tasks (${data.tasks.length})`}
+                        compact={true}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Stats section - takes 1/5 of the width */}
+            <div className="w-1/5 space-y-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">Overall Stats</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <Card className="mb-4">
+                    <CardContent className="p-4 flex items-center">
+                      <div className="bg-blue-100 p-3 rounded-full mr-4">
+                        <Package className="text-blue-700 h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">TODO Tasks</p>
+                        <h3 className="text-xl font-bold">{overallStats.totalTasks}</h3>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="mb-4">
+                    <CardContent className="p-4 flex items-center">
+                      <div className="bg-green-100 p-3 rounded-full mr-4">
+                        <Check className="text-green-700 h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Completed Today</p>
+                        <h3 className="text-xl font-bold">{overallStats.completedToday}</h3>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="mb-4">
+                    <CardContent className="p-4 flex items-center">
+                      <div className="bg-amber-100 p-3 rounded-full mr-4">
+                        <Calendar className="text-amber-700 h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Due Today</p>
+                        <h3 className="text-xl font-bold">{overallStats.dueToday}</h3>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </CardContent>
+              </Card>
+              
+              <div className="fixed bottom-4 right-4 text-sm text-gray-500">
+                <div className="flex items-center justify-end">
+                  <Clock className="h-4 w-4 mr-1" />
+                  Auto-refreshes every minute
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
