@@ -42,6 +42,9 @@ const formSchema = z.object({
   description: z.string().optional(),
   start_date: z.date({ required_error: 'Start date is required' }),
   installation_date: z.date({ required_error: 'Installation date is required' }),
+  project_value: z.number()
+    .min(1, { message: 'Project value must be at least 1' })
+    .max(100, { message: 'Project value must be at most 100' })
 }).refine(
   (data) => {
     return data.installation_date >= data.start_date;
@@ -67,6 +70,8 @@ interface TaskItem {
   selected?: boolean;
   task_number?: string;
   standard_task_id?: string;
+  time_coefficient?: number;
+  duration?: number; // Duration in minutes
 }
 
 const NewProjectModal: React.FC<NewProjectModalProps> = ({
@@ -108,7 +113,8 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
               workstation: workstationName,
               selected: true,
               task_number: task.task_number,
-              standard_task_id: task.id
+              standard_task_id: task.id,
+              time_coefficient: task.time_coefficient
             });
           } catch (error) {
             console.error(`Error fetching workstation for task ${task.task_name}:`, error);
@@ -141,21 +147,45 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
       description: '',
       start_date: new Date(),
       installation_date: new Date(),
+      project_value: 50, // Default project value
     },
   });
+
+  // Calculate task durations whenever project_value changes or when tasks are loaded/modified
+  useEffect(() => {
+    const projectValue = form.watch('project_value') || 50;
+    
+    // Update tasks with calculated durations
+    setTasks(currentTasks => 
+      currentTasks.map(task => ({
+        ...task,
+        duration: calculateTaskDuration(task, projectValue)
+      }))
+    );
+  }, [form.watch('project_value'), tasks.length]);
+
+  // Calculate task duration based on coefficient and project value
+  const calculateTaskDuration = (task: TaskItem, projectValue: number): number => {
+    if (!task.time_coefficient) return 60; // Default 1 hour if no coefficient
+    return Math.round(task.time_coefficient * projectValue);
+  };
 
   const handleAddCustomTask = () => {
     if (newTaskName.trim()) {
       const nextId = (tasks.length + 1).toString().padStart(2, '0');
-      setTasks([
-        ...tasks, 
-        { 
-          id: nextId, 
-          name: newTaskName.trim(), 
-          workstation: newTaskWorkstation.trim(),
-          selected: true 
-        }
-      ]);
+      const newTask = { 
+        id: nextId, 
+        name: newTaskName.trim(), 
+        workstation: newTaskWorkstation.trim(),
+        selected: true,
+        time_coefficient: 1.0, // Default coefficient for custom tasks
+      };
+      
+      // Calculate duration for the new task
+      const projectValue = form.getValues('project_value') || 50;
+      newTask.duration = calculateTaskDuration(newTask, projectValue);
+      
+      setTasks([...tasks, newTask]);
       setNewTaskName('');
       setNewTaskWorkstation('');
     }
@@ -226,8 +256,9 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
         const taskStartDate = new Date(data.start_date);
         taskStartDate.setDate(data.start_date.getDate() + (index * daysPerTask));
         
-        // Create a task name with the ID prefix
-        const taskName = `${task.id} - ${task.name}`;
+        // Create a task name with the ID prefix and duration
+        const durationText = task.duration ? ` (${task.duration} min)` : '';
+        const taskName = `${task.id} - ${task.name}${durationText}`;
         
         // Simple mapping of workstations to standard categories
         let workstationType: 'CUTTING' | 'WELDING' | 'PAINTING' | 'ASSEMBLY' | 'PACKAGING' | 'SHIPPING' = 'ASSEMBLY';
@@ -242,12 +273,15 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
           workstationType = 'ASSEMBLY';
         }
         
+        // Create task description with duration and workstation info
+        const taskDescription = `Duration: ${task.duration || 60} minutes\n${task.workstation ? `Workstation: ${task.workstation}` : ''}`;
+        
         // Create the task
         const newTask = await taskService.create({
           phase_id: phase.id,
           assignee_id: null,
           title: taskName,
-          description: task.workstation ? `Workstation: ${task.workstation}` : null,
+          description: taskDescription,
           workstation: workstationType,
           status: 'TODO',
           priority: index < 5 ? 'High' : index < 15 ? 'Medium' : 'Low',
@@ -332,6 +366,26 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
                         placeholder="Project details..." 
                         className="resize-none" 
                         {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="project_value"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Project Value (1-100)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        min="1" 
+                        max="100" 
+                        {...field} 
+                        onChange={e => field.onChange(parseInt(e.target.value))}
                       />
                     </FormControl>
                     <FormMessage />
@@ -442,9 +496,14 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
                           checked={task.selected} 
                           onCheckedChange={() => handleToggleTask(index)} 
                         />
-                        <label htmlFor={`task-${index}`} className="text-sm flex-1">
-                          {task.id} - {task.name}
-                          {task.workstation && <span className="text-muted-foreground ml-1">({task.workstation})</span>}
+                        <label htmlFor={`task-${index}`} className="text-sm flex-1 flex flex-wrap items-center">
+                          <span className="mr-1">{task.id} - {task.name}</span>
+                          {task.workstation && <span className="text-muted-foreground mr-2">({task.workstation})</span>}
+                          {task.duration && (
+                            <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
+                              {task.duration} min
+                            </span>
+                          )}
                         </label>
                         <Button 
                           type="button" 
