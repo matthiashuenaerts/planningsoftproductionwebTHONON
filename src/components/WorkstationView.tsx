@@ -373,9 +373,31 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
   const getTaskProgress = (task: Task): number => {
     // Only return progress for tasks explicitly marked as IN_PROGRESS
     if (task.status === 'IN_PROGRESS') {
-      // Start with a small progress (10%) when task is first moved to in-progress
-      // In a real app, this should be stored in the database and updated based on actual progress
-      return 10;
+      const now = new Date();
+      
+      // If we don't know when the task was started, use a default progress (10%)
+      if (!task.updated_at) {
+        return 10;
+      }
+      
+      const updatedAt = new Date(task.updated_at);
+      
+      // If updated_at is somehow in the future, default to 10%
+      if (updatedAt > now) {
+        return 10;
+      }
+      
+      // Define a fixed duration for tasks (e.g., 2 days = 48 hours in milliseconds)
+      const TASK_DURATION_MS = 48 * 60 * 60 * 1000;
+      
+      // Calculate elapsed time since the task was marked as IN_PROGRESS
+      const elapsedTime = now.getTime() - updatedAt.getTime();
+      
+      // Calculate progress percentage based on elapsed time and fixed duration
+      const progressPercentage = Math.min(100, Math.floor((elapsedTime / TASK_DURATION_MS) * 100));
+      
+      // Ensure we show at least 10% progress for visibility
+      return Math.max(10, progressPercentage);
     }
     return 0;
   };

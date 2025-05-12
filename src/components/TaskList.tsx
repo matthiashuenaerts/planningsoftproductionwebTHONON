@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -189,15 +188,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
   const getTaskProgress = (task: Task): number => {
     // Only calculate progress for IN_PROGRESS tasks
     if (task.status === 'IN_PROGRESS') {
-      // Calculate progress based on time elapsed since task was updated to IN_PROGRESS
-      // and the time until the due date
       const now = new Date();
-      const dueDate = new Date(task.due_date);
-      
-      // If due date is in the past, show 100%
-      if (dueDate < now) {
-        return 100;
-      }
       
       // If we don't know when the task was started, use a default progress (10%)
       if (!task.updated_at) {
@@ -211,13 +202,14 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
         return 10;
       }
       
-      // Calculate percentage of time elapsed between updated_at and due_date
-      const totalDuration = dueDate.getTime() - updatedAt.getTime();
-      const elapsedDuration = now.getTime() - updatedAt.getTime();
+      // Define a fixed duration for tasks (e.g., 2 days = 48 hours in milliseconds)
+      const TASK_DURATION_MS = 48 * 60 * 60 * 1000;
       
-      if (totalDuration <= 0) return 100; // Safeguard against invalid dates
+      // Calculate elapsed time since the task was marked as IN_PROGRESS
+      const elapsedTime = now.getTime() - updatedAt.getTime();
       
-      const progressPercentage = Math.min(100, Math.floor((elapsedDuration / totalDuration) * 100));
+      // Calculate progress percentage based on elapsed time and fixed duration
+      const progressPercentage = Math.min(100, Math.floor((elapsedTime / TASK_DURATION_MS) * 100));
       
       // Ensure we show at least 10% progress for visibility
       return Math.max(10, progressPercentage);
