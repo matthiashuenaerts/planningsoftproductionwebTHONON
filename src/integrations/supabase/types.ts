@@ -485,6 +485,7 @@ export type Database = {
           phase_id: string
           priority: string
           status: string
+          status_changed_at: string | null
           title: string
           updated_at: string
           workstation: string
@@ -500,6 +501,7 @@ export type Database = {
           phase_id: string
           priority: string
           status: string
+          status_changed_at?: string | null
           title: string
           updated_at?: string
           workstation: string
@@ -515,6 +517,7 @@ export type Database = {
           phase_id?: string
           priority?: string
           status?: string
+          status_changed_at?: string | null
           title?: string
           updated_at?: string
           workstation?: string

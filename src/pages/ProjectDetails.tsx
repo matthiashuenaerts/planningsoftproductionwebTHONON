@@ -75,7 +75,10 @@ const ProjectDetails = () => {
     }
     
     try {
-      const updateData: Partial<Task> = { status };
+      const updateData: Partial<Task> = { 
+        status, 
+        status_changed_at: new Date().toISOString() 
+      };
       
       // Add completion info if task is being marked as completed
       if (status === 'COMPLETED') {
@@ -91,6 +94,7 @@ const ProjectDetails = () => {
           task.id === taskId ? { 
             ...task, 
             status,
+            status_changed_at: updateData.status_changed_at,
             ...(status === 'COMPLETED' ? {
               completed_at: updateData.completed_at,
               completed_by: currentEmployee.id

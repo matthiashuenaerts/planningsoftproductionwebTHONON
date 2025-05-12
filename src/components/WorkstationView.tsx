@@ -350,7 +350,8 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
       await taskService.update(taskId, { 
         status: 'COMPLETED',
         completed_by: currentEmployee.id,
-        completed_at: new Date().toISOString()
+        completed_at: new Date().toISOString(),
+        status_changed_at: new Date().toISOString()
       });
       
       // Update local state to remove the completed task
@@ -375,15 +376,17 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
     if (task.status === 'IN_PROGRESS') {
       const now = new Date();
       
+      // Use status_changed_at if available, otherwise fall back to updated_at
+      const statusChangedAt = task.status_changed_at ? new Date(task.status_changed_at) : 
+                              task.updated_at ? new Date(task.updated_at) : null;
+      
       // If we don't know when the task was started, use a default progress (10%)
-      if (!task.updated_at) {
+      if (!statusChangedAt) {
         return 10;
       }
       
-      const updatedAt = new Date(task.updated_at);
-      
-      // If updated_at is somehow in the future, default to 10%
-      if (updatedAt > now) {
+      // If status_changed_at is somehow in the future, default to 10%
+      if (statusChangedAt > now) {
         return 10;
       }
       
@@ -418,7 +421,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
       taskDurationMs = 48 * 60 * 60 * 1000; // 48 hours default
       
       // Calculate elapsed time since the task was marked as IN_PROGRESS
-      const elapsedTime = now.getTime() - updatedAt.getTime();
+      const elapsedTime = now.getTime() - statusChangedAt.getTime();
       
       // Calculate progress percentage based on elapsed time and task duration
       const progressPercentage = Math.min(100, Math.floor((elapsedTime / taskDurationMs) * 100));

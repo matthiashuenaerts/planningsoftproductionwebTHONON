@@ -227,7 +227,8 @@ const PersonalTasks = () => {
       const updateData: Partial<Task> = { 
         status,
         updated_at: new Date().toISOString(),
-        assignee_id: currentEmployee?.id
+        assignee_id: currentEmployee?.id,
+        status_changed_at: new Date().toISOString()
       };
       
       // Add completion info if task is being marked as completed
@@ -250,6 +251,7 @@ const PersonalTasks = () => {
             ...task, 
             status, 
             assignee_id: currentEmployee?.id,
+            status_changed_at: updateData.status_changed_at,
             ...(status === 'COMPLETED' ? {
               completed_at: updateData.completed_at,
               completed_by: currentEmployee.id

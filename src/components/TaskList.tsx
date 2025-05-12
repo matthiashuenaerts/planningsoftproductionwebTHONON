@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -191,15 +190,17 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
     if (task.status === 'IN_PROGRESS') {
       const now = new Date();
       
+      // Use status_changed_at if available, otherwise fall back to updated_at
+      const statusChangedAt = task.status_changed_at ? new Date(task.status_changed_at) : 
+                              task.updated_at ? new Date(task.updated_at) : null;
+      
       // If we don't know when the task was started, use a default progress (10%)
-      if (!task.updated_at) {
+      if (!statusChangedAt) {
         return 10;
       }
       
-      const updatedAt = new Date(task.updated_at);
-      
-      // If updated_at is somehow in the future, default to 10%
-      if (updatedAt > now) {
+      // If status_changed_at is somehow in the future, default to 10%
+      if (statusChangedAt > now) {
         return 10;
       }
       
@@ -217,7 +218,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
       }
       
       // Calculate elapsed time since the task was marked as IN_PROGRESS
-      const elapsedTime = now.getTime() - updatedAt.getTime();
+      const elapsedTime = now.getTime() - statusChangedAt.getTime();
       
       // Calculate progress percentage based on elapsed time and task duration
       const progressPercentage = Math.min(100, Math.floor((elapsedTime / taskDurationMs) * 100));

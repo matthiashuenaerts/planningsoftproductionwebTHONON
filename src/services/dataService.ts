@@ -42,6 +42,7 @@ export interface Task {
   project_name?: string; // Added for WorkstationView
   completed_at?: string | null; // Time when the task was completed
   completed_by?: string | null; // ID of the employee who completed the task
+  status_changed_at?: string | null; // Time when the task status was last changed
 }
 
 // Employee Types
@@ -439,6 +440,11 @@ export const taskService = {
   },
   
   async update(id: string, task: Partial<Task>): Promise<Task> {
+    // Update status_changed_at when status is being changed
+    if (task.status) {
+      task.status_changed_at = new Date().toISOString();
+    }
+    
     const { data, error } = await supabase
       .from('tasks')
       .update(task)
