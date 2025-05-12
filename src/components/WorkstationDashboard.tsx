@@ -31,6 +31,7 @@ const AUTO_REFRESH_INTERVAL = 60000; // Refresh every 60 seconds
 interface WorkstationData {
   workstation: Workstation;
   tasks: Task[];
+  inProgressTasks: Task[]; // New property for in-progress tasks
   stats: {
     totalTasks: number;
     completedToday: number;
@@ -184,12 +185,23 @@ const WorkstationDashboard = () => {
         const workstationDataArray: WorkstationData[] = [];
         for (const workstation of workstations) {
           const tasks = await fetchTasksForWorkstation(workstation);
+          
+          // Separate in-progress tasks
+          const inProgressTasks = tasks.filter(task => task.status === 'IN_PROGRESS');
+          const otherTasks = tasks.filter(task => task.status !== 'IN_PROGRESS');
+          
           const stats = await calculateStats(tasks, workstation);
           
           workstationDataArray.push({
             workstation,
-            tasks,
-            stats
+            // Use other tasks as the main task list
+            tasks: otherTasks,
+            // Store in-progress tasks separately
+            inProgressTasks,
+            stats: {
+              ...stats,
+              inProgress: inProgressTasks.length
+            }
           });
         }
         
@@ -488,12 +500,15 @@ const WorkstationDashboard = () => {
         }
       }
       
-      console.log(`Stats update for ${workstation.name}: ${tasksData.length} total tasks, ${completedToday} completed today, ${dueToday} due today`);
+      // Calculate in-progress tasks
+      const inProgress = tasksData.filter(task => task.status === 'IN_PROGRESS').length;
+      
+      console.log(`Stats update for ${workstation.name}: ${tasksData.length} total tasks, ${completedToday} completed today, ${inProgress} in progress, ${dueToday} due today`);
       
       return {
         totalTasks: tasksData.length,
         completedToday,
-        inProgress: 0,
+        inProgress,
         dueToday
       };
     } catch (error) {
@@ -666,15 +681,29 @@ const WorkstationDashboard = () => {
                       {data.workstation.name}
                     </h2>
                     
-                    {data.tasks.length === 0 ? (
+                    {/* In-progress tasks section - always show at the top */}
+                    {data.inProgressTasks.length > 0 && (
+                      <div className="mb-3">
+                        <h3 className="text-sm font-medium text-amber-600 mb-1">In Progress</h3>
+                        <div className="max-h-[calc(100vh-350px)] overflow-y-auto pr-1">
+                          <TaskList 
+                            tasks={data.inProgressTasks}
+                            compact={true}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Standard tasks section */}
+                    {data.tasks.length === 0 && data.inProgressTasks.length === 0 ? (
                       <div className="p-3 text-center text-gray-500">
                         No pending tasks
                       </div>
-                    ) : (
+                    ) : data.tasks.length > 0 && (
                       <div className="max-h-[calc(100vh-250px)] overflow-y-auto pr-1">
                         <TaskList 
                           tasks={data.tasks} 
-                          title={`Tasks (${data.tasks.length})`}
+                          title={`Todo Tasks (${data.tasks.length})`}
                           compact={true}
                         />
                       </div>
