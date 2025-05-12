@@ -7,6 +7,7 @@ import { Task } from '@/services/dataService';
 import { workstationService } from '@/services/workstationService';
 import { supabase } from '@/integrations/supabase/client';
 import { StandardTask, standardTasksService } from '@/services/standardTasksService';
+import { Progress } from '@/components/ui/progress';
 
 interface TaskListProps {
   tasks: Task[];
@@ -183,13 +184,32 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
     );
   };
 
+  // Helper to get progress value for in-progress tasks (mock for now)
+  const getTaskProgress = (task: Task): number => {
+    // For now, return a random progress value between 10 and 90 for in-progress tasks
+    // In a real implementation, this could be based on real task progress data
+    if (task.status === 'IN_PROGRESS') {
+      // Return a random progress value for demonstration
+      return Math.floor(Math.random() * 80) + 10; // Random between 10-90%
+    }
+    return 0;
+  };
+
   return (
     <div className="mt-4">
       <h3 className="text-lg font-medium mb-2">{title}</h3>
       <div className="space-y-3">
         {displayTasks.map((task) => (
-          <Card key={task.id} className={`${getTaskStatusClass(task.due_date)} ${compact ? 'mb-2' : ''}`}>
-            <CardContent className={`${compact ? 'p-3' : 'p-4'}`}>
+          <Card key={task.id} className={`${getTaskStatusClass(task.due_date)} ${compact ? 'mb-2' : ''} relative overflow-hidden`}>
+            {task.status === 'IN_PROGRESS' && (
+              <div className="absolute inset-0 z-0">
+                <div 
+                  className="h-full bg-blue-50 dark:bg-blue-900/20" 
+                  style={{ width: `${getTaskProgress(task)}%` }}
+                />
+              </div>
+            )}
+            <CardContent className={`${compact ? 'p-3' : 'p-4'} relative z-10`}>
               <div className="flex justify-between items-start mb-2">
                 <h4 className={`font-medium ${compact ? 'text-sm' : ''}`}>
                   {renderTaskTitle(task)}
@@ -227,6 +247,12 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
               </div>
 
               {!compact && <p className="text-sm text-muted-foreground mb-3">{task.description}</p>}
+              
+              {task.status === 'IN_PROGRESS' && !compact && (
+                <div className="mb-3">
+                  <Progress value={getTaskProgress(task)} className="h-1.5" />
+                </div>
+              )}
               
               {task.status === 'COMPLETED' && task.completed_by && task.completed_at && !compact && (
                 <div className="mb-3 text-sm bg-green-50 p-2 rounded border border-green-100">

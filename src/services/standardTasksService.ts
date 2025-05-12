@@ -58,5 +58,10 @@ export const standardTasksService = {
   // Get task name parts by splitting the task name at underscores
   getTaskNameParts(taskName: string): string[] {
     return taskName.split('_').filter(part => part.trim() !== '');
+  },
+
+  // Calculate task duration based on time coefficient and project value
+  calculateTaskDuration(timeCoefficient: number, projectValue: number): number {
+    return Math.round(timeCoefficient * projectValue);
   }
 };

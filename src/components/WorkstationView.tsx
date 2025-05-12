@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import TaskList from './TaskList';
@@ -9,6 +8,7 @@ import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monito
 import { Button } from '@/components/ui/button';
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from '@/context/AuthContext';
+import { Progress } from '@/components/ui/progress';
 
 // Helper function to validate and convert task status
 const validateTaskStatus = (status: string): "TODO" | "IN_PROGRESS" | "COMPLETED" => {
@@ -191,6 +191,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
               const tasksWithDetails = await Promise.all(
                 linkedTasks.map(async (task) => {
                   try {
+                    // Get the phase to get the project_id
                     const { data: phaseData, error: phaseError } = await supabase
                       .from('phases')
                       .select('project_id, name')
@@ -199,6 +200,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
                     
                     if (phaseError) throw phaseError;
                     
+                    // Get the project name
                     const { data: projectData, error: projectError } = await supabase
                       .from('projects')
                       .select('name')
@@ -330,6 +332,17 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
     }
   };
 
+  // Helper to get progress value for in-progress tasks (mock for now)
+  const getTaskProgress = (task: Task): number => {
+    // For now, return a random progress value between 10 and 90 for in-progress tasks
+    // In a real implementation, this could be based on real task progress data
+    if (task.status === 'IN_PROGRESS') {
+      // Return a random progress value for demonstration
+      return Math.floor(Math.random() * 80) + 10; // Random between 10-90%
+    }
+    return 0;
+  };
+
   const getWorkstationIcon = (name: string) => {
     // Return appropriate icon based on workstation name
     const lowerCaseName = name.toLowerCase();
@@ -404,38 +417,54 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
             ) : (
               <div className="space-y-4 mt-2">
                 {tasks.map((task) => (
-                  <Card key={task.id} className="overflow-hidden">
-                    <div className="border-l-4 border-l-blue-500 p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="font-medium text-lg">
-                          {task.project_name ? `${task.project_name} - ${task.title}` : task.title}
-                        </h4>
-                        <div className="flex items-center gap-2">
-                          <div className={`px-2 py-1 rounded text-xs font-medium ${
-                            task.priority === 'High' || task.priority === 'Urgent' 
-                              ? 'bg-red-100 text-red-800' 
-                              : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {task.priority}
+                  <Card key={task.id} className="overflow-hidden relative">
+                    <div className="border-l-4 border-l-blue-500 p-4 relative z-10">
+                      {task.status === 'IN_PROGRESS' && (
+                        <div className="absolute inset-0 left-0 top-0 bottom-0 z-0">
+                          <div 
+                            className="h-full bg-blue-50 dark:bg-blue-900/20" 
+                            style={{ width: `${getTaskProgress(task)}%` }}
+                          />
+                        </div>
+                      )}
+                      <div className="relative z-10">
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="font-medium text-lg">
+                            {task.project_name ? `${task.project_name} - ${task.title}` : task.title}
+                          </h4>
+                          <div className="flex items-center gap-2">
+                            <div className={`px-2 py-1 rounded text-xs font-medium ${
+                              task.priority === 'High' || task.priority === 'Urgent' 
+                                ? 'bg-red-100 text-red-800' 
+                                : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {task.priority}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      
-                      {task.description && (
-                        <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
-                      )}
-                      
-                      <div className="flex justify-between items-center mt-4">
-                        <div className="text-sm text-muted-foreground">
-                          Due: {new Date(task.due_date).toLocaleDateString()}
+                        
+                        {task.description && (
+                          <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
+                        )}
+                        
+                        {task.status === 'IN_PROGRESS' && (
+                          <div className="mb-3">
+                            <Progress value={getTaskProgress(task)} className="h-1.5" />
+                          </div>
+                        )}
+                        
+                        <div className="flex justify-between items-center mt-4">
+                          <div className="text-sm text-muted-foreground">
+                            Due: {new Date(task.due_date).toLocaleDateString()}
+                          </div>
+                          <Button 
+                            onClick={() => handleCompleteTask(task.id)}
+                            className="bg-green-500 hover:bg-green-600"
+                            size="sm"
+                          >
+                            <Check className="mr-1 h-4 w-4" /> Complete Task
+                          </Button>
                         </div>
-                        <Button 
-                          onClick={() => handleCompleteTask(task.id)}
-                          className="bg-green-500 hover:bg-green-600"
-                          size="sm"
-                        >
-                          <Check className="mr-1 h-4 w-4" /> Complete Task
-                        </Button>
                       </div>
                     </div>
                   </Card>
