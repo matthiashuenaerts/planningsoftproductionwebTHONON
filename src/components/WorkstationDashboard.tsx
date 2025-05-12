@@ -547,7 +547,18 @@ const WorkstationDashboard = () => {
         <div className="grid grid-cols-4 gap-4">
           {/* Tasks column - takes up 3/4 of the space */}
           <div className="col-span-3">
-            {data.tasks.length === 0 ? (
+            {/* Display in-progress tasks first if there are any */}
+            {data.inProgressTasks && data.inProgressTasks.length > 0 && (
+              <div className="mb-4">
+                <TaskList 
+                  tasks={data.inProgressTasks} 
+                  title={`In Progress Tasks (${data.inProgressTasks.length})`}
+                />
+              </div>
+            )}
+            
+            {/* Display to-do tasks */}
+            {data.tasks.length === 0 && (!data.inProgressTasks || data.inProgressTasks.length === 0) ? (
               <Card>
                 <CardHeader>
                   <CardTitle>No Tasks</CardTitle>
@@ -556,7 +567,7 @@ const WorkstationDashboard = () => {
                   <p>There are no pending tasks assigned to this workstation.</p>
                 </CardContent>
               </Card>
-            ) : (
+            ) : data.tasks.length > 0 && (
               <TaskList 
                 tasks={data.tasks} 
                 title={`To Do Tasks (${data.tasks.length})`}
@@ -633,6 +644,7 @@ const WorkstationDashboard = () => {
           <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
         </div>
       )}
+      
       <div className="max-w-full mx-auto">
         <div className="flex justify-between items-center mb-4">
           <div>
@@ -682,7 +694,7 @@ const WorkstationDashboard = () => {
                     </h2>
                     
                     {/* In-progress tasks section - always show at the top */}
-                    {data.inProgressTasks.length > 0 && (
+                    {data.inProgressTasks && data.inProgressTasks.length > 0 && (
                       <div className="mb-3">
                         <h3 className="text-sm font-medium text-amber-600 mb-1">In Progress</h3>
                         <div className="max-h-[calc(100vh-350px)] overflow-y-auto pr-1">
@@ -695,7 +707,7 @@ const WorkstationDashboard = () => {
                     )}
                     
                     {/* Standard tasks section */}
-                    {data.tasks.length === 0 && data.inProgressTasks.length === 0 ? (
+                    {data.tasks.length === 0 && (!data.inProgressTasks || data.inProgressTasks.length === 0) ? (
                       <div className="p-3 text-center text-gray-500">
                         No pending tasks
                       </div>
