@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,7 +15,7 @@ interface TaskListProps {
   title?: string;
   onTaskStatusChange?: (taskId: string, status: Task['status']) => void;
   limit?: number;
-  compact?: boolean; // Added this property to fix the TypeScript error
+  compact?: boolean;
 }
 
 const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatusChange, limit, compact = false }) => {
@@ -186,11 +187,40 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
 
   // Helper to get progress value for in-progress tasks
   const getTaskProgress = (task: Task): number => {
-    // Only return progress for tasks explicitly marked as IN_PROGRESS
+    // Only calculate progress for IN_PROGRESS tasks
     if (task.status === 'IN_PROGRESS') {
-      // Start with a small progress (10%) when task is first moved to in-progress
-      // In a real app, this should be stored in the database and updated based on actual progress
-      return 10; 
+      // Calculate progress based on time elapsed since task was updated to IN_PROGRESS
+      // and the time until the due date
+      const now = new Date();
+      const dueDate = new Date(task.due_date);
+      
+      // If due date is in the past, show 100%
+      if (dueDate < now) {
+        return 100;
+      }
+      
+      // If we don't know when the task was started, use a default progress (10%)
+      if (!task.updated_at) {
+        return 10;
+      }
+      
+      const updatedAt = new Date(task.updated_at);
+      
+      // If updated_at is somehow in the future, default to 10%
+      if (updatedAt > now) {
+        return 10;
+      }
+      
+      // Calculate percentage of time elapsed between updated_at and due_date
+      const totalDuration = dueDate.getTime() - updatedAt.getTime();
+      const elapsedDuration = now.getTime() - updatedAt.getTime();
+      
+      if (totalDuration <= 0) return 100; // Safeguard against invalid dates
+      
+      const progressPercentage = Math.min(100, Math.floor((elapsedDuration / totalDuration) * 100));
+      
+      // Ensure we show at least 10% progress for visibility
+      return Math.max(10, progressPercentage);
     }
     return 0;
   };
