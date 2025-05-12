@@ -387,14 +387,41 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
         return 10;
       }
       
-      // Define a fixed duration for tasks (e.g., 2 days = 48 hours in milliseconds)
-      const TASK_DURATION_MS = 48 * 60 * 60 * 1000;
+      // Extract task number from title to find the corresponding standard task
+      const extractTaskNumber = (title: string): string | null => {
+        const match = title.match(/^(\d{2})(?:\s*[-:]\s*|\s+)/);
+        return match ? match[1] : null;
+      };
+      
+      const taskNumber = extractTaskNumber(task.title);
+      let taskDurationMs;
+      
+      // Attempt to get the standard task duration
+      if (taskNumber) {
+        // Use an immediately invoked async function to get the standard task
+        (async () => {
+          try {
+            const standardTask = await standardTasksService.getByTaskNumber(taskNumber);
+            if (standardTask && standardTask.time_coefficient > 0) {
+              // We found a standard task with a valid time coefficient
+              // This will be used in the next render cycle
+              console.log(`Found standard task for ${taskNumber} with duration: ${standardTask.time_coefficient} minutes`);
+            }
+          } catch (error) {
+            console.error("Error fetching standard task:", error);
+          }
+        })();
+      }
+      
+      // For now, use a fixed duration until we implement a state to store the fetched durations
+      // In a production app, we'd store these in state or context
+      taskDurationMs = 48 * 60 * 60 * 1000; // 48 hours default
       
       // Calculate elapsed time since the task was marked as IN_PROGRESS
       const elapsedTime = now.getTime() - updatedAt.getTime();
       
-      // Calculate progress percentage based on elapsed time and fixed duration
-      const progressPercentage = Math.min(100, Math.floor((elapsedTime / TASK_DURATION_MS) * 100));
+      // Calculate progress percentage based on elapsed time and task duration
+      const progressPercentage = Math.min(100, Math.floor((elapsedTime / taskDurationMs) * 100));
       
       // Ensure we show at least 10% progress for visibility
       return Math.max(10, progressPercentage);

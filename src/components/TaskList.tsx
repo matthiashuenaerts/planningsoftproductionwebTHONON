@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -202,14 +203,24 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
         return 10;
       }
       
-      // Define a fixed duration for tasks (e.g., 2 days = 48 hours in milliseconds)
-      const TASK_DURATION_MS = 48 * 60 * 60 * 1000;
+      // Get the standard task to find the time coefficient (duration in minutes)
+      const standardTask = getStandardTask(task);
+      let taskDurationMs;
+      
+      if (standardTask && standardTask.time_coefficient > 0) {
+        // Convert time coefficient (minutes) to milliseconds
+        // The time_coefficient is the task duration in minutes
+        taskDurationMs = standardTask.time_coefficient * 60 * 1000;
+      } else {
+        // If no standard task or invalid coefficient, default to 2 days (48 hours)
+        taskDurationMs = 48 * 60 * 60 * 1000; 
+      }
       
       // Calculate elapsed time since the task was marked as IN_PROGRESS
       const elapsedTime = now.getTime() - updatedAt.getTime();
       
-      // Calculate progress percentage based on elapsed time and fixed duration
-      const progressPercentage = Math.min(100, Math.floor((elapsedTime / TASK_DURATION_MS) * 100));
+      // Calculate progress percentage based on elapsed time and task duration
+      const progressPercentage = Math.min(100, Math.floor((elapsedTime / taskDurationMs) * 100));
       
       // Ensure we show at least 10% progress for visibility
       return Math.max(10, progressPercentage);
