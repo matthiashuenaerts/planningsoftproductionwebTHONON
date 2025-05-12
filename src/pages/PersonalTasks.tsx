@@ -227,9 +227,13 @@ const PersonalTasks = () => {
       const updateData: Partial<Task> = { 
         status,
         updated_at: new Date().toISOString(),
-        assignee_id: currentEmployee?.id,
         status_changed_at: new Date().toISOString()
       };
+      
+      // Set assignee when changing to IN_PROGRESS
+      if (status === 'IN_PROGRESS') {
+        updateData.assignee_id = currentEmployee?.id;
+      }
       
       // Add completion info if task is being marked as completed
       if (status === 'COMPLETED') {
@@ -250,8 +254,10 @@ const PersonalTasks = () => {
           task.id === taskId ? { 
             ...task, 
             status, 
-            assignee_id: currentEmployee?.id,
             status_changed_at: updateData.status_changed_at,
+            ...(status === 'IN_PROGRESS' ? {
+              assignee_id: currentEmployee?.id
+            } : {}),
             ...(status === 'COMPLETED' ? {
               completed_at: updateData.completed_at,
               completed_by: currentEmployee.id

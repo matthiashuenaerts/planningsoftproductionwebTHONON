@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import TaskList from './TaskList';
@@ -149,7 +150,8 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
                       updated_at: task.updated_at,
                       project_name: projectData.name,
                       completed_at: task.completed_at,
-                      completed_by: task.completed_by
+                      completed_by: task.completed_by,
+                      status_changed_at: task.status_changed_at
                     } as Task;
                   } catch (error) {
                     console.error('Error fetching project info for task:', error);
@@ -370,6 +372,54 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
     }
   };
 
+  // Function to handle updating a task status to IN_PROGRESS
+  const handleStartTask = async (taskId: string) => {
+    if (!currentEmployee) {
+      toast({
+        title: "Authentication Error",
+        description: "You must be logged in to start tasks.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      // Update task with in-progress information
+      await taskService.update(taskId, { 
+        status: 'IN_PROGRESS',
+        assignee_id: currentEmployee.id,
+        status_changed_at: new Date().toISOString()
+      });
+      
+      // Update local state
+      setTasks(tasks.map(task => 
+        task.id === taskId ? {
+          ...task,
+          status: 'IN_PROGRESS',
+          assignee_id: currentEmployee.id,
+          status_changed_at: new Date().toISOString()
+        } : task
+      ));
+      
+      // Update assignee names
+      setAssigneeNames(prev => ({
+        ...prev,
+        [currentEmployee.id]: currentEmployee.name
+      }));
+      
+      toast({
+        title: "Task started",
+        description: "Task has been marked as in progress."
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: `Failed to start task: ${error.message}`,
+        variant: "destructive"
+      });
+    }
+  };
+
   // Helper to get progress value for in-progress tasks
   const getTaskProgress = (task: Task): number => {
     // Only return progress for tasks explicitly marked as IN_PROGRESS
@@ -549,7 +599,8 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
                         {task.status === 'IN_PROGRESS' && task.assignee_id && (
                           <div className="mb-2 text-sm bg-blue-50 text-blue-700 px-2 py-1 rounded inline-flex items-center">
                             <span className="font-medium mr-1">Assigned to:</span> 
-                            {assigneeNames[task.assignee_id] || 'Unknown user'}
+                            {task.assignee_id && assigneeNames[task.assignee_id] ? 
+                              assigneeNames[task.assignee_id] : 'Unknown user'}
                           </div>
                         )}
                         
@@ -557,19 +608,27 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
                           <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
                         )}
                         
-                        {/* Remove the visible progress bar, keep only the background progress indicator */}
-                        
                         <div className="flex justify-between items-center mt-4">
                           <div className="text-sm text-muted-foreground">
                             Due: {new Date(task.due_date).toLocaleDateString()}
                           </div>
-                          <Button 
-                            onClick={() => handleCompleteTask(task.id)}
-                            className="bg-green-500 hover:bg-green-600"
-                            size="sm"
-                          >
-                            <Check className="mr-1 h-4 w-4" /> Complete Task
-                          </Button>
+                          {task.status === 'TODO' ? (
+                            <Button 
+                              onClick={() => handleStartTask(task.id)}
+                              className="bg-blue-500 hover:bg-blue-600"
+                              size="sm"
+                            >
+                              Start Task
+                            </Button>
+                          ) : (
+                            <Button 
+                              onClick={() => handleCompleteTask(task.id)}
+                              className="bg-green-500 hover:bg-green-600"
+                              size="sm"
+                            >
+                              <Check className="mr-1 h-4 w-4" /> Complete Task
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>

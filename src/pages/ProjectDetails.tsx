@@ -80,6 +80,11 @@ const ProjectDetails = () => {
         status_changed_at: new Date().toISOString() 
       };
       
+      // Set assignee when changing to IN_PROGRESS
+      if (status === 'IN_PROGRESS') {
+        updateData.assignee_id = currentEmployee.id;
+      }
+      
       // Add completion info if task is being marked as completed
       if (status === 'COMPLETED') {
         updateData.completed_at = new Date().toISOString();
@@ -95,6 +100,9 @@ const ProjectDetails = () => {
             ...task, 
             status,
             status_changed_at: updateData.status_changed_at,
+            ...(status === 'IN_PROGRESS' ? {
+              assignee_id: currentEmployee.id
+            } : {}),
             ...(status === 'COMPLETED' ? {
               completed_at: updateData.completed_at,
               completed_by: currentEmployee.id

@@ -443,6 +443,12 @@ export const taskService = {
     // Update status_changed_at when status is being changed
     if (task.status) {
       task.status_changed_at = new Date().toISOString();
+      
+      // If the status is changed to IN_PROGRESS, make sure assignee_id is set
+      if (task.status === 'IN_PROGRESS' && !task.assignee_id) {
+        // Check if user info is available (ideally this would be the current user)
+        console.warn('Setting task to IN_PROGRESS without specifying an assignee');
+      }
     }
     
     const { data, error } = await supabase

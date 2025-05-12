@@ -21,6 +21,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
   const [taskWorkstations, setTaskWorkstations] = useState<Record<string, string[]>>({});
   const [completedByNames, setCompletedByNames] = useState<Record<string, string>>({});
   const [standardTasksMap, setStandardTasksMap] = useState<Record<string, StandardTask>>({});
+  const [assigneeNames, setAssigneeNames] = useState<Record<string, string>>({});
   
   useEffect(() => {
     const loadTaskWorkstations = async () => {
@@ -90,11 +91,41 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
         console.error('Error loading standard tasks:', error);
       }
     };
+
+    // New function to load assignee names
+    const loadAssigneeNames = async () => {
+      const namesMap: Record<string, string> = {};
+      const assignedTasks = tasks.filter(task => task.assignee_id);
+      
+      for (const task of assignedTasks) {
+        if (!task.assignee_id) continue;
+        
+        try {
+          const { data, error } = await supabase
+            .from('employees')
+            .select('name')
+            .eq('id', task.assignee_id)
+            .single();
+          
+          if (error) throw error;
+          
+          if (data) {
+            namesMap[task.id] = data.name;
+          }
+        } catch (error) {
+          console.error(`Error fetching employee name for task ${task.id}:`, error);
+          namesMap[task.id] = 'Unknown';
+        }
+      }
+      
+      setAssigneeNames(namesMap);
+    };
     
     if (tasks.length > 0) {
       loadTaskWorkstations();
       loadCompletedByNames();
       loadStandardTasks();
+      loadAssigneeNames();
     }
   }, [tasks]);
 
@@ -286,7 +317,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
               {task.status === 'IN_PROGRESS' && task.assignee_id && !compact && (
                 <div className="mb-3 text-sm bg-blue-50 text-blue-700 px-2 py-1 rounded inline-flex items-center">
                   <span className="font-medium mr-1">Assigned to:</span> 
-                  {completedByNames[task.id] || task.assignee_id}
+                  {assigneeNames[task.id] || 'Unknown user'}
                 </div>
               )}
               
