@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,16 +29,22 @@ const validatePriority = (priority: string): "Low" | "Medium" | "High" | "Urgent
 
 const AUTO_REFRESH_INTERVAL = 60000; // Refresh every 60 seconds
 
+interface WorkstationData {
+  workstation: Workstation;
+  tasks: Task[];
+  stats: {
+    totalTasks: number;
+    completedToday: number;
+    inProgress: number;
+    dueToday: number;
+  };
+}
+
 const WorkstationDashboard = () => {
   const { currentEmployee } = useAuth();
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    totalTasks: 0,
-    completedToday: 0,
-    inProgress: 0,
-    dueToday: 0
-  });
+  const [workstationData, setWorkstationData] = useState<WorkstationData[]>([]);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const { toast } = useToast();
   const [userWorkstations, setUserWorkstations] = useState<Workstation[]>([]);
@@ -55,12 +62,12 @@ const WorkstationDashboard = () => {
   // Auto-refresh data at regular intervals for TV display
   useEffect(() => {
     // Initial fetch
-    fetchUserWorkstations();
+    fetchUserWorkstations(true);
     
     // Set up auto-refresh
     const refreshTimer = setInterval(() => {
       console.log(`Auto-refreshing data at ${new Date().toLocaleTimeString()}`);
-      fetchUserWorkstations();
+      fetchUserWorkstations(false);
       setLastUpdated(new Date());
     }, AUTO_REFRESH_INTERVAL);
     
@@ -68,19 +75,20 @@ const WorkstationDashboard = () => {
   }, []);
 
   // Fetch the workstations assigned to this user
-  const fetchUserWorkstations = async () => {
+  const fetchUserWorkstations = async (isInitialLoad: boolean) => {
     if (!currentEmployee) {
       toast({
         title: "Error",
         description: "No employee information found",
         variant: "destructive"
       });
-      setLoading(false);
+      if (isInitialLoad) setInitialLoading(false);
       return;
     }
 
     try {
-      setLoading(true);
+      if (isInitialLoad) setInitialLoading(true);
+      else setRefreshing(true);
       
       // First check employee_workstation_links table
       const { data: workstationLinks, error: linksError } = await supabase
@@ -172,179 +180,153 @@ const WorkstationDashboard = () => {
       if (workstations.length > 0) {
         console.log(`Found ${workstations.length} workstations for user:`, workstations.map(ws => ws.name));
         setUserWorkstations(workstations);
-        fetchTasks(workstations);
+        
+        // Process all workstations
+        const workstationDataArray: WorkstationData[] = [];
+        for (const workstation of workstations) {
+          const tasks = await fetchTasksForWorkstation(workstation);
+          const stats = await calculateStats(tasks, workstation);
+          
+          workstationDataArray.push({
+            workstation,
+            tasks,
+            stats
+          });
+        }
+        
+        setWorkstationData(workstationDataArray);
       } else {
         console.warn("No workstations found for this user");
-        setLoading(false);
       }
+      
+      if (isInitialLoad) setInitialLoading(false);
+      setRefreshing(false);
     } catch (error: any) {
       console.error('Error fetching workstations:', error);
-      setLoading(false);
+      if (isInitialLoad) setInitialLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const fetchTasks = async (workstations: Workstation[]) => {
-    if (!workstations.length) {
-      setLoading(false);
-      return;
-    }
-
+  const fetchTasksForWorkstation = async (workstation: Workstation): Promise<Task[]> => {
     try {
       const allTasks: Task[] = [];
       
-      // For each workstation, get the tasks
-      for (const workstation of workstations) {
-        // First try to get tasks through standard task workstation links
-        const { data: standardTaskLinks, error: standardLinksError } = await supabase
-          .from('standard_task_workstation_links')
-          .select('standard_task_id')
-          .eq('workstation_id', workstation.id);
-          
-        if (standardLinksError) {
-          console.error("Error fetching standard task links:", standardLinksError);
-          continue;
-        }
-          
-        if (standardTaskLinks && standardTaskLinks.length > 0) {
-          console.log("Found standard task links:", standardTaskLinks.length);
-          
-          // Get the standard task details for these linked task IDs
-          const standardTaskIds = standardTaskLinks.map(link => link.standard_task_id);
-          
-          // For each standard task, get tasks that contain its number in the title
-          for (const standardTaskId of standardTaskIds) {
-            // Get the standard task details
-            const { data: standardTask, error: standardTaskError } = await supabase
-              .from('standard_tasks')
-              .select('task_number, task_name')
-              .eq('id', standardTaskId)
-              .single();
-              
-            if (standardTaskError) {
-              console.error("Error fetching standard task:", standardTaskError);
-              continue;
-            }
-            
-            if (!standardTask) continue;
-            
-            try {
-              // Search for active tasks containing this standard task number or name
-              const { data: matchingTasks, error: matchingTasksError } = await supabase
-                .from('tasks')
-                .select('*')
-                .ilike('title', `%${standardTask.task_number}%`)
-                .eq('status', 'TODO');
-                
-              if (matchingTasksError) {
-                console.error("Error fetching matching tasks:", matchingTasksError);
-                continue;
-              }
-              
-              if (matchingTasks && matchingTasks.length > 0) {
-                console.log(`Found ${matchingTasks.length} tasks matching standard task ${standardTask.task_number}`);
-                
-                const validatedTasks: Task[] = matchingTasks.map(task => ({
-                  ...task,
-                  status: validateTaskStatus(task.status),
-                  priority: validatePriority(task.priority)
-                }));
-                
-                allTasks.push(...validatedTasks);
-              }
-            } catch (error) {
-              console.error(`Error querying tasks for standard task ${standardTask.task_number}:`, error);
-            }
-
-            // Try a second query for the task name if needed
-            try {
-              const { data: matchingNameTasks, error: matchingNameTasksError } = await supabase
-                .from('tasks')
-                .select('*')
-                .ilike('title', `%${standardTask.task_name}%`)
-                .eq('status', 'TODO');
-                
-              if (matchingNameTasksError) {
-                console.error("Error fetching tasks by name:", matchingNameTasksError);
-                continue;
-              }
-              
-              if (matchingNameTasks && matchingNameTasks.length > 0) {
-                const validatedTasks: Task[] = matchingNameTasks.map(task => ({
-                  ...task,
-                  status: validateTaskStatus(task.status),
-                  priority: validatePriority(task.priority)
-                }));
-                
-                allTasks.push(...validatedTasks);
-              }
-            } catch (error) {
-              console.error(`Error querying tasks by name for standard task ${standardTask.task_name}:`, error);
-            }
-          }
-        }
+      // First try to get tasks through standard task workstation links
+      const { data: standardTaskLinks, error: standardLinksError } = await supabase
+        .from('standard_task_workstation_links')
+        .select('standard_task_id')
+        .eq('workstation_id', workstation.id);
         
-        // Check direct task workstation links
-        console.log("Checking direct task links for workstation", workstation.name);
+      if (standardLinksError) {
+        console.error("Error fetching standard task links:", standardLinksError);
+      } else if (standardTaskLinks && standardTaskLinks.length > 0) {
+        console.log("Found standard task links:", standardTaskLinks.length);
         
-        // Get direct task workstation links
-        const { data: taskLinks, error: taskLinksError } = await supabase
-          .from('task_workstation_links')
-          .select('task_id')
-          .eq('workstation_id', workstation.id);
-          
-        if (taskLinksError) {
-          console.error("Error fetching task workstation links:", taskLinksError);
-          continue;
-        }
+        // Get the standard task details for these linked task IDs
+        const standardTaskIds = standardTaskLinks.map(link => link.standard_task_id);
         
-        if (taskLinks && taskLinks.length > 0) {
-          console.log("Found direct task links:", taskLinks.length);
-          
-          const taskIds = taskLinks.map(link => link.task_id);
-          
-          // Get the actual tasks
-          const { data: linkedTasks, error: linkedTasksError } = await supabase
-            .from('tasks')
-            .select('*')
-            .in('id', taskIds)
-            .eq('status', 'TODO');
+        // For each standard task, get tasks that contain its number in the title
+        for (const standardTaskId of standardTaskIds) {
+          // Get the standard task details
+          const { data: standardTask, error: standardTaskError } = await supabase
+            .from('standard_tasks')
+            .select('task_number, task_name')
+            .eq('id', standardTaskId)
+            .single();
             
-          if (linkedTasksError) {
-            console.error("Error fetching linked tasks:", linkedTasksError);
+          if (standardTaskError) {
+            console.error("Error fetching standard task:", standardTaskError);
             continue;
           }
           
-          if (linkedTasks && linkedTasks.length > 0) {
-            console.log("Found linked tasks:", linkedTasks.length);
+          if (!standardTask) continue;
+          
+          try {
+            // Search for active tasks containing this standard task number or name
+            const { data: matchingTasks, error: matchingTasksError } = await supabase
+              .from('tasks')
+              .select('*')
+              .ilike('title', `%${standardTask.task_number}%`)
+              .eq('status', 'TODO');
+              
+            if (matchingTasksError) {
+              console.error("Error fetching matching tasks:", matchingTasksError);
+              continue;
+            }
             
-            const validatedTasks: Task[] = linkedTasks.map(task => ({
-              ...task,
-              status: validateTaskStatus(task.status),
-              priority: validatePriority(task.priority)
-            }));
+            if (matchingTasks && matchingTasks.length > 0) {
+              console.log(`Found ${matchingTasks.length} tasks matching standard task ${standardTask.task_number}`);
+              
+              const validatedTasks: Task[] = matchingTasks.map(task => ({
+                ...task,
+                status: validateTaskStatus(task.status),
+                priority: validatePriority(task.priority)
+              }));
+              
+              allTasks.push(...validatedTasks);
+            }
+          } catch (error) {
+            console.error(`Error querying tasks for standard task ${standardTask.task_number}:`, error);
+          }
+
+          // Try a second query for the task name if needed
+          try {
+            const { data: matchingNameTasks, error: matchingNameTasksError } = await supabase
+              .from('tasks')
+              .select('*')
+              .ilike('title', `%${standardTask.task_name}%`)
+              .eq('status', 'TODO');
+              
+            if (matchingNameTasksError) {
+              console.error("Error fetching tasks by name:", matchingNameTasksError);
+              continue;
+            }
             
-            allTasks.push(...validatedTasks);
+            if (matchingNameTasks && matchingNameTasks.length > 0) {
+              const validatedTasks: Task[] = matchingNameTasks.map(task => ({
+                ...task,
+                status: validateTaskStatus(task.status),
+                priority: validatePriority(task.priority)
+              }));
+              
+              allTasks.push(...validatedTasks);
+            }
+          } catch (error) {
+            console.error(`Error querying tasks by name for standard task ${standardTask.task_name}:`, error);
           }
         }
+      }
+      
+      // Check direct task workstation links
+      console.log("Checking direct task links for workstation", workstation.name);
+      
+      // Get direct task workstation links
+      const { data: taskLinks, error: taskLinksError } = await supabase
+        .from('task_workstation_links')
+        .select('task_id')
+        .eq('workstation_id', workstation.id);
         
-        // Final fallback: check if tasks have workstation name directly
-        console.log("Checking for tasks with workstation name:", workstation.name);
+      if (taskLinksError) {
+        console.error("Error fetching task workstation links:", taskLinksError);
+      } else if (taskLinks && taskLinks.length > 0) {
+        console.log("Found direct task links:", taskLinks.length);
         
-        const { data: directTasks, error: directTasksError } = await supabase
+        const taskIds = taskLinks.map(link => link.task_id);
+        
+        // Get the actual tasks
+        const { data: linkedTasks, error: linkedTasksError } = await supabase
           .from('tasks')
           .select('*')
-          .ilike('workstation', workstation.name)
+          .in('id', taskIds)
           .eq('status', 'TODO');
           
-        if (directTasksError) {
-          console.error("Error fetching direct tasks:", directTasksError);
-          continue;
-        }
-        
-        if (directTasks && directTasks.length > 0) {
-          console.log("Found tasks with workstation directly:", directTasks.length);
+        if (linkedTasksError) {
+          console.error("Error fetching linked tasks:", linkedTasksError);
+        } else if (linkedTasks && linkedTasks.length > 0) {
+          console.log("Found linked tasks:", linkedTasks.length);
           
-          const validatedTasks: Task[] = directTasks.map(task => ({
+          const validatedTasks: Task[] = linkedTasks.map(task => ({
             ...task,
             status: validateTaskStatus(task.status),
             priority: validatePriority(task.priority)
@@ -354,12 +336,35 @@ const WorkstationDashboard = () => {
         }
       }
       
+      // Final fallback: check if tasks have workstation name directly
+      console.log("Checking for tasks with workstation name:", workstation.name);
+      
+      const { data: directTasks, error: directTasksError } = await supabase
+        .from('tasks')
+        .select('*')
+        .ilike('workstation', workstation.name)
+        .eq('status', 'TODO');
+        
+      if (directTasksError) {
+        console.error("Error fetching direct tasks:", directTasksError);
+      } else if (directTasks && directTasks.length > 0) {
+        console.log("Found tasks with workstation directly:", directTasks.length);
+        
+        const validatedTasks: Task[] = directTasks.map(task => ({
+          ...task,
+          status: validateTaskStatus(task.status),
+          priority: validatePriority(task.priority)
+        }));
+        
+        allTasks.push(...validatedTasks);
+      }
+      
       // Remove any duplicate tasks
       const uniqueTasks = Array.from(
         new Map(allTasks.map(task => [task.id, task])).values()
       );
       
-      console.log("Total unique tasks found:", uniqueTasks.length);
+      console.log("Total unique tasks found for", workstation.name, ":", uniqueTasks.length);
       
       // Get project and phase info for each task
       const tasksWithDetails = await enrichTasksWithProjectInfo(uniqueTasks);
@@ -371,14 +376,10 @@ const WorkstationDashboard = () => {
         return dateA.getTime() - dateB.getTime();
       });
       
-      setTasks(sortedTasks);
-      
-      // Update stats based on these tasks
-      updateStats(sortedTasks);
-      setLoading(false);
+      return sortedTasks;
     } catch (error: any) {
       console.error('Error fetching workstation tasks:', error);
-      setLoading(false);
+      return [];
     }
   };
 
@@ -418,7 +419,7 @@ const WorkstationDashboard = () => {
   };
 
   // Helper function to update task statistics
-  const updateStats = async (tasksData: Task[]) => {
+  const calculateStats = async (tasksData: Task[], workstation: Workstation) => {
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -435,79 +436,150 @@ const WorkstationDashboard = () => {
       let todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
       
-      if (userWorkstations.length > 0) {
-        // Get workstation IDs and names for queries
-        const workstationIds = userWorkstations.map(ws => ws.id);
-        const workstationNames = userWorkstations.map(ws => ws.name);
+      // Tasks completed today via task_workstation_links
+      const { data: completedLinkedTasks, error: linkError } = await supabase
+        .from('task_workstation_links')
+        .select(`
+          task_id,
+          tasks!inner (id, completed_at, status)
+        `)
+        .eq('workstation_id', workstation.id)
+        .gte('tasks.completed_at', todayStart.toISOString())
+        .eq('tasks.status', 'COMPLETED');
         
-        // Tasks completed today via task_workstation_links
-        const { data: completedLinkedTasks, error: linkError } = await supabase
-          .from('task_workstation_links')
-          .select(`
-            task_id,
-            tasks!inner (id, completed_at, status)
-          `)
-          .in('workstation_id', workstationIds)
-          .gte('tasks.completed_at', todayStart.toISOString())
-          .eq('tasks.status', 'COMPLETED');
-          
-        if (linkError) {
-          console.error("Error fetching completed linked tasks:", linkError);
-        } else {
-          console.log("Completed linked tasks:", completedLinkedTasks?.length || 0);
-          // Count unique tasks from the linked results
-          if (completedLinkedTasks) {
-            const uniqueCompletedIds = new Set<string>();
-            completedLinkedTasks.forEach(item => {
-              if (item.tasks && item.task_id) {
-                uniqueCompletedIds.add(item.task_id);
-              }
-            });
-            completedToday += uniqueCompletedIds.size;
-          }
-        }
-        
-        // Tasks completed today via workstation name
-        const { data: completedNamedTasks, error: namedError } = await supabase
-          .from('tasks')
-          .select('id')
-          .in('workstation', workstationNames)
-          .eq('status', 'COMPLETED')
-          .gte('completed_at', todayStart.toISOString());
-          
-        if (namedError) {
-          console.error("Error fetching completed tasks by name:", namedError);
-        } else {
-          console.log("Completed tasks by workstation name:", completedNamedTasks?.length || 0);
-          // Add to our count, accounting for any potential overlap with the previous query
-          const completedNamedIds = new Set(completedNamedTasks?.map(task => task.id) || []);
-          const linkTaskIds = new Set(completedLinkedTasks?.map(item => item.task_id) || []);
-          
-          // Count tasks that are in completedNamedIds but not in linkTaskIds
-          if (completedNamedTasks) {
-            completedNamedTasks.forEach(task => {
-              if (!linkTaskIds.has(task.id)) {
-                completedToday++;
-              }
-            });
-          }
+      if (linkError) {
+        console.error("Error fetching completed linked tasks:", linkError);
+      } else {
+        console.log("Completed linked tasks:", completedLinkedTasks?.length || 0);
+        // Count unique tasks from the linked results
+        if (completedLinkedTasks) {
+          const uniqueCompletedIds = new Set<string>();
+          completedLinkedTasks.forEach(item => {
+            if (item.tasks && item.task_id) {
+              uniqueCompletedIds.add(item.task_id);
+            }
+          });
+          completedToday += uniqueCompletedIds.size;
         }
       }
       
-      console.log(`Stats update: ${tasksData.length} total tasks, ${completedToday} completed today, ${dueToday} due today`);
+      // Tasks completed today via workstation name
+      const { data: completedNamedTasks, error: namedError } = await supabase
+        .from('tasks')
+        .select('id')
+        .ilike('workstation', workstation.name)
+        .eq('status', 'COMPLETED')
+        .gte('completed_at', todayStart.toISOString());
+        
+      if (namedError) {
+        console.error("Error fetching completed tasks by name:", namedError);
+      } else {
+        console.log("Completed tasks by workstation name:", completedNamedTasks?.length || 0);
+        // Add to our count, accounting for any potential overlap with the previous query
+        const completedNamedIds = new Set(completedNamedTasks?.map(task => task.id) || []);
+        const linkTaskIds = new Set(completedLinkedTasks?.map(item => item.task_id) || []);
+        
+        // Count tasks that are in completedNamedIds but not in linkTaskIds
+        if (completedNamedTasks) {
+          completedNamedTasks.forEach(task => {
+            if (!linkTaskIds.has(task.id)) {
+              completedToday++;
+            }
+          });
+        }
+      }
       
-      setStats({
+      console.log(`Stats update for ${workstation.name}: ${tasksData.length} total tasks, ${completedToday} completed today, ${dueToday} due today`);
+      
+      return {
         totalTasks: tasksData.length,
         completedToday,
         inProgress: 0,
         dueToday
-      });
+      };
     } catch (error) {
       console.error('Error updating task stats:', error);
+      return {
+        totalTasks: tasksData.length,
+        completedToday: 0,
+        inProgress: 0,
+        dueToday: 0
+      };
     }
   };
 
-  if (loading) {
+  // Render a single workstation section
+  const renderWorkstationSection = (data: WorkstationData) => {
+    return (
+      <div key={data.workstation.id} className="border rounded-lg p-4 bg-white shadow mb-4">
+        <h2 className="text-xl font-bold mb-4 text-primary">
+          {data.workstation.name}
+        </h2>
+        
+        <div className="grid grid-cols-4 gap-4">
+          {/* Tasks column - takes up 3/4 of the space */}
+          <div className="col-span-3">
+            {data.tasks.length === 0 ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>No Tasks</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p>There are no pending tasks assigned to this workstation.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <TaskList 
+                tasks={data.tasks} 
+                title={`To Do Tasks (${data.tasks.length})`}
+              />
+            )}
+          </div>
+          
+          {/* Stats column - takes up 1/4 of the space */}
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="p-6 flex items-center">
+                <div className="bg-blue-100 p-3 rounded-full mr-4">
+                  <Package className="text-blue-700 h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">TODO Tasks</p>
+                  <h3 className="text-2xl font-bold">{data.stats.totalTasks}</h3>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-6 flex items-center">
+                <div className="bg-green-100 p-3 rounded-full mr-4">
+                  <Check className="text-green-700 h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Completed Today</p>
+                  <h3 className="text-2xl font-bold">{data.stats.completedToday}</h3>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-6 flex items-center">
+                <div className="bg-amber-100 p-3 rounded-full mr-4">
+                  <Calendar className="text-amber-700 h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Due Today</p>
+                  <h3 className="text-2xl font-bold">{data.stats.dueToday}</h3>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  if (initialLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
@@ -516,7 +588,12 @@ const WorkstationDashboard = () => {
   }
 
   return (
-    <div className="p-4 bg-gray-50 min-h-screen">
+    <div className="p-4 bg-gray-50 min-h-screen relative">
+      {refreshing && (
+        <div className="absolute top-2 right-2">
+          <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
+        </div>
+      )}
       <div className="max-w-full mx-auto">
         <div className="flex justify-between items-center mb-4">
           <div>
@@ -543,7 +620,7 @@ const WorkstationDashboard = () => {
           </div>
         </div>
 
-        {/* Main content - two column layout */}
+        {/* Main content */}
         {userWorkstations.length === 0 ? (
           <Card>
             <CardHeader>
@@ -554,91 +631,8 @@ const WorkstationDashboard = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-4 gap-4">
-            {/* Tasks column - takes up 3/4 of the space */}
-            <div className="col-span-3">
-              {tasks.length === 0 ? (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>No Tasks</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p>There are no pending tasks assigned to your workstation(s).</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <TaskList 
-                  tasks={tasks} 
-                  title="To Do Tasks" 
-                />
-              )}
-            </div>
-            
-            {/* Stats column - takes up 1/4 of the space */}
-            <div className="space-y-4">
-              <Card>
-                <CardContent className="p-6 flex items-center">
-                  <div className="bg-blue-100 p-3 rounded-full mr-4">
-                    <Package className="text-blue-700 h-6 w-6" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">TODO Tasks</p>
-                    <h3 className="text-2xl font-bold">{stats.totalTasks}</h3>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardContent className="p-6 flex items-center">
-                  <div className="bg-green-100 p-3 rounded-full mr-4">
-                    <Check className="text-green-700 h-6 w-6" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Completed Today</p>
-                    <h3 className="text-2xl font-bold">{stats.completedToday}</h3>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardContent className="p-6 flex items-center">
-                  <div className="bg-amber-100 p-3 rounded-full mr-4">
-                    <Calendar className="text-amber-700 h-6 w-6" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Due Today</p>
-                    <h3 className="text-2xl font-bold">{stats.dueToday}</h3>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardContent className="p-6 flex items-center">
-                  <div className="bg-purple-100 p-3 rounded-full mr-4">
-                    <ArrowUpRight className="text-purple-700 h-6 w-6" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Workstations</p>
-                    <h3 className="text-2xl font-bold">{userWorkstations.length}</h3>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {userWorkstations.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Assigned Workstations</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="space-y-1">
-                      {userWorkstations.map(ws => (
-                        <li key={ws.id} className="text-sm font-medium text-gray-700">{ws.name}</li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
+          <div className={`grid ${workstationData.length > 1 ? 'grid-cols-1' : 'grid-cols-1'} gap-6`}>
+            {workstationData.map(renderWorkstationSection)}
           </div>
         )}
       </div>
