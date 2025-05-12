@@ -31,7 +31,7 @@ const AUTO_REFRESH_INTERVAL = 60000; // Refresh every 60 seconds
 interface WorkstationData {
   workstation: Workstation;
   tasks: Task[];
-  inProgressTasks: Task[]; // New property for in-progress tasks
+  inProgressTasks: Task[]; // Separate property for in-progress tasks
   stats: {
     totalTasks: number;
     completedToday: number;
@@ -184,20 +184,20 @@ const WorkstationDashboard = () => {
         // Process all workstations
         const workstationDataArray: WorkstationData[] = [];
         for (const workstation of workstations) {
-          const tasks = await fetchTasksForWorkstation(workstation);
+          const allTasks = await fetchTasksForWorkstation(workstation);
           
-          // Separate in-progress tasks
-          const inProgressTasks = tasks.filter(task => task.status === 'IN_PROGRESS');
-          const otherTasks = tasks.filter(task => task.status !== 'IN_PROGRESS');
+          // Explicitly separate in-progress tasks and todo tasks
+          const inProgressTasks = allTasks.filter(task => task.status === 'IN_PROGRESS');
+          const todoTasks = allTasks.filter(task => task.status === 'TODO');
           
-          const stats = await calculateStats(tasks, workstation);
+          console.log(`Workstation ${workstation.name} has ${inProgressTasks.length} in-progress tasks and ${todoTasks.length} todo tasks`);
+          
+          const stats = await calculateStats(allTasks, workstation);
           
           workstationDataArray.push({
             workstation,
-            // Use other tasks as the main task list
-            tasks: otherTasks,
-            // Store in-progress tasks separately
-            inProgressTasks,
+            tasks: todoTasks,  // Only TODO tasks go here
+            inProgressTasks,   // IN_PROGRESS tasks are stored separately
             stats: {
               ...stats,
               inProgress: inProgressTasks.length
@@ -253,13 +253,14 @@ const WorkstationDashboard = () => {
           
           if (!standardTask) continue;
           
+          // IMPORTANT CHANGE: Fetch both TODO and IN_PROGRESS tasks
           try {
             // Search for active tasks containing this standard task number or name
             const { data: matchingTasks, error: matchingTasksError } = await supabase
               .from('tasks')
               .select('*')
               .ilike('title', `%${standardTask.task_number}%`)
-              .eq('status', 'TODO');
+              .in('status', ['TODO', 'IN_PROGRESS']);
               
             if (matchingTasksError) {
               console.error("Error fetching matching tasks:", matchingTasksError);
@@ -287,7 +288,7 @@ const WorkstationDashboard = () => {
               .from('tasks')
               .select('*')
               .ilike('title', `%${standardTask.task_name}%`)
-              .eq('status', 'TODO');
+              .in('status', ['TODO', 'IN_PROGRESS']);
               
             if (matchingNameTasksError) {
               console.error("Error fetching tasks by name:", matchingNameTasksError);
@@ -325,12 +326,12 @@ const WorkstationDashboard = () => {
         
         const taskIds = taskLinks.map(link => link.task_id);
         
-        // Get the actual tasks
+        // Get the actual tasks - IMPORTANT CHANGE: get both TODO and IN_PROGRESS
         const { data: linkedTasks, error: linkedTasksError } = await supabase
           .from('tasks')
           .select('*')
           .in('id', taskIds)
-          .eq('status', 'TODO');
+          .in('status', ['TODO', 'IN_PROGRESS']);
           
         if (linkedTasksError) {
           console.error("Error fetching linked tasks:", linkedTasksError);
@@ -350,11 +351,12 @@ const WorkstationDashboard = () => {
       // Final fallback: check if tasks have workstation name directly
       console.log("Checking for tasks with workstation name:", workstation.name);
       
+      // IMPORTANT CHANGE: get both TODO and IN_PROGRESS tasks
       const { data: directTasks, error: directTasksError } = await supabase
         .from('tasks')
         .select('*')
         .ilike('workstation', workstation.name)
-        .eq('status', 'TODO');
+        .in('status', ['TODO', 'IN_PROGRESS']);
         
       if (directTasksError) {
         console.error("Error fetching direct tasks:", directTasksError);
