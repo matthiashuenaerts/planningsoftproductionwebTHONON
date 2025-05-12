@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -106,6 +107,9 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
             const links = await workstationService.getWorkstationsForStandardTask(task.id);
             const workstationName = links && links.length > 0 ? links[0].name : '';
             
+            const projectValue = form.getValues('project_value') || 50;
+            const duration = task.time_coefficient ? Math.round(task.time_coefficient * projectValue) : 60;
+            
             taskItems.push({
               id: task.task_number,
               name: task.task_name,
@@ -113,7 +117,8 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
               selected: true,
               task_number: task.task_number,
               standard_task_id: task.id,
-              time_coefficient: task.time_coefficient
+              time_coefficient: task.time_coefficient,
+              duration: duration
             });
           } catch (error) {
             console.error(`Error fetching workstation for task ${task.task_name}:`, error);
@@ -172,17 +177,16 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
   const handleAddCustomTask = () => {
     if (newTaskName.trim()) {
       const nextId = (tasks.length + 1).toString().padStart(2, '0');
-      const newTask = { 
+      const projectValue = form.getValues('project_value') || 50;
+      
+      const newTask: TaskItem = { 
         id: nextId, 
         name: newTaskName.trim(), 
         workstation: newTaskWorkstation.trim(),
         selected: true,
         time_coefficient: 1.0, // Default coefficient for custom tasks
+        duration: projectValue // For custom tasks, duration equals project value (coefficient of 1.0)
       };
-      
-      // Calculate duration for the new task
-      const projectValue = form.getValues('project_value') || 50;
-      newTask.duration = calculateTaskDuration(newTask, projectValue);
       
       setTasks([...tasks, newTask]);
       setNewTaskName('');
