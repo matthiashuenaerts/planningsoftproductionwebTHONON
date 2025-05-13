@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { format, addDays, isWithinInterval, startOfDay, endOfDay, startOfWeek } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -131,6 +132,76 @@ const ProjectItem = ({ project, team, dateRange, onExtendProject }) => {
   );
 };
 
+// Define the multi-day project item component
+const MultiDayProjectItem = ({ project, team, startDay, endDay, totalDays, onExtendProject }) => {
+  const [{ isDragging }, drag] = useDrag(() => ({
+    type: 'PROJECT',
+    item: { id: project.id, team: team },
+    collect: (monitor) => ({
+      isDragging: !!monitor.isDragging()
+    })
+  }));
+
+  const teamColor = team ? teamColors[team] : teamColors.unassigned;
+  
+  const handleExtend = (e, direction) => {
+    e.stopPropagation();
+    onExtendProject(project.id, direction);
+  };
+
+  // Calculate width based on days (spanning from startDay to endDay)
+  const spanDays = Math.min(totalDays - startDay, endDay - startDay + 1);
+  const widthClass = spanDays > 1 ? `col-span-${spanDays}` : '';
+
+  return (
+    <div
+      ref={drag}
+      className={cn(
+        "p-2 mb-2 rounded border cursor-move relative",
+        teamColor.bg,
+        teamColor.border,
+        isDragging ? "opacity-50" : "opacity-100",
+        widthClass
+      )}
+      style={{ 
+        opacity: isDragging ? 0.5 : 1,
+        gridColumn: `span ${spanDays}`
+      }}
+    >
+      <div className="flex justify-between items-start">
+        <div>
+          <div className={cn("font-medium", teamColor.text)}>{project.name}</div>
+          <div className="text-xs text-gray-600">{project.client}</div>
+        </div>
+        <Badge className={getStatusColor(project.status)}>{project.status}</Badge>
+      </div>
+      
+      <div className="text-xs mt-1 text-gray-600">
+        {spanDays} day{spanDays > 1 ? 's' : ''}
+      </div>
+      
+      <div className="flex justify-between mt-2">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="p-1 h-6 w-6"
+          onClick={(e) => handleExtend(e, 'start')}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="p-1 h-6 w-6"
+          onClick={(e) => handleExtend(e, 'end')}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 // Define the day cell component
 const DayCell = ({ date, team, projects, assignments, onDropProject, handleDayClick, handleExtendProject }) => {
   const [{ isOver }, drop] = useDrop(() => ({
@@ -150,19 +221,13 @@ const DayCell = ({ date, team, projects, assignments, onDropProject, handleDayCl
   }));
 
   const dateStr = format(date, 'yyyy-MM-dd');
-  const projectsForDay = projects.filter(project => {
+  
+  // Projects that start on this day
+  const projectsStartingToday = projects.filter(project => {
     const assignment = assignments.find(a => a.project_id === project.id && a.team === team);
     if (!assignment) return false;
     
-    // Check if this date is within the assignment date range
-    const startAssignmentDate = new Date(assignment.start_date);
-    const endAssignmentDate = new Date(startAssignmentDate);
-    endAssignmentDate.setDate(endAssignmentDate.getDate() + (assignment.duration - 1));
-    
-    return isWithinInterval(date, {
-      start: startOfDay(startAssignmentDate),
-      end: endOfDay(endAssignmentDate)
-    });
+    return format(new Date(assignment.start_date), 'yyyy-MM-dd') === dateStr;
   });
 
   return (
@@ -178,7 +243,7 @@ const DayCell = ({ date, team, projects, assignments, onDropProject, handleDayCl
       </div>
       
       <div className="overflow-y-auto max-h-[300px]">
-        {projectsForDay.map(project => {
+        {projectsStartingToday.map(project => {
           const assignment = assignments.find(a => a.project_id === project.id && a.team === team);
           if (!assignment) return null;
           
@@ -194,19 +259,15 @@ const DayCell = ({ date, team, projects, assignments, onDropProject, handleDayCl
             currentDate.setDate(currentDate.getDate() + 1);
           }
           
-          // Only show the project on the start date to avoid duplicates
-          if (format(date, 'yyyy-MM-dd') === format(startAssignmentDate, 'yyyy-MM-dd')) {
-            return (
-              <ProjectItem 
-                key={project.id} 
-                project={project} 
-                team={team} 
-                dateRange={dateRange}
-                onExtendProject={handleExtendProject}
-              />
-            );
-          }
-          return null;
+          return (
+            <ProjectItem 
+              key={project.id} 
+              project={project} 
+              team={team} 
+              dateRange={dateRange}
+              onExtendProject={handleExtendProject}
+            />
+          );
         })}
       </div>
     </div>
@@ -218,6 +279,43 @@ const TeamCalendar = ({ team, startDate, projects, assignments, onDropProject, h
   const teamColor = teamColors[team];
   const weekDates = Array.from({ length: 7 }, (_, i) => addDays(startDate, i));
 
+  // Generate map of project spans
+  const projectSpans = {};
+  
+  assignments
+    .filter(a => a.team === team)
+    .forEach(assignment => {
+      const startDay = new Date(assignment.start_date);
+      const endDay = new Date(startDay);
+      endDay.setDate(endDay.getDate() + (assignment.duration - 1));
+      
+      // Only consider projects that fall within our week view
+      const firstDayOfWeek = startDate;
+      const lastDayOfWeek = addDays(startDate, 6);
+      
+      if (
+        (startDay <= lastDayOfWeek && endDay >= firstDayOfWeek) // Project overlaps with our week
+      ) {
+        // Find the start day index in our week (0-6)
+        const startDayIndex = Math.max(
+          0, 
+          Math.floor((startDay.getTime() - firstDayOfWeek.getTime()) / (24 * 60 * 60 * 1000))
+        );
+        
+        // Find the end day index in our week (0-6)
+        const endDayIndex = Math.min(
+          6, 
+          Math.floor((endDay.getTime() - firstDayOfWeek.getTime()) / (24 * 60 * 60 * 1000))
+        );
+        
+        projectSpans[assignment.project_id] = {
+          startDayIndex, 
+          endDayIndex,
+          assignment
+        };
+      }
+    });
+
   return (
     <div className="mb-6">
       <div className={cn("p-3 rounded-t-lg", teamColor.header)}>
@@ -228,6 +326,7 @@ const TeamCalendar = ({ team, startDate, projects, assignments, onDropProject, h
         "grid grid-cols-7 gap-1 p-2 rounded-b-lg border-b border-x",
         teamColor.border
       )}>
+        {/* First render normal day cells */}
         {weekDates.map((date, i) => (
           <DayCell 
             key={i} 
@@ -240,6 +339,46 @@ const TeamCalendar = ({ team, startDate, projects, assignments, onDropProject, h
             handleExtendProject={handleExtendProject}
           />
         ))}
+      </div>
+      
+      {/* Then render multi-day projects in a separate grid */}
+      <div className="mt-2">
+        <div className={cn(
+          "grid grid-cols-7 gap-1 p-2 rounded-lg border",
+          teamColor.border
+        )}>
+          {Object.entries(projectSpans).map(([projectId, span]) => {
+            const { startDayIndex, endDayIndex, assignment } = span as any;
+            const project = projects.find(p => p.id === projectId);
+            
+            if (!project) return null;
+            
+            // Create empty cells for preceding days
+            const precedingCells = Array.from({ length: startDayIndex }).map((_, i) => (
+              <div key={`empty-${projectId}-${i}`} className="invisible"></div>
+            ));
+            
+            // Calculate the date range for this project
+            const firstDayOfWeek = startDate;
+            const startAssignmentDate = new Date(assignment.start_date);
+            const endAssignmentDate = new Date(startAssignmentDate);
+            endAssignmentDate.setDate(endAssignmentDate.getDate() + (assignment.duration - 1));
+            
+            return (
+              <React.Fragment key={`multi-${projectId}`}>
+                {precedingCells}
+                <MultiDayProjectItem 
+                  project={project}
+                  team={team}
+                  startDay={startDayIndex}
+                  endDay={endDayIndex}
+                  totalDays={7}
+                  onExtendProject={handleExtendProject}
+                />
+              </React.Fragment>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
