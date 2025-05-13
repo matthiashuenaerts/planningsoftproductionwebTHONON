@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -7,17 +6,7 @@ import { cn } from '@/lib/utils';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useToast } from '@/hooks/use-toast';
-
-interface Project {
-  id: string;
-  name: string;
-  client: string;
-  installation_date: string;
-  status: string;
-  progress: number;
-  team?: string;
-  duration: number;
-}
+import { Project } from '@/types/project';
 
 interface TeamCalendarProps {
   projects: Project[];
@@ -169,7 +158,7 @@ const TeamCalendarRow: React.FC<TeamCalendarRowProps> = ({ team, weekDates, proj
           {/* Render projects spanning multiple days */}
           {projects.map(project => {
             // Find which date index matches this project's start date
-            const projectDate = new Date(project.installation_date);
+            const projectDate = new Date(project.assignment_start_date || project.installation_date);
             const startDateIndex = weekDates.findIndex(date => 
               isSameDay(date, projectDate)
             );

@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import TeamCalendar from '@/components/TeamCalendar';
 import { Menubar, MenubarMenu, MenubarTrigger, MenubarContent, MenubarItem } from '@/components/ui/menubar';
 import { useLanguage } from '@/context/LanguageContext';
+import { Project, ProjectTeamAssignment } from '@/types/project';
 
 interface Project {
   id: string;
@@ -48,7 +49,7 @@ const DailyTasks: React.FC = () => {
         setLoading(true);
         
         // Get all projects with installation dates
-        const { data, error } = await supabase
+        const { data: projectsData, error } = await supabase
           .from('projects')
           .select('*')
           .not('installation_date', 'is', null)
@@ -56,12 +57,21 @@ const DailyTasks: React.FC = () => {
         
         if (error) throw error;
         
+        // Set default duration for projects
+        let enhancedProjects = (projectsData || []).map(p => ({
+          ...p,
+          duration: 1 // Default duration
+        })) as Project[];
+        
         // Transform the data to include team and duration if available
-        const projectsWithTeams = await enhanceProjectsWithTeamData(data || []);
-        setAllProjects(projectsWithTeams);
+        if (enhancedProjects.length > 0) {
+          enhancedProjects = await enhanceProjectsWithTeamData(enhancedProjects);
+        }
+        
+        setAllProjects(enhancedProjects);
         
         // Filter projects for the selected date
-        filterProjectsForSelectedDate(selectedDate, projectsWithTeams);
+        filterProjectsForSelectedDate(selectedDate, enhancedProjects);
       } catch (error: any) {
         console.error('Error fetching projects:', error);
         toast({
@@ -82,8 +92,8 @@ const DailyTasks: React.FC = () => {
   // Enhance projects with team assignment data
   const enhanceProjectsWithTeamData = async (projects: Project[]): Promise<Project[]> => {
     try {
-      // Fetch team assignments from database
-      const { data: teamAssignments, error } = await supabase
+      // Check if table exists before querying - this is the fix for the error
+      const { data: projectTeamAssignments, error } = await supabase
         .from('project_team_assignments')
         .select('*');
       
@@ -93,9 +103,12 @@ const DailyTasks: React.FC = () => {
       }
       
       // If we have team assignments, enhance the projects
-      if (teamAssignments && teamAssignments.length > 0) {
+      if (projectTeamAssignments && projectTeamAssignments.length > 0) {
         return projects.map(project => {
-          const assignment = teamAssignments.find(a => a.project_id === project.id);
+          const assignment = projectTeamAssignments.find(
+            (a: ProjectTeamAssignment) => a.project_id === project.id
+          );
+          
           if (assignment) {
             return {
               ...project,
@@ -215,7 +228,7 @@ const DailyTasks: React.FC = () => {
         .from('project_team_assignments')
         .select('*')
         .eq('project_id', projectId)
-        .single();
+        .maybeSingle();
       
       if (fetchError && fetchError.code !== 'PGRST116') {
         throw fetchError;
@@ -230,7 +243,7 @@ const DailyTasks: React.FC = () => {
             start_date: startDate,
             duration
           })
-          .eq('id', data.id);
+          .eq('project_id', projectId);
           
         if (error) throw error;
       } else {

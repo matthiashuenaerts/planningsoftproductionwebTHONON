@@ -1,7 +1,8 @@
+
 import React from 'react';
 import { format } from 'date-fns';
 import { Schedule } from '@/services/planningService';
-import { TaskScheduleItem } from './TaskScheduleItem';
+import TaskScheduleItem from './TaskScheduleItem';
 
 interface PlanningTimelineProps {
   selectedDate: Date | undefined;
@@ -27,14 +28,15 @@ const PlanningTimeline = ({
   }
 
   const renderScheduleItem = (schedule: Schedule, index: number) => {
-    const isCompleted = schedule.task?.status === 'COMPLETED';
+    // Updated to check if task and status properties exist
+    const isCompleted = schedule.task && schedule.task.status === 'COMPLETED';
     
     return (
       <TaskScheduleItem
         key={schedule.id || index}
         title={schedule.title}
         time={`${formatTime(schedule.start_time)} - ${formatTime(schedule.end_time)}`}
-        isCompleted={isCompleted}
+        isCompleted={isCompleted || false}
         description={schedule.description || ''}
       />
     );
@@ -48,7 +50,7 @@ const PlanningTimeline = ({
       
       {schedules.map((schedule, index) => (
         <div key={schedule.id || index} className="mb-4">
-          <h3 className="font-semibold">{schedule.employee?.name || 'Unknown Employee'}</h3>
+          <h3 className="font-semibold">{schedule.employee ? schedule.employee.name : 'Unknown Employee'}</h3>
           <div>
             {renderScheduleItem(schedule, index)}
           </div>
