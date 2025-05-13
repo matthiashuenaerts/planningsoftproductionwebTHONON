@@ -33,7 +33,16 @@ const Login: React.FC = () => {
         
         // Set session expiration to 24 hours from now
         const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
-        const sessionData = { ...employee, expires: expiresAt };
+        
+        // Ensure the role is of the correct type
+        const role = employee.role as "admin" | "manager" | "worker" | "workstation";
+        
+        // Create sessionData with the correct role type
+        const sessionData = { 
+          ...employee,
+          role,
+          expires: expiresAt 
+        };
         
         // Store in localStorage
         localStorage.setItem('employeeSession', JSON.stringify(sessionData));
