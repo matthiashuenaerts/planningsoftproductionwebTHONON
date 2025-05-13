@@ -1,17 +1,18 @@
-
 import React, { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { format, addDays, parseISO } from 'date-fns';
-import { projectService } from '@/services/dataService';
-import { Button } from '@/components/ui/button';
 import { CalendarDays, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Button } from '@/components/ui/button';
+import TeamCalendar from '@/components/TeamCalendar';
+import { Menubar, MenubarMenu, MenubarTrigger, MenubarContent, MenubarItem } from '@/components/ui/menubar';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface Project {
   id: string;
@@ -20,17 +21,20 @@ interface Project {
   installation_date: string;
   status: string;
   progress: number;
+  team?: string;
+  duration: number;
   [key: string]: any;
 }
 
 const DailyTasks: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
-  const [calendarView, setCalendarView] = useState<'month' | 'week'>('month');
+  const [calendarView, setCalendarView] = useState<'month' | 'week' | 'team'>('month');
   const [projects, setProjects] = useState<Project[]>([]);
   const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [weekStart, setWeekStart] = useState<Date>(new Date());
   const { toast } = useToast();
+  const { t } = useLanguage();
 
   // Format the selected date to match our date format in the database
   const formattedSelectedDate = selectedDate 
@@ -52,10 +56,12 @@ const DailyTasks: React.FC = () => {
         
         if (error) throw error;
         
-        setAllProjects(data || []);
+        // Transform the data to include team and duration if available
+        const projectsWithTeams = await enhanceProjectsWithTeamData(data || []);
+        setAllProjects(projectsWithTeams);
         
         // Filter projects for the selected date
-        filterProjectsForSelectedDate(selectedDate, data || []);
+        filterProjectsForSelectedDate(selectedDate, projectsWithTeams);
       } catch (error: any) {
         console.error('Error fetching projects:', error);
         toast({
@@ -73,6 +79,52 @@ const DailyTasks: React.FC = () => {
     fetchAllProjects();
   }, [toast]);
 
+  // Enhance projects with team assignment data
+  const enhanceProjectsWithTeamData = async (projects: Project[]): Promise<Project[]> => {
+    try {
+      // Fetch team assignments from database
+      const { data: teamAssignments, error } = await supabase
+        .from('project_team_assignments')
+        .select('*');
+      
+      if (error) {
+        console.error('Error fetching team assignments:', error);
+        return projects;
+      }
+      
+      // If we have team assignments, enhance the projects
+      if (teamAssignments && teamAssignments.length > 0) {
+        return projects.map(project => {
+          const assignment = teamAssignments.find(a => a.project_id === project.id);
+          if (assignment) {
+            return {
+              ...project,
+              team: assignment.team,
+              duration: assignment.duration || 1,
+              assignment_start_date: assignment.start_date
+            };
+          }
+          return {
+            ...project,
+            duration: 1 // Default duration for projects without assignment
+          };
+        });
+      }
+      
+      // Add default duration if no assignments
+      return projects.map(project => ({
+        ...project,
+        duration: 1
+      }));
+    } catch (error) {
+      console.error('Error enhancing projects with team data:', error);
+      return projects.map(project => ({
+        ...project,
+        duration: 1
+      }));
+    }
+  };
+
   // Filter projects when selected date changes
   useEffect(() => {
     filterProjectsForSelectedDate(selectedDate, allProjects);
@@ -87,6 +139,16 @@ const DailyTasks: React.FC = () => {
     
     const dateString = date.toISOString().split('T')[0];
     const filtered = allProjectsData.filter(project => {
+      // If project has a team assignment, check if it falls within the project duration
+      if (project.team && project.assignment_start_date) {
+        const startDate = new Date(project.assignment_start_date);
+        const endDate = addDays(startDate, project.duration - 1);
+        const checkDate = new Date(dateString);
+        
+        return checkDate >= startDate && checkDate <= endDate;
+      }
+      
+      // Otherwise use the original installation date
       return project.installation_date === dateString;
     });
     
@@ -117,7 +179,18 @@ const DailyTasks: React.FC = () => {
   // Get projects for a specific date
   const getProjectsForDate = (date: Date) => {
     const dateString = date.toISOString().split('T')[0];
-    return allProjects.filter(project => project.installation_date === dateString);
+    return allProjects.filter(project => {
+      // Check if project is scheduled for this date based on team assignment
+      if (project.team && project.assignment_start_date) {
+        const startDate = new Date(project.assignment_start_date);
+        const endDate = addDays(startDate, project.duration - 1);
+        
+        return date >= startDate && date <= endDate;
+      }
+      
+      // Fall back to installation date
+      return project.installation_date === dateString;
+    });
   };
 
   // Helper function to format date
@@ -132,6 +205,63 @@ const DailyTasks: React.FC = () => {
   // Handler for clicking project
   const handleProjectClick = (projectId: string) => {
     window.location.href = `/projects/${projectId}`;
+  };
+
+  // Assign project to team
+  const handleAssignTeam = async (projectId: string, team: string, startDate: string, duration: number) => {
+    try {
+      // Check if there's an existing assignment
+      const { data, error: fetchError } = await supabase
+        .from('project_team_assignments')
+        .select('*')
+        .eq('project_id', projectId)
+        .single();
+      
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        throw fetchError;
+      }
+      
+      if (data) {
+        // Update existing assignment
+        const { error } = await supabase
+          .from('project_team_assignments')
+          .update({
+            team,
+            start_date: startDate,
+            duration
+          })
+          .eq('id', data.id);
+          
+        if (error) throw error;
+      } else {
+        // Create new assignment
+        const { error } = await supabase
+          .from('project_team_assignments')
+          .insert({
+            project_id: projectId,
+            team,
+            start_date: startDate,
+            duration
+          });
+          
+        if (error) throw error;
+      }
+      
+      // Refresh projects data
+      const updatedProjects = await enhanceProjectsWithTeamData(allProjects);
+      setAllProjects(updatedProjects);
+      filterProjectsForSelectedDate(selectedDate, updatedProjects);
+      
+      return true;
+    } catch (error: any) {
+      console.error('Error assigning team:', error);
+      toast({
+        title: "Error",
+        description: `Failed to assign team: ${error.message}`,
+        variant: "destructive"
+      });
+      throw error;
+    }
   };
 
   // Function to get status color
@@ -158,7 +288,7 @@ const DailyTasks: React.FC = () => {
       <div className="ml-64 w-full p-6">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold">Installation Calendar</h1>
+            <h1 className="text-2xl font-bold">{t.common.installationCalendar}</h1>
             
             <div className="flex mt-4 md:mt-0 space-x-2">
               <Button 
@@ -172,6 +302,12 @@ const DailyTasks: React.FC = () => {
                 onClick={() => setCalendarView('week')}
               >
                 Week View
+              </Button>
+              <Button 
+                variant={calendarView === 'team' ? 'default' : 'outline'}
+                onClick={() => setCalendarView('team')}
+              >
+                Team Planning
               </Button>
             </div>
           </div>
@@ -248,6 +384,19 @@ const DailyTasks: React.FC = () => {
                                   <span className="font-medium">{formatDate(project.installation_date)}</span>
                                 </div>
                                 
+                                {project.team && (
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Team:</span>
+                                    <Badge className={cn(
+                                      project.team === 'green' ? 'bg-green-100 text-green-800' :
+                                      project.team === 'blue' ? 'bg-blue-100 text-blue-800' :
+                                      'bg-orange-100 text-orange-800'
+                                    )}>
+                                      {project.team} team
+                                    </Badge>
+                                  </div>
+                                )}
+                                
                                 <div className="space-y-1">
                                   <div className="flex justify-between text-sm">
                                     <span className="text-muted-foreground">Progress:</span>
@@ -286,7 +435,7 @@ const DailyTasks: React.FC = () => {
                 </Card>
               </div>
             </div>
-          ) : (
+          ) : calendarView === 'week' ? (
             <Card>
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-center">
@@ -354,6 +503,16 @@ const DailyTasks: React.FC = () => {
                               >
                                 <div className="font-medium truncate">{project.name}</div>
                                 <div className="text-muted-foreground truncate">{project.client}</div>
+                                {project.team && (
+                                  <Badge className={cn(
+                                    "mt-1",
+                                    project.team === 'green' ? 'bg-green-100 text-green-800' :
+                                    project.team === 'blue' ? 'bg-blue-100 text-blue-800' :
+                                    'bg-orange-100 text-orange-800'
+                                  )}>
+                                    {project.team}
+                                  </Badge>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -374,6 +533,13 @@ const DailyTasks: React.FC = () => {
                 )}
               </CardContent>
             </Card>
+          ) : (
+            // Team planning view
+            <TeamCalendar 
+              projects={allProjects}
+              selectedDate={selectedDate || new Date()}
+              onAssignTeam={handleAssignTeam}
+            />
           )}
           
           <div className="mt-6">
@@ -421,10 +587,20 @@ const DailyTasks: React.FC = () => {
                                   <div className="text-sm text-muted-foreground">{project.client}</div>
                                 </div>
                                 
-                                <div className="mt-2 sm:mt-0">
+                                <div className="mt-2 sm:mt-0 flex items-center space-x-2">
                                   <Badge className={getStatusColor(project.status)}>
                                     {project.status}
                                   </Badge>
+                                  
+                                  {project.team && (
+                                    <Badge className={cn(
+                                      project.team === 'green' ? 'bg-green-100 text-green-800' :
+                                      project.team === 'blue' ? 'bg-blue-100 text-blue-800' :
+                                      'bg-orange-100 text-orange-800'
+                                    )}>
+                                      {project.team} team
+                                    </Badge>
+                                  )}
                                 </div>
                               </div>
                             </div>

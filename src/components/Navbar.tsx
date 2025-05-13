@@ -47,7 +47,7 @@ const Navbar: React.FC = () => {
         <NavItem 
           to="/daily-tasks" 
           icon={<Calendar className="w-5 h-5" />} 
-          title={t.common.dailyTasks} 
+          title={t.common.installationCalendar} 
           active={location.pathname === '/daily-tasks'} 
         />
         <NavItem 
