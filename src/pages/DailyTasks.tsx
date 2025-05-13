@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import InstallationTeamCalendar from '@/components/InstallationTeamCalendar';
 
 interface Project {
   id: string;
@@ -25,7 +26,7 @@ interface Project {
 
 const DailyTasks: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
-  const [calendarView, setCalendarView] = useState<'month' | 'week'>('month');
+  const [displayMode, setDisplayMode] = useState<'calendar' | 'teams'>('calendar');
   const [projects, setProjects] = useState<Project[]>([]);
   const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -162,21 +163,21 @@ const DailyTasks: React.FC = () => {
             
             <div className="flex mt-4 md:mt-0 space-x-2">
               <Button 
-                variant={calendarView === 'month' ? 'default' : 'outline'}
-                onClick={() => setCalendarView('month')}
+                variant={displayMode === 'calendar' ? 'default' : 'outline'}
+                onClick={() => setDisplayMode('calendar')}
               >
-                Month View
+                Calendar View
               </Button>
               <Button 
-                variant={calendarView === 'week' ? 'default' : 'outline'}
-                onClick={() => setCalendarView('week')}
+                variant={displayMode === 'teams' ? 'default' : 'outline'}
+                onClick={() => setDisplayMode('teams')}
               >
-                Week View
+                Team Planner
               </Button>
             </div>
           </div>
           
-          {calendarView === 'month' ? (
+          {displayMode === 'calendar' ? (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <Card>
                 <CardHeader>
@@ -287,93 +288,7 @@ const DailyTasks: React.FC = () => {
               </div>
             </div>
           ) : (
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex justify-between items-center">
-                  <CardTitle>Week View</CardTitle>
-                  <div className="flex items-center space-x-2">
-                    <Button variant="outline" size="icon" onClick={prevWeek}>
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="text-sm font-medium">
-                      {format(weekStart, 'MMM d')} - {format(addDays(weekStart, 6), 'MMM d, yyyy')}
-                    </span>
-                    <Button variant="outline" size="icon" onClick={nextWeek}>
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                <CardDescription>
-                  Calendar view of project installations for the week
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-7 gap-2 mt-2">
-                  {weekDates.map((date, i) => (
-                    <div key={i} className="text-center">
-                      <div className="mb-1 font-medium text-sm">{format(date, 'EEE')}</div>
-                      <div 
-                        className={cn(
-                          "p-2 rounded-full w-8 h-8 mx-auto flex items-center justify-center text-sm",
-                          new Date().toDateString() === date.toDateString() 
-                            ? "bg-primary text-primary-foreground" 
-                            : "text-gray-700"
-                        )}
-                      >
-                        {format(date, 'd')}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                <div className="grid grid-cols-7 gap-2 mt-2">
-                  {weekDates.map((date, i) => {
-                    const dateProjects = getProjectsForDate(date);
-                    return (
-                      <div 
-                        key={i} 
-                        className={cn(
-                          "border rounded-md min-h-[120px] p-1",
-                          dateProjects.length > 0 ? "bg-primary/5" : "",
-                          selectedDate && date.toDateString() === selectedDate.toDateString() 
-                            ? "ring-2 ring-primary" 
-                            : ""
-                        )}
-                        onClick={() => setSelectedDate(date)}
-                      >
-                        {dateProjects.length > 0 ? (
-                          <div className="space-y-1">
-                            {dateProjects.map(project => (
-                              <div 
-                                key={project.id}
-                                className="p-1 rounded bg-white shadow-sm border text-xs cursor-pointer hover:bg-gray-50"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleProjectClick(project.id);
-                                }}
-                              >
-                                <div className="font-medium truncate">{project.name}</div>
-                                <div className="text-muted-foreground truncate">{project.client}</div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="h-full flex items-center justify-center text-muted-foreground text-xs">
-                            No installations
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                
-                {loading && (
-                  <div className="flex justify-center mt-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <InstallationTeamCalendar projects={allProjects} />
           )}
           
           <div className="mt-6">
