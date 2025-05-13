@@ -57,7 +57,7 @@ const Settings: React.FC = () => {
                 className="mt-6"
                 onClick={() => window.history.back()}
               >
-                Cancel
+                Go Back
               </Button>
             </div>
           </div>
@@ -73,7 +73,7 @@ const Settings: React.FC = () => {
       </div>
       <div className="ml-64 w-full p-6">
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-2xl font-bold mb-6">Settings</h1>
+          <h1 className="text-2xl font-bold mb-6">System Settings</h1>
           
           <Tabs defaultValue="workstations">
             <TabsList className="mb-4">

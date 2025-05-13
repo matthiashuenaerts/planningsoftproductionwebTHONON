@@ -271,44 +271,6 @@ export type Database = {
           },
         ]
       }
-      project_team_assignments: {
-        Row: {
-          created_at: string
-          duration: number
-          id: string
-          project_id: string
-          start_date: string
-          team: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          duration?: number
-          id?: string
-          project_id: string
-          start_date: string
-          team: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          duration?: number
-          id?: string
-          project_id?: string
-          start_date?: string
-          team?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_team_assignments_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: true
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       projects: {
         Row: {
           client: string
@@ -583,30 +545,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      user_preferences: {
-        Row: {
-          created_at: string
-          id: string
-          language: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          language?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          language?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
       }
       work_hours: {
         Row: {

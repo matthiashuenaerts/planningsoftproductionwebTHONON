@@ -1,122 +1,93 @@
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AppProvider } from "./context/AppContext";
+import { AuthProvider } from "./context/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+import Index from "./pages/Index";
+import Login from "./pages/Login";
+import Projects from "./pages/Projects";
+import ProjectDetails from "./pages/ProjectDetails";
+import Workstations from "./pages/Workstations";
+import DailyTasks from "./pages/DailyTasks";
+import PersonalTasks from "./pages/PersonalTasks";
+import Planning from "./pages/Planning";
+import Settings from "./pages/Settings";
+import Orders from "./pages/Orders";
+import ProjectOrders from "./pages/ProjectOrders";
+import NotFound from "./pages/NotFound";
 
-import { useState, useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom';
-import './App.css';
-import { AuthProvider } from './context/AuthContext';
-import ProtectedRoute from './components/ProtectedRoute';
-import Login from './pages/Login';
-import NotFound from './pages/NotFound';
-import Index from './pages/Index';
-import Loading from './components/Loading';
-import { Toaster } from './components/ui/toaster';
+const queryClient = new QueryClient();
 
-// Lazy load components
-const Dashboard = lazy(() => import('./pages/Index'));
-const Projects = lazy(() => import('./pages/Projects'));
-const ProjectDetails = lazy(() => import('./pages/ProjectDetails'));
-const Orders = lazy(() => import('./pages/Orders'));
-const ProjectOrders = lazy(() => import('./pages/ProjectOrders'));
-const Settings = lazy(() => import('./pages/Settings'));
-const Workstations = lazy(() => import('./pages/Workstations'));
-const Planning = lazy(() => import('./pages/Planning'));
-const PersonalTasks = lazy(() => import('./pages/PersonalTasks'));
-const DailyTasks = lazy(() => import('./pages/DailyTasks'));
-const InstallCalendar = lazy(() => import('./pages/InstallCalendar'));
-
-function App() {
-  const [initialized, setInitialized] = useState(false);
-
-  useEffect(() => {
-    // Any initialization logic here
-    setInitialized(true);
-  }, []);
-
-  if (!initialized) {
-    return <Loading />;
-  }
-
-  return (
+const App = () => (
+  <QueryClientProvider client={queryClient}>
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-          <Route path="/projects" element={
-            <ProtectedRoute>
-              <Suspense fallback={<Loading />}>
-                <Projects />
-              </Suspense>
-            </ProtectedRoute>
-          } />
-          <Route path="/projects/:id" element={
-            <ProtectedRoute>
-              <Suspense fallback={<Loading />}>
-                <ProjectDetails />
-              </Suspense>
-            </ProtectedRoute>
-          } />
-          <Route path="/orders" element={
-            <ProtectedRoute>
-              <Suspense fallback={<Loading />}>
-                <Orders />
-              </Suspense>
-            </ProtectedRoute>
-          } />
-          <Route path="/projects/:id/orders" element={
-            <ProtectedRoute>
-              <Suspense fallback={<Loading />}>
-                <ProjectOrders />
-              </Suspense>
-            </ProtectedRoute>
-          } />
-          <Route path="/settings" element={
-            <ProtectedRoute>
-              <Suspense fallback={<Loading />}>
-                <Settings />
-              </Suspense>
-            </ProtectedRoute>
-          } />
-          <Route path="/workstations" element={
-            <ProtectedRoute>
-              <Suspense fallback={<Loading />}>
-                <Workstations />
-              </Suspense>
-            </ProtectedRoute>
-          } />
-          <Route path="/planning" element={
-            <ProtectedRoute>
-              <Suspense fallback={<Loading />}>
-                <Planning />
-              </Suspense>
-            </ProtectedRoute>
-          } />
-          <Route path="/personal-tasks" element={
-            <ProtectedRoute>
-              <Suspense fallback={<Loading />}>
-                <PersonalTasks />
-              </Suspense>
-            </ProtectedRoute>
-          } />
-          <Route path="/daily-tasks" element={
-            <ProtectedRoute>
-              <Suspense fallback={<Loading />}>
-                <DailyTasks />
-              </Suspense>
-            </ProtectedRoute>
-          } />
-          <Route path="/install-calendar" element={
-            <ProtectedRoute>
-              <Suspense fallback={<Loading />}>
-                <InstallCalendar />
-              </Suspense>
-            </ProtectedRoute>
-          } />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-        <Toaster />
+        <AppProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/" element={
+                <ProtectedRoute>
+                  <Index />
+                </ProtectedRoute>
+              } />
+              <Route path="/projects" element={
+                <ProtectedRoute>
+                  <Projects />
+                </ProtectedRoute>
+              } />
+              <Route path="/projects/:projectId" element={
+                <ProtectedRoute>
+                  <ProjectDetails />
+                </ProtectedRoute>
+              } />
+              <Route path="/workstations" element={
+                <ProtectedRoute>
+                  <Workstations />
+                </ProtectedRoute>
+              } />
+              <Route path="/personal-tasks" element={
+                <ProtectedRoute>
+                  <PersonalTasks />
+                </ProtectedRoute>
+              } />
+              <Route path="/daily-tasks" element={
+                <ProtectedRoute>
+                  <DailyTasks />
+                </ProtectedRoute>
+              } />
+              <Route path="/planning" element={
+                <ProtectedRoute>
+                  <Planning />
+                </ProtectedRoute>
+              } />
+              <Route path="/settings" element={
+                <ProtectedRoute>
+                  <Settings />
+                </ProtectedRoute>
+              } />
+              <Route path="/orders" element={
+                <ProtectedRoute>
+                  <Orders />
+                </ProtectedRoute>
+              } />
+              <Route path="/projects/:projectId/orders" element={
+                <ProtectedRoute>
+                  <ProjectOrders />
+                </ProtectedRoute>
+              } />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </TooltipProvider>
+        </AppProvider>
       </AuthProvider>
     </BrowserRouter>
-  );
-}
+  </QueryClientProvider>
+);
 
 export default App;

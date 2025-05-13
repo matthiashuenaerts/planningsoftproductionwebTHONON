@@ -1,75 +1,118 @@
 
 import React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { Calendar, LogOut, LayoutDashboard, List, Settings as SettingsIcon, Package, CalendarClock, CalendarCheck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import {
-  HomeIcon,
-  PackageIcon,
-  ShoppingCartIcon,
-  CalendarDaysIcon,
-  ClipboardIcon,
-  ListTodo as ListTodoIcon,
-  Settings2 as Settings2Icon,
-  CircuitBoard as CircuitBoardIcon,
-  CalendarClock as CalendarClockIcon,
-} from 'lucide-react';
-import { Button } from "@/components/ui/button"
 
-export default function Navbar() {
+const Navbar: React.FC = () => {
+  const location = useLocation();
   const { currentEmployee, logout } = useAuth();
-  const { pathname } = useLocation();
-
   const isAdmin = currentEmployee?.role === 'admin';
 
-  const menuItems = [
-    { name: "Dashboard", path: '/', icon: <HomeIcon className="w-5 h-5" /> },
-    { name: "Projects", path: '/projects', icon: <PackageIcon className="w-5 h-5" /> },
-    { name: "Orders", path: '/orders', icon: <ShoppingCartIcon className="w-5 h-5" /> },
-    { name: "Daily Tasks", path: '/daily-tasks', icon: <CalendarDaysIcon className="w-5 h-5" /> },
-    { name: "Installation Calendar", path: '/install-calendar', icon: <CalendarClockIcon className="w-5 h-5" /> },
-    { name: "Planning", path: '/planning', icon: <ClipboardIcon className="w-5 h-5" /> },
-    { name: "Personal Tasks", path: '/personal-tasks', icon: <ListTodoIcon className="w-5 h-5" /> },
-    { name: "Workstations", path: '/workstations', icon: <CircuitBoardIcon className="w-5 h-5" /> },
-    { name: "Settings", path: '/settings', icon: <Settings2Icon className="w-5 h-5" /> },
-  ];
-
   return (
-    <div className="flex flex-col h-full p-4 bg-sidebar">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-primary">WorkFlow Pro</h1>
-        <p className="text-sm text-muted-foreground">Navigation</p>
+    <nav className="bg-sidebar text-sidebar-foreground p-4 flex flex-col h-full">
+      <div className="flex items-center justify-center mb-8 mt-2">
+        <h1 className="text-xl font-bold">PhaseFlow</h1>
       </div>
-      <nav className="flex-grow">
-        <ul className="space-y-2">
-          {menuItems.map((item) => (
-            <li key={item.name}>
-              <NavLink
-                to={item.path}
-                className={({ isActive }) =>
-                  `flex items-center px-4 py-2 rounded-md text-sm font-medium
-                  ${isActive
-                      ? 'bg-secondary text-secondary-foreground'
-                      : 'text-foreground hover:bg-secondary hover:text-secondary-foreground'
-                  }`
-                }
-              >
-                {item.icon}
-                <span className="ml-3">{item.name}</span>
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      
+      <div className="flex flex-col space-y-2 flex-1">
+        <NavItem 
+          to="/" 
+          icon={<LayoutDashboard className="w-5 h-5" />} 
+          title="Dashboard" 
+          active={location.pathname === '/'} 
+        />
+        <NavItem 
+          to="/projects" 
+          icon={<List className="w-5 h-5" />} 
+          title="Projects" 
+          active={location.pathname === '/projects' || location.pathname.includes('/projects/')} 
+        />
+        <NavItem 
+          to="/workstations" 
+          icon={<List className="w-5 h-5" />} 
+          title="Workstations" 
+          active={location.pathname === '/workstations'} 
+        />
+        <NavItem 
+          to="/personal-tasks" 
+          icon={<CalendarCheck className="w-5 h-5" />} 
+          title="Personal Tasks" 
+          active={location.pathname === '/personal-tasks'} 
+        />
+        <NavItem 
+          to="/daily-tasks" 
+          icon={<Calendar className="w-5 h-5" />} 
+          title="Daily Tasks" 
+          active={location.pathname === '/daily-tasks'} 
+        />
+        <NavItem 
+          to="/planning" 
+          icon={<CalendarClock className="w-5 h-5" />} 
+          title="Day Planning" 
+          active={location.pathname === '/planning'} 
+        />
+        <NavItem 
+          to="/orders" 
+          icon={<Package className="w-5 h-5" />} 
+          title="Orders" 
+          active={location.pathname === '/orders' || location.pathname.includes('/orders/')} 
+        />
+        {isAdmin && (
+          <NavItem 
+            to="/settings" 
+            icon={<SettingsIcon className="w-5 h-5" />} 
+            title="Settings" 
+            active={location.pathname === '/settings'} 
+          />
+        )}
+      </div>
+      
       <div className="mt-auto">
-        <div className="border-t border-t-muted pt-4">
-          <p className="text-sm text-muted-foreground mb-1">
-            {currentEmployee?.name || 'User Name'}
-          </p>
-          <Button variant="ghost" className="w-full justify-start" onClick={logout}>
-            Logout
-          </Button>
+        <div className="flex items-center gap-3 px-3 py-2 rounded-md">
+          <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center">
+            <span className="text-sm font-medium">
+              {currentEmployee?.name.charAt(0) || 'U'}
+            </span>
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium">{currentEmployee?.name || 'User'}</p>
+            <p className="text-xs text-sidebar-foreground/70">{currentEmployee?.role || 'Employee'}</p>
+          </div>
+          <button 
+            onClick={logout} 
+            className="p-2 rounded-md hover:bg-sidebar-accent/50 transition-colors"
+            title="Logout"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
-    </div>
+    </nav>
   );
+};
+
+interface NavItemProps {
+  to: string;
+  icon: React.ReactNode;
+  title: string;
+  active: boolean;
 }
+
+const NavItem: React.FC<NavItemProps> = ({ to, icon, title, active }) => {
+  return (
+    <Link
+      to={to}
+      className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
+        active 
+          ? "bg-sidebar-accent text-sidebar-accent-foreground" 
+          : "hover:bg-sidebar-accent/50"
+      }`}
+    >
+      {icon}
+      <span className="text-sm font-medium">{title}</span>
+    </Link>
+  );
+};
+
+export default Navbar;
