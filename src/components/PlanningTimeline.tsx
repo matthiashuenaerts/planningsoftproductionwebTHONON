@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { format } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 import { Schedule } from '@/services/planningService';
 import TaskScheduleItem from './TaskScheduleItem';
 
@@ -20,7 +20,30 @@ const PlanningTimeline = ({
   isAdmin = false // Default to false
 }: PlanningTimelineProps) => {
   const formatTime = (time: string) => {
-    return format(new Date(`2000-01-01T${time}`), 'HH:mm');
+    try {
+      // Check if time is a valid time string first
+      if (!time || typeof time !== 'string') {
+        console.error('Invalid time provided to formatTime:', time);
+        return 'Invalid time';
+      }
+      
+      // If the time string doesn't include date info, prepend a date
+      const timeWithDate = time.includes('T') 
+        ? time 
+        : `2000-01-01T${time}`;
+      
+      const date = parseISO(timeWithDate);
+      
+      if (!isValid(date)) {
+        console.error('Invalid date produced from time:', time);
+        return 'Invalid time';
+      }
+      
+      return format(date, 'HH:mm');
+    } catch (error) {
+      console.error('Error formatting time:', error, time);
+      return 'Invalid time';
+    }
   };
 
   if (isLoading) {
