@@ -1,122 +1,76 @@
-
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Calendar, LogOut, LayoutDashboard, List, Settings as SettingsIcon, Package, CalendarClock, CalendarCheck } from 'lucide-react';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
-import LanguageSwitcher from '@/components/LanguageSwitcher';
+import {
+  HomeIcon,
+  PackageIcon,
+  ShoppingCartIcon,
+  CalendarDaysIcon,
+  ClipboardIcon,
+  ListTodo as ListTodoIcon,
+  Settings2 as Settings2Icon,
+  CircuitBoard as CircuitBoardIcon,
+  CalendarClock as CalendarClockIcon,
+} from 'lucide-react';
+import { Button } from "@/components/ui/button"
 
-const Navbar: React.FC = () => {
-  const location = useLocation();
+export default function Navbar() {
   const { currentEmployee, logout } = useAuth();
   const { t } = useLanguage();
+  const { pathname } = useLocation();
+
   const isAdmin = currentEmployee?.role === 'admin';
 
+  const menuItems = [
+    { name: t.common.dashboard, path: '/', icon: <HomeIcon className="w-5 h-5" /> },
+    { name: t.common.projects, path: '/projects', icon: <PackageIcon className="w-5 h-5" /> },
+    { name: t.common.orders, path: '/orders', icon: <ShoppingCartIcon className="w-5 h-5" /> },
+    { name: t.common.dailyTasks, path: '/daily-tasks', icon: <CalendarDaysIcon className="w-5 h-5" /> },
+    { name: t.common.installationCalendar, path: '/install-calendar', icon: <CalendarClockIcon className="w-5 h-5" /> },
+    { name: t.common.planning, path: '/planning', icon: <ClipboardIcon className="w-5 h-5" /> },
+    { name: t.common.personalTasks, path: '/personal-tasks', icon: <ListTodoIcon className="w-5 h-5" /> },
+    { name: t.common.workstations, path: '/workstations', icon: <CircuitBoardIcon className="w-5 h-5" /> },
+    { name: t.common.settings, path: '/settings', icon: <Settings2Icon className="w-5 h-5" /> },
+  ];
+
   return (
-    <nav className="bg-sidebar text-sidebar-foreground p-4 flex flex-col h-full">
-      <div className="flex items-center justify-between mb-8 mt-2">
-        <h1 className="text-xl font-bold">PhaseFlow</h1>
-        <LanguageSwitcher />
+    <div className="flex flex-col h-full p-4 bg-sidebar">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-primary">{t.common.companyName}</h1>
+        <p className="text-sm text-muted-foreground">{t.common.navigation}</p>
       </div>
-      
-      <div className="flex flex-col space-y-2 flex-1">
-        <NavItem 
-          to="/" 
-          icon={<LayoutDashboard className="w-5 h-5" />} 
-          title={t.common.dashboard} 
-          active={location.pathname === '/'} 
-        />
-        <NavItem 
-          to="/projects" 
-          icon={<List className="w-5 h-5" />} 
-          title={t.common.projects} 
-          active={location.pathname === '/projects' || location.pathname.includes('/projects/')} 
-        />
-        <NavItem 
-          to="/workstations" 
-          icon={<List className="w-5 h-5" />} 
-          title={t.common.workstations} 
-          active={location.pathname === '/workstations'} 
-        />
-        <NavItem 
-          to="/personal-tasks" 
-          icon={<CalendarCheck className="w-5 h-5" />} 
-          title={t.common.personalTasks} 
-          active={location.pathname === '/personal-tasks'} 
-        />
-        <NavItem 
-          to="/daily-tasks" 
-          icon={<Calendar className="w-5 h-5" />} 
-          title={t.common.installationCalendar} 
-          active={location.pathname === '/daily-tasks'} 
-        />
-        <NavItem 
-          to="/planning" 
-          icon={<CalendarClock className="w-5 h-5" />} 
-          title={t.common.dayPlanning} 
-          active={location.pathname === '/planning'} 
-        />
-        <NavItem 
-          to="/orders" 
-          icon={<Package className="w-5 h-5" />} 
-          title={t.common.orders} 
-          active={location.pathname === '/orders' || location.pathname.includes('/orders/')} 
-        />
-        {isAdmin && (
-          <NavItem 
-            to="/settings" 
-            icon={<SettingsIcon className="w-5 h-5" />} 
-            title={t.common.settings} 
-            active={location.pathname === '/settings'} 
-          />
-        )}
-      </div>
-      
+      <nav className="flex-grow">
+        <ul className="space-y-2">
+          {menuItems.map((item) => (
+            <li key={item.name}>
+              <NavLink
+                to={item.path}
+                className={({ isActive }) =>
+                  `flex items-center px-4 py-2 rounded-md text-sm font-medium
+                  ${isActive
+                      ? 'bg-secondary text-secondary-foreground'
+                      : 'text-foreground hover:bg-secondary hover:text-secondary-foreground'
+                  }`
+                }
+              >
+                {item.icon}
+                <span className="ml-3">{item.name}</span>
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+      </nav>
       <div className="mt-auto">
-        <div className="flex items-center gap-3 px-3 py-2 rounded-md">
-          <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center">
-            <span className="text-sm font-medium">
-              {currentEmployee?.name.charAt(0) || 'U'}
-            </span>
-          </div>
-          <div className="flex-1">
-            <p className="text-sm font-medium">{currentEmployee?.name || 'User'}</p>
-            <p className="text-xs text-sidebar-foreground/70">{currentEmployee?.role || 'Employee'}</p>
-          </div>
-          <button 
-            onClick={logout} 
-            className="p-2 rounded-md hover:bg-sidebar-accent/50 transition-colors"
-            title={t.common.logout}
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
+        <div className="border-t border-t-muted pt-4">
+          <p className="text-sm text-muted-foreground mb-1">
+            {currentEmployee?.name || 'User Name'}
+          </p>
+          <Button variant="ghost" className="w-full justify-start" onClick={logout}>
+            {t.common.logout}
+          </Button>
         </div>
       </div>
-    </nav>
+    </div>
   );
-};
-
-interface NavItemProps {
-  to: string;
-  icon: React.ReactNode;
-  title: string;
-  active: boolean;
 }
-
-const NavItem: React.FC<NavItemProps> = ({ to, icon, title, active }) => {
-  return (
-    <Link
-      to={to}
-      className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
-        active 
-          ? "bg-sidebar-accent text-sidebar-accent-foreground" 
-          : "hover:bg-sidebar-accent/50"
-      }`}
-    >
-      {icon}
-      <span className="text-sm font-medium">{title}</span>
-    </Link>
-  );
-};
-
-export default Navbar;
