@@ -37,9 +37,9 @@ function App() {
   }
 
   return (
-    <LanguageProvider>
+    <BrowserRouter>
       <AuthProvider>
-        <BrowserRouter>
+        <LanguageProvider>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
@@ -115,10 +115,10 @@ function App() {
             } />
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </BrowserRouter>
-        <Toaster />
+          <Toaster />
+        </LanguageProvider>
       </AuthProvider>
-    </LanguageProvider>
+    </BrowserRouter>
   );
 }
 
