@@ -1,62 +1,46 @@
 
 import React, { useState, useEffect } from 'react';
-import Navbar from '@/components/Navbar';
 import { useParams, useNavigate } from 'react-router-dom';
+import Navbar from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  Plus,
-  ArrowLeft,
-  ChevronDown,
-  ChevronUp,
+import { 
+  Plus, 
+  ChevronDown, 
+  ChevronUp, 
+  FileText,
   Paperclip,
-  Trash2,
-  UploadCloud,
-  FileText
+  Trash2
 } from 'lucide-react';
+import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { orderService } from '@/services/orderService';
 import { projectService } from '@/services/dataService';
-import { useAuth } from '@/context/AuthContext';
-import NewOrderModal from '@/components/NewOrderModal';
 import { Order, OrderItem, OrderAttachment } from '@/types/order';
-import { format } from 'date-fns';
+import NewOrderModal from '@/components/NewOrderModal';
+import OrderAttachmentUploader from '@/components/OrderAttachmentUploader';
 
 const ProjectOrders: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { currentEmployee } = useAuth();
+  
   const [loading, setLoading] = useState(true);
-  const [projectName, setProjectName] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
+  const [project, setProject] = useState<any>(null);
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [orderItems, setOrderItems] = useState<Record<string, OrderItem[]>>({});
   const [orderAttachments, setOrderAttachments] = useState<Record<string, OrderAttachment[]>>({});
-  const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
-  const [uploadingForOrder, setUploadingForOrder] = useState<string | null>(null);
-  const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
-  
-  const isAdmin = currentEmployee?.role === 'admin';
+  const [showNewOrderModal, setShowNewOrderModal] = useState(false);
   
   useEffect(() => {
     if (!projectId) {
@@ -68,27 +52,21 @@ const ProjectOrders: React.FC = () => {
       try {
         setLoading(true);
         
-        // Load project details
-        const project = await projectService.getById(projectId);
-        if (!project) {
-          toast({
-            title: "Error",
-            description: "Project not found",
-            variant: "destructive"
-          });
-          navigate('/projects');
-          return;
+        // Get project details
+        const projectData = await projectService.getById(projectId);
+        if (!projectData) {
+          throw new Error("Project not found");
         }
+        setProject(projectData);
         
-        setProjectName(project.name);
-        
-        // Load orders for the project
+        // Get all orders for this project
         const ordersData = await orderService.getByProject(projectId);
         setOrders(ordersData);
       } catch (error: any) {
+        console.error("Error loading project orders:", error);
         toast({
           title: "Error",
-          description: `Failed to load data: ${error.message}`,
+          description: `Failed to load project data: ${error.message}`,
           variant: "destructive"
         });
       } finally {
@@ -118,11 +96,7 @@ const ProjectOrders: React.FC = () => {
         }));
         
         // Also load attachments
-        const attachments = await orderService.getOrderAttachments(orderId);
-        setOrderAttachments(prev => ({
-          ...prev,
-          [orderId]: attachments
-        }));
+        await loadOrderAttachments(orderId);
       } catch (error: any) {
         toast({
           title: "Error",
@@ -131,6 +105,72 @@ const ProjectOrders: React.FC = () => {
         });
       }
     }
+  };
+  
+  const loadOrderAttachments = async (orderId: string) => {
+    try {
+      const attachments = await orderService.getOrderAttachments(orderId);
+      setOrderAttachments(prev => ({
+        ...prev,
+        [orderId]: attachments
+      }));
+    } catch (error: any) {
+      console.error("Error loading attachments:", error);
+    }
+  };
+  
+  const handleDeleteAttachment = async (attachmentId: string, orderId: string) => {
+    try {
+      await orderService.deleteOrderAttachment(attachmentId);
+      
+      // Update the UI by removing the deleted attachment
+      setOrderAttachments(prev => ({
+        ...prev,
+        [orderId]: prev[orderId].filter(att => att.id !== attachmentId)
+      }));
+      
+      toast({
+        title: "Success",
+        description: "Attachment deleted successfully",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: `Failed to delete attachment: ${error.message}`,
+        variant: "destructive"
+      });
+    }
+  };
+  
+  const handleDeleteOrder = async (orderId: string) => {
+    if (window.confirm("Are you sure you want to delete this order? This action cannot be undone.")) {
+      try {
+        await orderService.deleteOrder(orderId);
+        
+        // Update UI
+        setOrders(prev => prev.filter(order => order.id !== orderId));
+        setExpandedOrder(null);
+        
+        toast({
+          title: "Success",
+          description: "Order deleted successfully",
+        });
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: `Failed to delete order: ${error.message}`,
+          variant: "destructive"
+        });
+      }
+    }
+  };
+  
+  const handleAttachmentUploadSuccess = async (orderId: string) => {
+    await loadOrderAttachments(orderId);
+    toast({
+      title: "Success",
+      description: "Attachment uploaded successfully",
+    });
   };
   
   const formatDate = (dateString: string) => {
@@ -156,133 +196,6 @@ const ProjectOrders: React.FC = () => {
     }
   };
   
-  const updateOrderStatus = async (orderId: string, newStatus: Order['status']) => {
-    try {
-      await orderService.updateOrderStatus(orderId, newStatus);
-      
-      // Update local state
-      setOrders(prev => 
-        prev.map(order => 
-          order.id === orderId ? { ...order, status: newStatus } : order
-        )
-      );
-      
-      toast({
-        title: "Success",
-        description: `Order status updated to ${newStatus}`,
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: `Failed to update order status: ${error.message}`,
-        variant: "destructive"
-      });
-    }
-  };
-  
-  const refreshOrders = async () => {
-    try {
-      if (!projectId) return;
-      
-      const ordersData = await orderService.getByProject(projectId);
-      setOrders(ordersData);
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: `Failed to refresh orders: ${error.message}`,
-        variant: "destructive"
-      });
-    }
-  };
-  
-  const handleFileUpload = async (orderId: string, e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    
-    setUploadingForOrder(orderId);
-    
-    try {
-      const file = files[0];
-      const attachment = await orderService.uploadOrderAttachment(orderId, file);
-      
-      // Update local state
-      setOrderAttachments(prev => ({
-        ...prev,
-        [orderId]: [...(prev[orderId] || []), attachment]
-      }));
-      
-      toast({
-        title: "Success",
-        description: "File uploaded successfully",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: `Failed to upload file: ${error.message}`,
-        variant: "destructive"
-      });
-    } finally {
-      setUploadingForOrder(null);
-      
-      // Reset the file input
-      e.target.value = '';
-    }
-  };
-  
-  const handleDeleteAttachment = async (orderId: string, attachmentId: string) => {
-    if (!confirm("Are you sure you want to delete this attachment?")) return;
-    
-    try {
-      await orderService.deleteOrderAttachment(attachmentId);
-      
-      // Update local state
-      setOrderAttachments(prev => ({
-        ...prev,
-        [orderId]: prev[orderId].filter(attachment => attachment.id !== attachmentId)
-      }));
-      
-      toast({
-        title: "Success",
-        description: "Attachment deleted successfully",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: `Failed to delete attachment: ${error.message}`,
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleDeleteOrder = async () => {
-    if (!orderToDelete) return;
-    
-    try {
-      await orderService.deleteOrder(orderToDelete);
-      
-      // Update local state
-      setOrders(prev => prev.filter(order => order.id !== orderToDelete));
-      
-      // If the deleted order was expanded, close it
-      if (expandedOrder === orderToDelete) {
-        setExpandedOrder(null);
-      }
-      
-      toast({
-        title: "Success",
-        description: "Order deleted successfully",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: `Failed to delete order: ${error.message}`,
-        variant: "destructive"
-      });
-    } finally {
-      setOrderToDelete(null);
-    }
-  };
-  
   if (loading) {
     return (
       <div className="flex min-h-screen">
@@ -295,7 +208,7 @@ const ProjectOrders: React.FC = () => {
       </div>
     );
   }
-  
+
   return (
     <div className="flex min-h-screen">
       <div className="w-64 bg-sidebar fixed top-0 bottom-0">
@@ -303,30 +216,36 @@ const ProjectOrders: React.FC = () => {
       </div>
       <div className="ml-64 w-full p-6">
         <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <Button 
-                variant="outline" 
-                onClick={() => navigate(`/projects`)}
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Projects
-              </Button>
-              <h1 className="text-2xl font-bold">Orders for {projectName}</h1>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold mb-1">{project?.name} - Orders</h1>
+              <p className="text-muted-foreground">{project?.client}</p>
             </div>
-            
-            {isAdmin && (
-              <Button
-                onClick={() => setIsNewOrderModalOpen(true)}
-                className="flex items-center gap-1"
+            <div className="mt-4 sm:mt-0">
+              <Button 
+                onClick={() => setShowNewOrderModal(true)}
               >
-                <Plus className="h-4 w-4" /> Add Order
+                <Plus className="mr-2 h-4 w-4" />
+                New Order
               </Button>
-            )}
+              <Button
+                variant="outline"
+                className="ml-2"
+                onClick={() => navigate(`/projects/${projectId}`)}
+              >
+                Back to Project
+              </Button>
+            </div>
           </div>
           
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle>Project Orders</CardTitle>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span>Project Orders</span>
+                <span className="text-sm font-normal">
+                  {orders.length} {orders.length === 1 ? 'order' : 'orders'}
+                </span>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {orders.length > 0 ? (
@@ -339,7 +258,7 @@ const ProjectOrders: React.FC = () => {
                         <TableHead>Order Date</TableHead>
                         <TableHead>Expected Delivery</TableHead>
                         <TableHead>Status</TableHead>
-                        {isAdmin && <TableHead className="text-right">Actions</TableHead>}
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -374,132 +293,101 @@ const ProjectOrders: React.FC = () => {
                             <TableCell onClick={() => toggleOrderExpansion(order.id)}>
                               {getStatusBadge(order.status)}
                             </TableCell>
-                            {isAdmin && (
-                              <TableCell className="text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                  <select 
-                                    value={order.status}
-                                    onChange={(e) => updateOrderStatus(order.id, e.target.value as Order['status'])}
-                                    className="p-1 text-xs rounded border border-gray-300"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <option value="pending">Pending</option>
-                                    <option value="delivered">Delivered</option>
-                                    <option value="delayed">Delayed</option>
-                                    <option value="canceled">Canceled</option>
-                                  </select>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setOrderToDelete(order.id);
-                                    }}
-                                    className="h-8 w-8 text-destructive hover:text-destructive/80"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            )}
+                            <TableCell className="text-right">
+                              <Button 
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeleteOrder(order.id)}
+                                className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-100"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
                           </TableRow>
                           
                           {expandedOrder === order.id && (
                             <TableRow>
-                              <TableCell colSpan={isAdmin ? 6 : 5} className="p-0">
-                                <div className="bg-muted/30 p-3">
-                                  <h4 className="font-medium mb-2">Order Items</h4>
-                                  {orderItems[order.id] ? (
-                                    <Table>
-                                      <TableHeader>
-                                        <TableRow>
-                                          <TableHead>Description</TableHead>
-                                          <TableHead className="text-right">Quantity</TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                        {orderItems[order.id].map((item) => (
-                                          <TableRow key={item.id}>
-                                            <TableCell>{item.description}</TableCell>
-                                            <TableCell className="text-right">{item.quantity}</TableCell>
+                              <TableCell colSpan={6} className="p-0">
+                                <div className="bg-muted/30 p-4">
+                                  <div className="mb-4">
+                                    <h4 className="font-medium mb-2">Order Items</h4>
+                                    {!orderItems[order.id] ? (
+                                      <div className="flex justify-center p-4">
+                                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+                                      </div>
+                                    ) : orderItems[order.id].length === 0 ? (
+                                      <p className="text-sm text-muted-foreground">No items in this order.</p>
+                                    ) : (
+                                      <Table>
+                                        <TableHeader>
+                                          <TableRow>
+                                            <TableHead>Description</TableHead>
+                                            <TableHead className="text-right">Quantity</TableHead>
+                                            <TableHead className="text-right">Unit Price</TableHead>
+                                            <TableHead className="text-right">Total</TableHead>
                                           </TableRow>
-                                        ))}
-                                      </TableBody>
-                                    </Table>
-                                  ) : (
-                                    <div className="flex justify-center p-4">
-                                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
-                                    </div>
-                                  )}
+                                        </TableHeader>
+                                        <TableBody>
+                                          {orderItems[order.id].map((item) => (
+                                            <TableRow key={item.id}>
+                                              <TableCell>{item.description}</TableCell>
+                                              <TableCell className="text-right">{item.quantity}</TableCell>
+                                              <TableCell className="text-right">€{item.unit_price.toFixed(2)}</TableCell>
+                                              <TableCell className="text-right">€{item.total_price.toFixed(2)}</TableCell>
+                                            </TableRow>
+                                          ))}
+                                        </TableBody>
+                                      </Table>
+                                    )}
+                                  </div>
                                   
-                                  <div className="mt-6">
+                                  <div className="mt-4">
                                     <div className="flex justify-between items-center mb-2">
                                       <h4 className="font-medium">Attachments</h4>
-                                      <div className="relative">
-                                        <input
-                                          type="file"
-                                          id={`file-upload-${order.id}`}
-                                          onChange={(e) => handleFileUpload(order.id, e)}
-                                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                          disabled={uploadingForOrder === order.id}
-                                        />
-                                        <Button 
-                                          variant="outline" 
-                                          size="sm"
-                                          disabled={uploadingForOrder === order.id}
-                                        >
-                                          {uploadingForOrder === order.id ? (
-                                            <div className="flex items-center">
-                                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900 mr-2"></div>
-                                              <span>Uploading...</span>
-                                            </div>
-                                          ) : (
-                                            <>
-                                              <UploadCloud className="h-4 w-4 mr-2" />
-                                              <span>Upload File</span>
-                                            </>
-                                          )}
-                                        </Button>
-                                      </div>
+                                      <OrderAttachmentUploader 
+                                        orderId={order.id}
+                                        onUploadSuccess={() => handleAttachmentUploadSuccess(order.id)}
+                                      />
                                     </div>
-                                    
-                                    {orderAttachments[order.id] && (
-                                      <div className="space-y-2 mt-2">
-                                        {orderAttachments[order.id].length === 0 ? (
-                                          <p className="text-sm text-muted-foreground">No attachments found</p>
-                                        ) : (
-                                          orderAttachments[order.id].map((attachment) => (
-                                            <div 
-                                              key={attachment.id}
-                                              className="flex items-center gap-2 p-2 bg-background rounded border"
-                                            >
-                                              <Paperclip className="h-4 w-4 text-muted-foreground" />
-                                              <span className="flex-1 truncate">{attachment.file_name}</span>
-                                              <div className="flex gap-1">
-                                                <Button 
-                                                  variant="ghost"
-                                                  size="sm"
-                                                  className="h-8 w-8 p-0"
-                                                  onClick={() => window.open(attachment.file_path, '_blank')}
-                                                >
-                                                  <FileText className="h-4 w-4" />
-                                                  <span className="sr-only">View file</span>
-                                                </Button>
-                                                {isAdmin && (
-                                                  <Button 
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-8 w-8 p-0 hover:text-red-500"
-                                                    onClick={() => handleDeleteAttachment(order.id, attachment.id)}
-                                                  >
-                                                    <Trash2 className="h-4 w-4" />
-                                                    <span className="sr-only">Delete file</span>
-                                                  </Button>
-                                                )}
-                                              </div>
+                                    {!orderAttachments[order.id] ? (
+                                      <div className="flex justify-center p-4">
+                                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+                                      </div>
+                                    ) : orderAttachments[order.id]?.length === 0 ? (
+                                      <p className="text-sm text-muted-foreground">No attachments for this order.</p>
+                                    ) : (
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {orderAttachments[order.id].map((attachment) => (
+                                          <div 
+                                            key={attachment.id}
+                                            className="flex items-center justify-between p-2 bg-background rounded border"
+                                          >
+                                            <div className="flex items-center gap-2 truncate">
+                                              <Paperclip className="h-4 w-4 text-muted-foreground shrink-0" />
+                                              <span className="truncate">{attachment.file_name}</span>
                                             </div>
-                                          ))
-                                        )}
+                                            <div className="flex space-x-1">
+                                              <Button 
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8"
+                                                onClick={() => window.open(attachment.file_path, '_blank')}
+                                                title="View file"
+                                              >
+                                                <FileText className="h-4 w-4" />
+                                              </Button>
+                                              <Button 
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-100"
+                                                onClick={() => handleDeleteAttachment(attachment.id, order.id)}
+                                                title="Delete file"
+                                              >
+                                                <Trash2 className="h-4 w-4" />
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        ))}
                                       </div>
                                     )}
                                   </div>
@@ -515,15 +403,14 @@ const ProjectOrders: React.FC = () => {
               ) : (
                 <div className="p-6 text-center bg-gray-50 rounded-lg border border-dashed border-gray-300">
                   <p className="text-muted-foreground">No orders found for this project.</p>
-                  {isAdmin && (
-                    <Button 
-                      variant="outline"
-                      className="mt-4"
-                      onClick={() => setIsNewOrderModalOpen(true)}
-                    >
-                      <Plus className="mr-2 h-4 w-4" /> Create Order
-                    </Button>
-                  )}
+                  <Button 
+                    variant="outline" 
+                    className="mt-4"
+                    onClick={() => setShowNewOrderModal(true)}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add First Order
+                  </Button>
                 </div>
               )}
             </CardContent>
@@ -531,33 +418,15 @@ const ProjectOrders: React.FC = () => {
         </div>
       </div>
       
-      {isAdmin && projectId && (
-        <NewOrderModal 
-          open={isNewOrderModalOpen} 
-          onOpenChange={setIsNewOrderModalOpen} 
-          projectId={projectId}
-          onSuccess={refreshOrders}
-        />
-      )}
-
-      {/* Delete Order Confirmation Dialog */}
-      <AlertDialog open={!!orderToDelete} onOpenChange={(open) => !open && setOrderToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action will delete the order and all associated items and attachments.
-              This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteOrder} className="bg-red-600 hover:bg-red-700">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <NewOrderModal
+        open={showNewOrderModal}
+        onOpenChange={setShowNewOrderModal}
+        projectId={projectId || ''}
+        onSuccess={() => {
+          // Refresh order list
+          orderService.getByProject(projectId || '').then((data) => setOrders(data));
+        }}
+      />
     </div>
   );
 };

@@ -15,7 +15,10 @@ import {
   AlertCircle, 
   CheckCircle, 
   ListTodo,
-  Loader2
+  Loader2,
+  Clock,
+  Users,
+  User
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Navbar from '@/components/Navbar';
@@ -24,6 +27,7 @@ import PlanningControls from '@/components/PlanningControls';
 import { employeeService } from '@/services/dataService';
 import { planningService } from '@/services/planningService';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Planning = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
@@ -32,6 +36,7 @@ const Planning = () => {
   const [employees, setEmployees] = useState<any[]>([]);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [generationSuccess, setGenerationSuccess] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("all");
   const { currentEmployee } = useAuth();
   const { toast } = useToast();
   const isAdmin = currentEmployee?.role === 'admin';
@@ -132,6 +137,10 @@ const Planning = () => {
     setGenerationSuccess(null);
   }, [selectedDate]);
 
+  const filteredEmployees = activeTab === "all" 
+    ? employees 
+    : employees.filter(emp => emp.id === currentEmployee?.id);
+
   return (
     <div className="flex min-h-screen">
       <div className="w-64 bg-sidebar fixed top-0 bottom-0">
@@ -161,12 +170,13 @@ const Planning = () => {
                     {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
+                <PopoverContent className="w-auto p-0" align="end">
                   <Calendar
                     mode="single"
                     selected={selectedDate}
                     onSelect={(date) => setSelectedDate(date || new Date())}
                     initialFocus
+                    className={cn("p-3 pointer-events-auto")}
                   />
                 </PopoverContent>
               </Popover>
@@ -217,20 +227,54 @@ const Planning = () => {
               <AlertDescription>{generationSuccess}</AlertDescription>
             </Alert>
           )}
+          
+          {isAdmin && (
+            <Tabs 
+              defaultValue="all" 
+              className="mb-6"
+              value={activeTab}
+              onValueChange={setActiveTab}
+            >
+              <TabsList className="grid w-full max-w-md grid-cols-2">
+                <TabsTrigger value="all" className="flex items-center justify-center">
+                  <Users className="h-4 w-4 mr-2" />
+                  All Employees
+                </TabsTrigger>
+                <TabsTrigger value="me" className="flex items-center justify-center">
+                  <User className="h-4 w-4 mr-2" />
+                  My Schedule
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
 
           <PlanningTimeline 
             selectedDate={selectedDate}
-            employees={isAdmin ? employees : employees.filter(emp => emp.id === currentEmployee?.id)}
+            employees={isAdmin ? filteredEmployees : employees.filter(emp => emp.id === currentEmployee?.id)}
             isAdmin={isAdmin}
           />
           
-          <div className="mt-4 text-sm text-slate-500">
-            <p>Standard working hours:</p>
-            <ul className="list-disc pl-5 mt-1">
-              <li>Morning: 7:00 AM - 10:00 AM</li>
-              <li>Mid-day: 10:15 AM - 12:30 PM</li>
-              <li>Afternoon: 1:00 PM - 4:00 PM</li>
-            </ul>
+          <div className="mt-6">
+            <div className="bg-muted rounded-lg p-4">
+              <h3 className="text-lg font-medium mb-2 flex items-center">
+                <Clock className="h-5 w-5 mr-2" />
+                Standard Working Hours
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="font-medium">Morning</div>
+                  <div className="text-sm text-muted-foreground">7:00 AM - 10:00 AM</div>
+                </div>
+                <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                  <div className="font-medium">Mid-day</div>
+                  <div className="text-sm text-muted-foreground">10:15 AM - 12:30 PM</div>
+                </div>
+                <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                  <div className="font-medium">Afternoon</div>
+                  <div className="text-sm text-muted-foreground">1:00 PM - 4:00 PM</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

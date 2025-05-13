@@ -1,16 +1,26 @@
 
 import React, { useState, useEffect } from 'react';
-import { format, parse, addHours } from 'date-fns';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { 
+  User, 
+  Clock,
+  Square,
+  CheckSquare,
+  MoreVertical,
+} from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { cn } from '@/lib/utils';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import TaskScheduleItem from './TaskScheduleItem';
-import NewTaskModal from './NewTaskModal';
-import { planningService } from '@/services/planningService';
-import { DndProvider, useDrag, useDrop } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
-import { AlertCircle, Loader2 } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 
 interface PlanningTimelineProps {
   selectedDate: Date;
@@ -18,401 +28,338 @@ interface PlanningTimelineProps {
   isAdmin: boolean;
 }
 
-interface TimeSlot {
-  time: string;
-  label: string;
-}
-
-// Define type for dragged item
-interface DragItem {
+interface ScheduledTask {
   id: string;
-  employeeId: string;
+  employee_id: string;
+  title: string;
+  description: string | null;
+  start_time: string;
+  end_time: string;
+  task_id: string | null;
+  phase_id: string | null;
+  is_auto_generated: boolean;
+  created_at: string;
+  updated_at: string;
+  employee?: {
+    id: string;
+    name: string;
+  };
+  task?: {
+    id: string;
+    title: string;
+    status: string;
+    priority: string;
+  };
+  phase?: {
+    id: string;
+    name: string;
+    project_id: string;
+  };
+  project?: {
+    id: string;
+    name: string;
+  };
 }
 
-// Define standard working hours
-const WORK_PERIODS = [
-  { start: '07:00', end: '10:00', label: 'Morning' },
-  { start: '10:15', end: '12:30', label: 'Mid-day' },
-  { start: '13:00', end: '16:00', label: 'Afternoon' },
-];
-
-// Generate time slots based on work periods
-const generateTimeSlots = () => {
-  const slots: TimeSlot[] = [];
-  WORK_PERIODS.forEach(period => {
-    let currentTime = period.start;
-    while (currentTime < period.end) {
-      slots.push({
-        time: currentTime,
-        label: format(parse(currentTime, 'HH:mm', new Date()), 'h:mm a')
-      });
-      
-      // Add 30-minute increments
-      const parsedTime = parse(currentTime, 'HH:mm', new Date());
-      const nextTime = addHours(parsedTime, 0.5);
-      currentTime = format(nextTime, 'HH:mm');
-    }
-  });
-  return slots;
-};
-
-const HOURS = generateTimeSlots();
-
-// Define DraggableTask component
-const DraggableTask = ({ schedule, isAdmin, onDrop, onTaskUpdated }) => {
-  const [{ isDragging }, drag] = useDrag(() => ({
-    type: 'TASK',
-    item: { id: schedule.id, employeeId: schedule.employee_id } as DragItem,
-    canDrag: isAdmin,
-    collect: (monitor) => ({
-      isDragging: !!monitor.isDragging(),
-    }),
-  }));
-
-  return (
-    <div 
-      ref={isAdmin ? drag : null}
-      style={{ opacity: isDragging ? 0.5 : 1 }}
-    >
-      <TaskScheduleItem
-        key={schedule.id}
-        schedule={schedule}
-        isAdmin={isAdmin}
-        isDraggable={isAdmin}
-        onTaskUpdated={onTaskUpdated}
-      />
-    </div>
-  );
-};
-
-// Define DroppableCell component
-const DroppableCell = ({ employeeId, timeSlot, onDrop, children, handleCellClick }) => {
-  const [{ isOver }, drop] = useDrop(() => ({
-    accept: 'TASK',
-    drop: (item: DragItem) => onDrop(item.id, employeeId, timeSlot),
-    collect: (monitor) => ({
-      isOver: !!monitor.isOver(),
-    }),
-  }));
-
-  return (
-    <td 
-      ref={drop}
-      className={`p-2 text-sm text-gray-500 border-l hover:bg-gray-50 cursor-pointer ${isOver ? 'bg-blue-50' : ''}`}
-      onClick={() => handleCellClick(employeeId, timeSlot)}
-    >
-      {children}
-    </td>
-  );
-};
-
-const PlanningTimeline: React.FC<PlanningTimelineProps> = ({ selectedDate, employees, isAdmin }) => {
-  const [schedules, setSchedules] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isError, setIsError] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
-  const [editingSchedule, setEditingSchedule] = useState<any>(null);
+const PlanningTimeline: React.FC<PlanningTimelineProps> = ({ 
+  selectedDate,
+  employees,
+  isAdmin
+}) => {
+  const [scheduledTasks, setScheduledTasks] = useState<ScheduledTask[]>([]);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { currentEmployee } = useAuth();
+  
+  // Convert date to string in ISO format
+  const dateString = selectedDate.toISOString().split('T')[0];
 
-  // Generate time slots for the timeline
-  const timeSlots: TimeSlot[] = HOURS;
+  // Time segments for the day
+  const timeSegments = [
+    { name: 'Morning', startTime: '07:00', endTime: '10:00', color: 'bg-blue-50 border-blue-200' },
+    { name: 'Mid-day', startTime: '10:15', endTime: '12:30', color: 'bg-green-50 border-green-200' },
+    { name: 'Afternoon', startTime: '13:00', endTime: '16:00', color: 'bg-amber-50 border-amber-200' },
+  ];
 
   useEffect(() => {
-    const fetchSchedules = async () => {
+    const fetchScheduledTasks = async () => {
       try {
-        setIsLoading(true);
-        setIsError(false);
-        setErrorMessage("");
+        setLoading(true);
         
-        // Make sure the date is properly formatted
-        const formattedDate = new Date(selectedDate);
+        // Create the start and end datetime for the selected date
+        const startDate = `${dateString}T00:00:00`;
+        const endDate = `${dateString}T23:59:59`;
         
-        // Add a console log to debug
-        console.log("Fetching schedules for date:", formattedDate);
+        let query = supabase
+          .from('schedules')
+          .select(`
+            *,
+            employee:employees(id, name),
+            task:tasks(id, title, status, priority),
+            phase:phases(id, name, project_id)
+          `)
+          .gte('start_time', startDate)
+          .lte('start_time', endDate)
+          .order('start_time', { ascending: true });
+          
+        // If not admin, filter by employee ID
+        if (!isAdmin && currentEmployee) {
+          query = query.eq('employee_id', currentEmployee.id);
+        }
         
-        const schedulesData = await planningService.getSchedulesByDate(formattedDate);
+        const { data, error } = await query;
         
-        // Add a console log to see what was returned
-        console.log("Schedules fetched:", schedulesData);
+        if (error) throw error;
         
-        setSchedules(schedulesData);
+        // Get project info for tasks that have phases
+        const tasksWithProjects = await Promise.all((data || []).map(async (task) => {
+          if (task.phase && task.phase.project_id) {
+            const { data: projectData } = await supabase
+              .from('projects')
+              .select('id, name')
+              .eq('id', task.phase.project_id)
+              .single();
+            
+            return { ...task, project: projectData };
+          }
+          return task;
+        }));
+        
+        setScheduledTasks(tasksWithProjects);
       } catch (error: any) {
-        console.error('Error fetching schedules:', error);
-        setIsError(true);
-        setErrorMessage(error.message || "Failed to load schedule data");
+        console.error('Error fetching scheduled tasks:', error);
         toast({
-          title: "Error",
-          description: "Failed to load schedule data",
-          variant: "destructive"
+          title: 'Error',
+          description: `Failed to load schedule: ${error.message}`,
+          variant: 'destructive'
         });
+        setScheduledTasks([]);
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
-
-    fetchSchedules();
-  }, [selectedDate, toast]);
-
-  // Add event listener for task editing
-  useEffect(() => {
-    const handleEditTask = (event: CustomEvent) => {
-      if (event.detail) {
-        setEditingSchedule(event.detail);
-        // Find the employee for this schedule
-        const employeeForTask = employees.find(emp => emp.id === event.detail.employee_id);
-        setSelectedEmployee(employeeForTask);
-        
-        // Extract the time from the start_time
-        const startTime = new Date(event.detail.start_time);
-        const formattedTime = format(startTime, 'HH:mm');
-        setSelectedTimeSlot(formattedTime);
-        
-        setIsModalOpen(true);
-      }
-    };
-
-    window.addEventListener('editTask', handleEditTask as EventListener);
     
-    return () => {
-      window.removeEventListener('editTask', handleEditTask as EventListener);
-    };
-  }, [employees]);
-
-  const handleCellClick = (employeeId: string, timeSlot: string) => {
-    if (!isAdmin) return;
-    
-    setSelectedEmployee(employees.find(emp => emp.id === employeeId));
-    setSelectedTimeSlot(timeSlot);
-    setEditingSchedule(null); // Clear any editing schedule
-    setIsModalOpen(true);
-  };
-
-  const handleTaskAdded = () => {
-    // Refetch schedules after a task is added
-    planningService.getSchedulesByDate(selectedDate)
-      .then(schedulesData => {
-        setSchedules(schedulesData);
-        toast({
-          title: "Success",
-          description: "Task has been scheduled",
-        });
-      })
-      .catch(error => {
-        toast({
-          title: "Error",
-          description: "Failed to refresh schedule data",
-          variant: "destructive"
-        });
-      });
-  };
-
-  const handleModalClose = () => {
-    setIsModalOpen(false);
-    setEditingSchedule(null);
-  };
-
-  const handleTaskDrop = async (taskId: string, newEmployeeId: string, newTimeSlot: string) => {
-    if (!isAdmin) return;
-    
+    fetchScheduledTasks();
+  }, [selectedDate, isAdmin, currentEmployee, dateString, toast]);
+  
+  const markTaskCompleted = async (taskId: string) => {
     try {
-      const task = schedules.find(s => s.id === taskId);
-      if (!task) return;
+      // First update the schedule status
+      await supabase
+        .from('schedules')
+        .update({ is_completed: true })
+        .eq('id', taskId);
       
-      const parsedTime = parse(newTimeSlot, 'HH:mm', selectedDate);
+      // If it's linked to a task, update the task status too
+      const scheduledTask = scheduledTasks.find(t => t.id === taskId);
+      if (scheduledTask && scheduledTask.task_id) {
+        await supabase
+          .from('tasks')
+          .update({ 
+            status: 'COMPLETED',
+            completed_at: new Date().toISOString(),
+            completed_by: currentEmployee?.id
+          })
+          .eq('id', scheduledTask.task_id);
+      }
       
-      // Calculate new end time based on original duration
-      const originalStart = new Date(task.start_time);
-      const originalEnd = new Date(task.end_time);
-      const durationMs = originalEnd.getTime() - originalStart.getTime();
-      
-      const newStartDate = new Date(selectedDate);
-      newStartDate.setHours(parsedTime.getHours(), parsedTime.getMinutes());
-      
-      const newEndDate = new Date(newStartDate.getTime() + durationMs);
-      
-      await planningService.updateSchedule(taskId, {
-        employee_id: newEmployeeId,
-        start_time: newStartDate.toISOString(),
-        end_time: newEndDate.toISOString()
-      });
-      
-      // Refresh schedules
-      const updatedSchedules = await planningService.getSchedulesByDate(selectedDate);
-      setSchedules(updatedSchedules);
+      // Update the UI
+      setScheduledTasks(prev => 
+        prev.map(task => 
+          task.id === taskId 
+            ? { ...task, is_completed: true, task: task.task ? { ...task.task, status: 'COMPLETED' } : null } 
+            : task
+        )
+      );
       
       toast({
-        title: "Success",
-        description: "Task has been rescheduled",
+        title: 'Success',
+        description: 'Task marked as completed'
       });
-    } catch (error) {
-      console.error('Error moving task:', error);
+    } catch (error: any) {
+      console.error('Error updating task:', error);
       toast({
-        title: "Error",
-        description: "Failed to move task",
-        variant: "destructive"
+        title: 'Error',
+        description: `Failed to update task: ${error.message}`,
+        variant: 'destructive'
       });
     }
   };
-
-  const handleRetry = () => {
-    setIsError(false);
-    setIsLoading(true);
-    planningService.getSchedulesByDate(selectedDate)
-      .then(data => {
-        setSchedules(data);
-        setIsLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setIsError(true);
-        setErrorMessage(err.message || "Failed to load schedule data");
-        setIsLoading(false);
+  
+  const removeFromSchedule = async (taskId: string) => {
+    try {
+      await supabase
+        .from('schedules')
+        .delete()
+        .eq('id', taskId);
+      
+      // Update the UI
+      setScheduledTasks(prev => prev.filter(task => task.id !== taskId));
+      
+      toast({
+        title: 'Success',
+        description: 'Task removed from schedule'
       });
+    } catch (error: any) {
+      console.error('Error removing task:', error);
+      toast({
+        title: 'Error',
+        description: `Failed to remove task: ${error.message}`,
+        variant: 'destructive'
+      });
+    }
+  };
+  
+  // Helper to format time
+  const formatTime = (timeString: string) => {
+    try {
+      return format(parseISO(timeString), 'h:mm a');
+    } catch (error) {
+      return 'Invalid time';
+    }
+  };
+  
+  // Get tasks for a specific employee and time segment
+  const getTasksForSegment = (employeeId: string, segmentStart: string, segmentEnd: string) => {
+    // Convert segment times to ISO strings for comparison
+    const segmentStartTime = `${dateString}T${segmentStart}:00`;
+    const segmentEndTime = `${dateString}T${segmentEnd}:00`;
+    
+    return scheduledTasks.filter(task => {
+      return (
+        task.employee_id === employeeId &&
+        new Date(task.start_time) >= new Date(segmentStartTime) &&
+        new Date(task.start_time) < new Date(segmentEndTime)
+      );
+    });
+  };
+  
+  // Get priority color
+  const getPriorityColor = (priority: string) => {
+    switch (priority?.toLowerCase()) {
+      case 'high':
+        return 'bg-red-100 text-red-800 border-red-300';
+      case 'medium':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      case 'low':
+        return 'bg-green-100 text-green-800 border-green-300';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-300';
+    }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="flex flex-col items-center">
-          <Loader2 className="h-12 w-12 animate-spin text-primary mb-2" />
-          <span className="text-gray-500">Loading schedule...</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Alert variant="destructive" className="max-w-md">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>
-            {errorMessage || "Failed to load schedule data"}
-          </AlertDescription>
-          <Button 
-            variant="outline"
-            className="mt-4 bg-white text-red-500 hover:bg-gray-100" 
-            onClick={handleRetry}
-          >
-            Try Again
-          </Button>
-        </Alert>
-      </div>
-    );
-  }
-
-  // Group schedules by employee
-  const schedulesByEmployee = employees.reduce((acc, employee) => {
-    acc[employee.id] = schedules.filter(schedule => schedule.employee_id === employee.id);
-    return acc;
-  }, {} as Record<string, any[]>);
-
   return (
-    <div className="mt-6">
-      <Card>
-        <CardContent className="p-0 overflow-auto">
-          <div className="p-4">
-            <DndProvider backend={HTML5Backend}>
-              <div className="flex flex-col space-y-6">
-                {WORK_PERIODS.map((period, periodIndex) => (
-                  <div key={period.label} className="border rounded-lg">
-                    <div className="bg-gray-100 p-3 font-medium border-b">
-                      {period.label}: {format(parse(period.start, 'HH:mm', new Date()), 'h:mm a')} - 
-                      {format(parse(period.end, 'HH:mm', new Date()), 'h:mm a')}
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            {employees.map((employee) => (
-                              <th
-                                key={employee.id}
-                                className="p-4 text-left text-sm font-medium text-gray-500 border-r last:border-r-0"
-                                style={{ minWidth: '180px' }}
-                              >
-                                {employee.name}
-                                <div className="text-xs text-gray-500">
-                                  {employee.workstation || 'No workstation'}
-                                </div>
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200 bg-white">
-                          {/* Generate rows for each time slot in this period */}
-                          {timeSlots
-                            .filter(slot => {
-                              const slotTime = parse(slot.time, 'HH:mm', new Date());
-                              const periodStart = parse(period.start, 'HH:mm', new Date());
-                              const periodEnd = parse(period.end, 'HH:mm', new Date());
-                              return slotTime >= periodStart && slotTime < periodEnd;
-                            })
-                            .map(slot => (
-                              <tr key={slot.time} className="hover:bg-gray-50">
-                                {employees.map(employee => {
-                                  const employeeSchedules = schedulesByEmployee[employee.id] || [];
-                                  const schedulesInSlot = employeeSchedules.filter(schedule => {
-                                    const slotTime = parse(slot.time, 'HH:mm', selectedDate);
-                                    const slotEndTime = addHours(slotTime, 0.5);
-                                    const scheduleStart = new Date(schedule.start_time);
-                                    
-                                    return scheduleStart >= slotTime && scheduleStart < slotEndTime;
-                                  });
-                                  
-                                  return (
-                                    <DroppableCell
-                                      key={`${employee.id}-${slot.time}`}
-                                      employeeId={employee.id}
-                                      timeSlot={slot.time}
-                                      onDrop={handleTaskDrop}
-                                      handleCellClick={handleCellClick}
-                                    >
-                                      <div className="p-1 flex items-center">
-                                        <div className="text-xs text-gray-500 w-16 flex-shrink-0">
-                                          {slot.label}
+    <div>
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {employees.length > 0 ? (
+            employees.map((employee) => (
+              <Card key={employee.id} className="overflow-hidden">
+                <CardHeader className="bg-muted/50 pb-3">
+                  <CardTitle className="text-lg flex items-center">
+                    <User className="h-5 w-5 mr-2" />
+                    {employee.name}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="space-y-4">
+                    {timeSegments.map((segment) => (
+                      <div key={segment.name} className="rounded-md border overflow-hidden">
+                        <div className={cn("px-4 py-2 font-medium border-b", segment.color)}>
+                          {segment.name} ({segment.startTime} - {segment.endTime})
+                        </div>
+                        
+                        <div className="p-2 bg-white">
+                          {getTasksForSegment(employee.id, segment.startTime, segment.endTime).length > 0 ? (
+                            <div className="space-y-2">
+                              {getTasksForSegment(employee.id, segment.startTime, segment.endTime).map((task) => (
+                                <div 
+                                  key={task.id} 
+                                  className={cn(
+                                    "rounded border p-3",
+                                    task.is_auto_generated ? "bg-gray-50" : "bg-white"
+                                  )}
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div>
+                                      <div className="font-medium">{task.title}</div>
+                                      
+                                      {task.project && (
+                                        <div className="text-sm text-muted-foreground mb-1">
+                                          Project: {task.project.name}
                                         </div>
-                                        <div className="flex-grow">
-                                          {schedulesInSlot.map(schedule => (
-                                            <DraggableTask
-                                              key={schedule.id}
-                                              schedule={schedule}
-                                              isAdmin={isAdmin}
-                                              onDrop={handleTaskDrop}
-                                              onTaskUpdated={handleTaskAdded}
-                                            />
-                                          ))}
-                                        </div>
+                                      )}
+                                      
+                                      <div className="flex items-center text-sm text-muted-foreground">
+                                        <Clock className="h-3 w-3 mr-1" />
+                                        {formatTime(task.start_time)} - {formatTime(task.end_time)}
                                       </div>
-                                    </DroppableCell>
-                                  );
-                                })}
-                              </tr>
-                            ))}
-                        </tbody>
-                      </table>
-                    </div>
+                                      
+                                      {task.description && (
+                                        <p className="text-sm mt-2">{task.description}</p>
+                                      )}
+                                    </div>
+                                    
+                                    <div className="flex items-center space-x-2">
+                                      {task.task?.priority && (
+                                        <Badge className={cn("text-xs", getPriorityColor(task.task.priority))}>
+                                          {task.task.priority}
+                                        </Badge>
+                                      )}
+                                      
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                                            <MoreVertical className="h-4 w-4" />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                          <DropdownMenuItem 
+                                            onClick={() => markTaskCompleted(task.id)}
+                                            disabled={task.task?.status === 'COMPLETED'}
+                                          >
+                                            <CheckSquare className="h-4 w-4 mr-2" />
+                                            Mark as Completed
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onClick={() => removeFromSchedule(task.id)}
+                                          >
+                                            <Square className="h-4 w-4 mr-2" />
+                                            Remove from Schedule
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="py-6 text-center text-muted-foreground">
+                              No tasks scheduled for this time segment
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </DndProvider>
-          </div>
-        </CardContent>
-      </Card>
-
-      {isAdmin && (
-        <NewTaskModal
-          isOpen={isModalOpen}
-          onClose={handleModalClose}
-          employee={selectedEmployee}
-          timeSlot={selectedTimeSlot}
-          date={selectedDate}
-          onTaskAdded={handleTaskAdded}
-          editingSchedule={editingSchedule}
-        />
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <div className="text-center py-8 px-4 border rounded-lg">
+              <p className="text-muted-foreground">
+                {isAdmin 
+                  ? "No employees found. Please add employees first."
+                  : "No schedule available for you on this date."}
+              </p>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
