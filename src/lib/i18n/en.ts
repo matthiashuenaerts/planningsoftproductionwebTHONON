@@ -1,3 +1,4 @@
+
 import { i18n } from "i18next";
 
 export const en = {
@@ -19,6 +20,7 @@ export const en = {
     rememberMe: "Remember me",
     forgotPassword: "Forgot password?",
     dayPlanning: "Day Planning",
+    planning: "Planning", // Added missing property
     success: "Success",
     error: "Error",
     saveChanges: "Save Changes",
@@ -37,6 +39,8 @@ export const en = {
     dutch: "Dutch",
     french: "French",
     languagePreference: "Language Preference",
+    companyName: "WorkFlow Pro", // Added missing property
+    navigation: "Navigation", // Added missing property
   },
   project: {
     projectName: "Project Name",

@@ -20,6 +20,7 @@ export const fr: Translations = {
     rememberMe: "Se souvenir de moi",
     forgotPassword: "Mot de passe oublié ?",
     dayPlanning: "Planification journalière",
+    planning: "Planification", // Added missing property
     success: "Succès",
     error: "Erreur",
     saveChanges: "Enregistrer les modifications",
@@ -38,6 +39,8 @@ export const fr: Translations = {
     dutch: "Néerlandais",
     french: "Français",
     languagePreference: "Préférence de langue",
+    companyName: "WorkFlow Pro", // Added missing property
+    navigation: "Navigation", // Added missing property
   },
   project: {
     projectName: "Nom du projet",
