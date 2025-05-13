@@ -9,7 +9,6 @@ import NotFound from './pages/NotFound';
 import Index from './pages/Index';
 import Loading from './components/Loading';
 import { Toaster } from './components/ui/toaster';
-import { LanguageProvider } from './context/LanguageContext';
 
 // Lazy load components
 const Dashboard = lazy(() => import('./pages/Index'));
@@ -39,84 +38,82 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <LanguageProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-            <Route path="/projects" element={
-              <ProtectedRoute>
-                <Suspense fallback={<Loading />}>
-                  <Projects />
-                </Suspense>
-              </ProtectedRoute>
-            } />
-            <Route path="/projects/:id" element={
-              <ProtectedRoute>
-                <Suspense fallback={<Loading />}>
-                  <ProjectDetails />
-                </Suspense>
-              </ProtectedRoute>
-            } />
-            <Route path="/orders" element={
-              <ProtectedRoute>
-                <Suspense fallback={<Loading />}>
-                  <Orders />
-                </Suspense>
-              </ProtectedRoute>
-            } />
-            <Route path="/projects/:id/orders" element={
-              <ProtectedRoute>
-                <Suspense fallback={<Loading />}>
-                  <ProjectOrders />
-                </Suspense>
-              </ProtectedRoute>
-            } />
-            <Route path="/settings" element={
-              <ProtectedRoute>
-                <Suspense fallback={<Loading />}>
-                  <Settings />
-                </Suspense>
-              </ProtectedRoute>
-            } />
-            <Route path="/workstations" element={
-              <ProtectedRoute>
-                <Suspense fallback={<Loading />}>
-                  <Workstations />
-                </Suspense>
-              </ProtectedRoute>
-            } />
-            <Route path="/planning" element={
-              <ProtectedRoute>
-                <Suspense fallback={<Loading />}>
-                  <Planning />
-                </Suspense>
-              </ProtectedRoute>
-            } />
-            <Route path="/personal-tasks" element={
-              <ProtectedRoute>
-                <Suspense fallback={<Loading />}>
-                  <PersonalTasks />
-                </Suspense>
-              </ProtectedRoute>
-            } />
-            <Route path="/daily-tasks" element={
-              <ProtectedRoute>
-                <Suspense fallback={<Loading />}>
-                  <DailyTasks />
-                </Suspense>
-              </ProtectedRoute>
-            } />
-            <Route path="/install-calendar" element={
-              <ProtectedRoute>
-                <Suspense fallback={<Loading />}>
-                  <InstallCalendar />
-                </Suspense>
-              </ProtectedRoute>
-            } />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-          <Toaster />
-        </LanguageProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/projects" element={
+            <ProtectedRoute>
+              <Suspense fallback={<Loading />}>
+                <Projects />
+              </Suspense>
+            </ProtectedRoute>
+          } />
+          <Route path="/projects/:id" element={
+            <ProtectedRoute>
+              <Suspense fallback={<Loading />}>
+                <ProjectDetails />
+              </Suspense>
+            </ProtectedRoute>
+          } />
+          <Route path="/orders" element={
+            <ProtectedRoute>
+              <Suspense fallback={<Loading />}>
+                <Orders />
+              </Suspense>
+            </ProtectedRoute>
+          } />
+          <Route path="/projects/:id/orders" element={
+            <ProtectedRoute>
+              <Suspense fallback={<Loading />}>
+                <ProjectOrders />
+              </Suspense>
+            </ProtectedRoute>
+          } />
+          <Route path="/settings" element={
+            <ProtectedRoute>
+              <Suspense fallback={<Loading />}>
+                <Settings />
+              </Suspense>
+            </ProtectedRoute>
+          } />
+          <Route path="/workstations" element={
+            <ProtectedRoute>
+              <Suspense fallback={<Loading />}>
+                <Workstations />
+              </Suspense>
+            </ProtectedRoute>
+          } />
+          <Route path="/planning" element={
+            <ProtectedRoute>
+              <Suspense fallback={<Loading />}>
+                <Planning />
+              </Suspense>
+            </ProtectedRoute>
+          } />
+          <Route path="/personal-tasks" element={
+            <ProtectedRoute>
+              <Suspense fallback={<Loading />}>
+                <PersonalTasks />
+              </Suspense>
+            </ProtectedRoute>
+          } />
+          <Route path="/daily-tasks" element={
+            <ProtectedRoute>
+              <Suspense fallback={<Loading />}>
+                <DailyTasks />
+              </Suspense>
+            </ProtectedRoute>
+          } />
+          <Route path="/install-calendar" element={
+            <ProtectedRoute>
+              <Suspense fallback={<Loading />}>
+                <InstallCalendar />
+              </Suspense>
+            </ProtectedRoute>
+          } />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+        <Toaster />
       </AuthProvider>
     </BrowserRouter>
   );
