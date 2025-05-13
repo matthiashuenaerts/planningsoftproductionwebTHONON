@@ -28,17 +28,19 @@ const PlanningTimeline = ({
   }
 
   const renderScheduleItem = (schedule: Schedule, index: number) => {
-    // Updated to check if task and status properties exist
-    const isCompleted = schedule.task && schedule.task.status === 'COMPLETED';
+    // Default to false for isCompleted if task is not available
+    const isCompleted = false;
     
     return (
-      <TaskScheduleItem
-        key={schedule.id || index}
-        title={schedule.title}
-        time={`${formatTime(schedule.start_time)} - ${formatTime(schedule.end_time)}`}
-        isCompleted={isCompleted || false}
-        description={schedule.description || ''}
-      />
+      <div key={schedule.id || index} className="bg-white shadow rounded-lg p-4 mb-2">
+        <div className="font-medium">{schedule.title}</div>
+        <div className="text-sm text-gray-500">
+          {`${formatTime(schedule.start_time)} - ${formatTime(schedule.end_time)}`}
+        </div>
+        {schedule.description && (
+          <div className="text-sm mt-2">{schedule.description}</div>
+        )}
+      </div>
     );
   };
 
@@ -50,7 +52,9 @@ const PlanningTimeline = ({
       
       {schedules.map((schedule, index) => (
         <div key={schedule.id || index} className="mb-4">
-          <h3 className="font-semibold">{schedule.employee ? schedule.employee.name : 'Unknown Employee'}</h3>
+          <h3 className="font-semibold">
+            {schedule.title || 'Unnamed Schedule'} 
+          </h3>
           <div>
             {renderScheduleItem(schedule, index)}
           </div>

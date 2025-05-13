@@ -25,3 +25,10 @@ export const supportedLanguages: { code: Language; label: string }[] = [
   { code: 'nl', label: 'Nederlands' },
   { code: 'fr', label: 'Français' },
 ];
+
+// Mapping of language codes to their display information
+export const languages: Record<Language, { name: string; nativeName: string }> = {
+  en: { name: 'English', nativeName: 'English' },
+  nl: { name: 'Dutch', nativeName: 'Nederlands' },
+  fr: { name: 'French', nativeName: 'Français' },
+};

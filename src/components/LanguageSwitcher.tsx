@@ -30,7 +30,7 @@ const LanguageSwitcher: React.FC = () => {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuLabel>{t.common.languagePreference}</DropdownMenuLabel>
+        <DropdownMenuLabel>{t.common.language}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {Object.entries(languages).map(([langKey, langInfo]) => (
           <DropdownMenuItem
@@ -38,7 +38,7 @@ const LanguageSwitcher: React.FC = () => {
             className={`flex items-center justify-between ${langKey === language ? 'bg-accent/50' : ''}`}
             onClick={() => handleLanguageChange(langKey as Language)}
           >
-            {langInfo.name}
+            {langInfo.nativeName}
             {langKey === language && <Check className="h-4 w-4" />}
           </DropdownMenuItem>
         ))}
