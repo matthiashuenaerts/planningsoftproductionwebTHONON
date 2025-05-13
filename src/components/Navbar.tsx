@@ -3,66 +3,70 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Calendar, LogOut, LayoutDashboard, List, Settings as SettingsIcon, Package, CalendarClock, CalendarCheck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 const Navbar: React.FC = () => {
   const location = useLocation();
   const { currentEmployee, logout } = useAuth();
+  const { t } = useLanguage();
   const isAdmin = currentEmployee?.role === 'admin';
 
   return (
     <nav className="bg-sidebar text-sidebar-foreground p-4 flex flex-col h-full">
-      <div className="flex items-center justify-center mb-8 mt-2">
+      <div className="flex items-center justify-between mb-8 mt-2">
         <h1 className="text-xl font-bold">PhaseFlow</h1>
+        <LanguageSwitcher />
       </div>
       
       <div className="flex flex-col space-y-2 flex-1">
         <NavItem 
           to="/" 
           icon={<LayoutDashboard className="w-5 h-5" />} 
-          title="Dashboard" 
+          title={t.common.dashboard} 
           active={location.pathname === '/'} 
         />
         <NavItem 
           to="/projects" 
           icon={<List className="w-5 h-5" />} 
-          title="Projects" 
+          title={t.common.projects} 
           active={location.pathname === '/projects' || location.pathname.includes('/projects/')} 
         />
         <NavItem 
           to="/workstations" 
           icon={<List className="w-5 h-5" />} 
-          title="Workstations" 
+          title={t.common.workstations} 
           active={location.pathname === '/workstations'} 
         />
         <NavItem 
           to="/personal-tasks" 
           icon={<CalendarCheck className="w-5 h-5" />} 
-          title="Personal Tasks" 
+          title={t.common.personalTasks} 
           active={location.pathname === '/personal-tasks'} 
         />
         <NavItem 
           to="/daily-tasks" 
           icon={<Calendar className="w-5 h-5" />} 
-          title="Daily Tasks" 
+          title={t.common.dailyTasks} 
           active={location.pathname === '/daily-tasks'} 
         />
         <NavItem 
           to="/planning" 
           icon={<CalendarClock className="w-5 h-5" />} 
-          title="Day Planning" 
+          title={t.common.dayPlanning} 
           active={location.pathname === '/planning'} 
         />
         <NavItem 
           to="/orders" 
           icon={<Package className="w-5 h-5" />} 
-          title="Orders" 
+          title={t.common.orders} 
           active={location.pathname === '/orders' || location.pathname.includes('/orders/')} 
         />
         {isAdmin && (
           <NavItem 
             to="/settings" 
             icon={<SettingsIcon className="w-5 h-5" />} 
-            title="Settings" 
+            title={t.common.settings} 
             active={location.pathname === '/settings'} 
           />
         )}
@@ -82,7 +86,7 @@ const Navbar: React.FC = () => {
           <button 
             onClick={logout} 
             className="p-2 rounded-md hover:bg-sidebar-accent/50 transition-colors"
-            title="Logout"
+            title={t.common.logout}
           >
             <LogOut className="w-4 h-4" />
           </button>

@@ -546,6 +546,30 @@ export type Database = {
           },
         ]
       }
+      user_preferences: {
+        Row: {
+          created_at: string
+          id: string
+          language: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          language?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          language?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       work_hours: {
         Row: {
           created_at: string

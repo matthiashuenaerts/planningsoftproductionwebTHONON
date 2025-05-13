@@ -9,10 +9,12 @@ import EmployeeSettings from '@/components/settings/EmployeeSettings';
 import StandardTasksSettings from '@/components/settings/StandardTasksSettings';
 import { Button } from '@/components/ui/button';
 import { Settings as SettingsIcon } from 'lucide-react';
+import { useLanguage } from '@/context/LanguageContext';
 
 const Settings: React.FC = () => {
   const { currentEmployee } = useAuth();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const isAdmin = currentEmployee?.role === 'admin';
 
@@ -57,7 +59,7 @@ const Settings: React.FC = () => {
                 className="mt-6"
                 onClick={() => window.history.back()}
               >
-                Go Back
+                {t.common.cancel}
               </Button>
             </div>
           </div>
@@ -73,13 +75,13 @@ const Settings: React.FC = () => {
       </div>
       <div className="ml-64 w-full p-6">
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-2xl font-bold mb-6">System Settings</h1>
+          <h1 className="text-2xl font-bold mb-6">{t.settings.title}</h1>
           
           <Tabs defaultValue="workstations">
             <TabsList className="mb-4">
-              <TabsTrigger value="workstations">Workstations</TabsTrigger>
-              <TabsTrigger value="employees">Employees</TabsTrigger>
-              <TabsTrigger value="standard-tasks">Standard Tasks</TabsTrigger>
+              <TabsTrigger value="workstations">{t.settings.workstations}</TabsTrigger>
+              <TabsTrigger value="employees">{t.settings.employees}</TabsTrigger>
+              <TabsTrigger value="standard-tasks">{t.settings.standardTasks}</TabsTrigger>
             </TabsList>
             
             <TabsContent value="workstations">
