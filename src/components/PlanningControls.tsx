@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Loader2, Calendar } from 'lucide-react';
+import { Loader2, Wand2 } from 'lucide-react';
 
 interface PlanningControlsProps {
   selectedDate: Date;
@@ -29,8 +29,8 @@ const PlanningControls: React.FC<PlanningControlsProps> = ({
           </>
         ) : (
           <>
-            <Calendar className="mr-2 h-4 w-4" />
-            Auto-Generate Plan
+            <Wand2 className="mr-2 h-4 w-4" />
+            Auto-Generate All
           </>
         )}
       </Button>

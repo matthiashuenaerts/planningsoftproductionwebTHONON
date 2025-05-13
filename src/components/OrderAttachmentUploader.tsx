@@ -8,11 +8,13 @@ import { orderService } from '@/services/orderService';
 interface OrderAttachmentUploaderProps {
   orderId: string;
   onUploadSuccess: () => void;
+  compact?: boolean;
 }
 
 const OrderAttachmentUploader: React.FC<OrderAttachmentUploaderProps> = ({ 
   orderId, 
-  onUploadSuccess 
+  onUploadSuccess,
+  compact = false
 }) => {
   const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
@@ -59,6 +61,49 @@ const OrderAttachmentUploader: React.FC<OrderAttachmentUploaderProps> = ({
   const triggerCamera = () => {
     cameraInputRef.current?.click();
   };
+
+  // Compact version for smaller UI spaces
+  if (compact) {
+    return (
+      <div className="flex items-center gap-1">
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          className="hidden"
+          multiple
+        />
+        <input
+          type="file"
+          ref={cameraInputRef}
+          onChange={handleFileChange}
+          className="hidden"
+          accept="image/*"
+          capture="environment"
+        />
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={triggerFileSelect}
+          disabled={uploading}
+          className="h-8 w-8"
+          title="Add file"
+        >
+          <Paperclip className="h-4 w-4" />
+        </Button>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={triggerCamera}
+          disabled={uploading}
+          className="h-8 w-8"
+          title="Take photo"
+        >
+          <Camera className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2">

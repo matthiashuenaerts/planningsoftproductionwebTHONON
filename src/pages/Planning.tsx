@@ -18,7 +18,8 @@ import {
   Loader2,
   Clock,
   Users,
-  User
+  User,
+  Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Navbar from '@/components/Navbar';
@@ -28,6 +29,13 @@ import { employeeService } from '@/services/dataService';
 import { planningService } from '@/services/planningService';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const Planning = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
@@ -37,6 +45,7 @@ const Planning = () => {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [generationSuccess, setGenerationSuccess] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("all");
+  const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const { currentEmployee } = useAuth();
   const { toast } = useToast();
   const isAdmin = currentEmployee?.role === 'admin';
@@ -46,6 +55,13 @@ const Planning = () => {
       try {
         const employeeData = await employeeService.getAll();
         setEmployees(employeeData);
+        
+        // If admin, preselect the first employee, otherwise select current user
+        if (isAdmin && employeeData.length > 0) {
+          setSelectedEmployee(employeeData[0].id);
+        } else if (currentEmployee) {
+          setSelectedEmployee(currentEmployee.id);
+        }
       } catch (error) {
         console.error('Error fetching employees:', error);
         toast({
@@ -57,7 +73,7 @@ const Planning = () => {
     };
 
     fetchEmployees();
-  }, [toast]);
+  }, [toast, currentEmployee, isAdmin]);
 
   const handleGeneratePlan = async () => {
     if (!isAdmin) {
@@ -96,10 +112,10 @@ const Planning = () => {
   };
 
   const handleGeneratePersonalPlan = async () => {
-    if (!currentEmployee) {
+    if (!selectedEmployee) {
       toast({
-        title: "Authentication Required",
-        description: "You must be logged in to create a personal plan",
+        title: "Employee Required",
+        description: "Please select an employee to create a plan",
         variant: "destructive"
       });
       return;
@@ -111,12 +127,16 @@ const Planning = () => {
       setGenerationSuccess(null);
       
       // Generate a plan based on personal tasks
-      await planningService.generatePlanFromPersonalTasks(currentEmployee.id, selectedDate);
+      await planningService.generatePlanFromPersonalTasks(selectedEmployee, selectedDate);
       
-      setGenerationSuccess("Your personal daily plan has been generated based on your tasks");
+      // Get employee name
+      const employee = employees.find(emp => emp.id === selectedEmployee);
+      const employeeName = employee ? employee.name : "selected employee";
+      
+      setGenerationSuccess(`Daily plan has been generated for ${employeeName}`);
       toast({
         title: "Success",
-        description: "Your personal plan has been created",
+        description: `Plan created for ${employeeName}`,
       });
     } catch (error: any) {
       console.error("Generate personal plan error:", error);
@@ -137,9 +157,25 @@ const Planning = () => {
     setGenerationSuccess(null);
   }, [selectedDate]);
 
-  const filteredEmployees = activeTab === "all" 
-    ? employees 
-    : employees.filter(emp => emp.id === currentEmployee?.id);
+  const handleEmployeeChange = (employeeId: string) => {
+    setSelectedEmployee(employeeId);
+    
+    // If admin viewing personal tab, update the tab to show the selected employee
+    if (isAdmin && activeTab === "me") {
+      setActiveTab("selected");
+    }
+  };
+
+  const getFilteredEmployees = () => {
+    if (activeTab === "all") {
+      return employees;
+    } else if (activeTab === "me") {
+      return employees.filter(emp => emp.id === currentEmployee?.id);
+    } else if (activeTab === "selected" && selectedEmployee) {
+      return employees.filter(emp => emp.id === selectedEmployee);
+    }
+    return [];
+  };
 
   return (
     <div className="flex min-h-screen">
@@ -156,7 +192,7 @@ const Planning = () => {
               </p>
             </div>
             
-            <div className="flex items-center space-x-4">
+            <div className="flex flex-col md:flex-row items-start md:items-center space-y-3 md:space-y-0 md:space-x-4">
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -203,8 +239,8 @@ const Planning = () => {
                     </>
                   ) : (
                     <>
-                      <ListTodo className="mr-2 h-4 w-4" />
-                      Plan My Day
+                      <Wand2 className="mr-2 h-4 w-4" />
+                      Generate Tasks
                     </>
                   )}
                 </Button>
@@ -228,29 +264,52 @@ const Planning = () => {
             </Alert>
           )}
           
-          {isAdmin && (
-            <Tabs 
-              defaultValue="all" 
-              className="mb-6"
-              value={activeTab}
-              onValueChange={setActiveTab}
-            >
-              <TabsList className="grid w-full max-w-md grid-cols-2">
-                <TabsTrigger value="all" className="flex items-center justify-center">
-                  <Users className="h-4 w-4 mr-2" />
-                  All Employees
-                </TabsTrigger>
-                <TabsTrigger value="me" className="flex items-center justify-center">
-                  <User className="h-4 w-4 mr-2" />
-                  My Schedule
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          )}
+          <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="w-full max-w-xs">
+              <Select
+                value={selectedEmployee || ""}
+                onValueChange={handleEmployeeChange}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select employee" />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees.map((employee) => (
+                    <SelectItem key={employee.id} value={employee.id}>
+                      {employee.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {isAdmin && (
+              <Tabs 
+                value={activeTab} 
+                onValueChange={setActiveTab}
+                className="w-full max-w-md"
+              >
+                <TabsList className="grid grid-cols-3">
+                  <TabsTrigger value="all" className="flex items-center justify-center">
+                    <Users className="h-4 w-4 mr-2" />
+                    All Employees
+                  </TabsTrigger>
+                  <TabsTrigger value="selected" className="flex items-center justify-center">
+                    <User className="h-4 w-4 mr-2" />
+                    Selected
+                  </TabsTrigger>
+                  <TabsTrigger value="me" className="flex items-center justify-center">
+                    <User className="h-4 w-4 mr-2" />
+                    My Schedule
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            )}
+          </div>
 
           <PlanningTimeline 
             selectedDate={selectedDate}
-            employees={isAdmin ? filteredEmployees : employees.filter(emp => emp.id === currentEmployee?.id)}
+            employees={isAdmin ? getFilteredEmployees() : employees.filter(emp => emp.id === currentEmployee?.id)}
             isAdmin={isAdmin}
           />
           

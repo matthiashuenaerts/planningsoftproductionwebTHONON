@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +37,7 @@ interface ScheduledTask {
   task_id: string | null;
   phase_id: string | null;
   is_auto_generated: boolean;
+  is_completed?: boolean;
   created_at: string;
   updated_at: string;
   employee?: {

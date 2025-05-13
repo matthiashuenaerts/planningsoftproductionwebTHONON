@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
@@ -29,6 +28,7 @@ import { projectService } from '@/services/dataService';
 import { useAuth } from '@/context/AuthContext';
 import { Order, OrderItem, OrderAttachment } from '@/types/order';
 import { format } from 'date-fns';
+import OrderAttachmentUploader from '@/components/OrderAttachmentUploader';
 
 const Orders: React.FC = () => {
   const navigate = useNavigate();
@@ -176,6 +176,23 @@ const Orders: React.FC = () => {
   
   const handleSortToggle = () => {
     setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+  };
+  
+  const handleAttachmentUploadSuccess = async (orderId: string) => {
+    try {
+      const attachments = await orderService.getOrderAttachments(orderId);
+      setOrderAttachments(prev => ({
+        ...prev,
+        [orderId]: attachments
+      }));
+      
+      toast({
+        title: "Success",
+        description: "Attachment uploaded successfully",
+      });
+    } catch (error: any) {
+      console.error("Error refreshing attachments:", error);
+    }
   };
   
   const filteredOrders = orders
@@ -345,7 +362,14 @@ const Orders: React.FC = () => {
                                   </div>
                                   
                                   <div className="mt-4">
-                                    <h4 className="font-medium mb-2">Attachments</h4>
+                                    <div className="flex justify-between items-center mb-2">
+                                      <h4 className="font-medium">Attachments</h4>
+                                      <OrderAttachmentUploader 
+                                        orderId={order.id}
+                                        onUploadSuccess={() => handleAttachmentUploadSuccess(order.id)}
+                                        compact
+                                      />
+                                    </div>
                                     {!orderAttachments[order.id] ? (
                                       <div className="flex justify-center p-4">
                                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
@@ -353,14 +377,10 @@ const Orders: React.FC = () => {
                                     ) : orderAttachments[order.id]?.length === 0 ? (
                                       <div className="flex items-center justify-between">
                                         <p className="text-sm text-muted-foreground">No attachments for this order.</p>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => navigate(`/projects/${order.project_id}/orders`)}
-                                        >
-                                          <Paperclip className="mr-2 h-4 w-4" />
-                                          Add Attachment
-                                        </Button>
+                                        <OrderAttachmentUploader 
+                                          orderId={order.id}
+                                          onUploadSuccess={() => handleAttachmentUploadSuccess(order.id)}
+                                        />
                                       </div>
                                     ) : (
                                       <div className="space-y-2">
