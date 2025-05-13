@@ -15,23 +15,17 @@ import { Menubar, MenubarMenu, MenubarTrigger, MenubarContent, MenubarItem } fro
 import { useLanguage } from '@/context/LanguageContext';
 import { Project, ProjectTeamAssignment } from '@/types/project';
 
-interface Project {
-  id: string;
-  name: string;
-  client: string;
-  installation_date: string;
-  status: string;
-  progress: number;
+interface CalendarProject extends Project {
   team?: string;
   duration: number;
-  [key: string]: any;
+  assignment_start_date?: string;
 }
 
 const DailyTasks: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'team'>('month');
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [allProjects, setAllProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<CalendarProject[]>([]);
+  const [allProjects, setAllProjects] = useState<CalendarProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [weekStart, setWeekStart] = useState<Date>(new Date());
   const { toast } = useToast();
@@ -61,7 +55,7 @@ const DailyTasks: React.FC = () => {
         let enhancedProjects = (projectsData || []).map(p => ({
           ...p,
           duration: 1 // Default duration
-        })) as Project[];
+        })) as CalendarProject[];
         
         // Transform the data to include team and duration if available
         if (enhancedProjects.length > 0) {
@@ -90,7 +84,7 @@ const DailyTasks: React.FC = () => {
   }, [toast]);
 
   // Enhance projects with team assignment data
-  const enhanceProjectsWithTeamData = async (projects: Project[]): Promise<Project[]> => {
+  const enhanceProjectsWithTeamData = async (projects: CalendarProject[]): Promise<CalendarProject[]> => {
     try {
       // Check if table exists before querying - this is the fix for the error
       const { data: projectTeamAssignments, error } = await supabase
@@ -144,7 +138,7 @@ const DailyTasks: React.FC = () => {
   }, [selectedDate, allProjects]);
 
   // Filter projects for selected date
-  const filterProjectsForSelectedDate = (date: Date | undefined, allProjectsData: Project[]) => {
+  const filterProjectsForSelectedDate = (date: Date | undefined, allProjectsData: CalendarProject[]) => {
     if (!date) {
       setProjects([]);
       return;
@@ -221,7 +215,7 @@ const DailyTasks: React.FC = () => {
   };
 
   // Assign project to team
-  const handleAssignTeam = async (projectId: string, team: string, startDate: string, duration: number) => {
+  const handleAssignTeam = async (projectId: string, team: string, startDate: string, duration: number): Promise<void> => {
     try {
       // Check if there's an existing assignment
       const { data, error: fetchError } = await supabase
@@ -264,8 +258,6 @@ const DailyTasks: React.FC = () => {
       const updatedProjects = await enhanceProjectsWithTeamData(allProjects);
       setAllProjects(updatedProjects);
       filterProjectsForSelectedDate(selectedDate, updatedProjects);
-      
-      return true;
     } catch (error: any) {
       console.error('Error assigning team:', error);
       toast({
@@ -547,7 +539,6 @@ const DailyTasks: React.FC = () => {
               </CardContent>
             </Card>
           ) : (
-            // Team planning view
             <TeamCalendar 
               projects={allProjects}
               selectedDate={selectedDate || new Date()}

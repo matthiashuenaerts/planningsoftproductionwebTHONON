@@ -8,12 +8,16 @@ interface PlanningTimelineProps {
   selectedDate: Date | undefined;
   schedules: Schedule[];
   isLoading: boolean;
+  employees?: any[]; // Add employees prop
+  isAdmin?: boolean; // Add isAdmin prop
 }
 
 const PlanningTimeline = ({ 
   selectedDate, 
   schedules, 
-  isLoading 
+  isLoading,
+  employees = [], // Default to empty array
+  isAdmin = false // Default to false
 }: PlanningTimelineProps) => {
   const formatTime = (time: string) => {
     return format(new Date(`2000-01-01T${time}`), 'HH:mm');
