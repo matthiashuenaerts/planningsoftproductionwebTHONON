@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -145,9 +146,11 @@ const PlanningTimeline: React.FC<PlanningTimelineProps> = ({
   const markTaskCompleted = async (taskId: string) => {
     try {
       // First update the schedule status
+      const updateData = { is_completed: true } as Record<string, boolean>;
+      
       await supabase
         .from('schedules')
-        .update({ is_completed: true })
+        .update(updateData)
         .eq('id', taskId);
       
       // If it's linked to a task, update the task status too

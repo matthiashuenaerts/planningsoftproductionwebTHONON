@@ -11,6 +11,28 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 
+// Define project type
+interface Project {
+  id: string;
+  name: string;
+  client: string;
+  installation_date: string;
+  status: string;
+  progress: number;
+  [key: string]: any;
+}
+
+// Define assignment type
+interface Assignment {
+  id: string;
+  project_id: string;
+  team: string;
+  start_date: string;
+  duration: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
 // Define team colors
 const teamColors = {
   green: {
@@ -107,7 +129,7 @@ const ProjectItem = ({ project, team, dateRange, onExtendProject }) => {
 const TeamCalendar = ({ team, startDate, projects, assignments, onDropProject }) => {
   const [{ isOver }, drop] = useDrop(() => ({
     accept: 'PROJECT',
-    drop: (item) => onDropProject(item.id, team),
+    drop: (item: { id: string; team: string }) => onDropProject(item.id, team),
     collect: (monitor) => ({
       isOver: !!monitor.isOver()
     })
@@ -247,9 +269,9 @@ const UnassignedProjects = ({ projects, assignments }) => {
 };
 
 // Main installation team calendar component
-const InstallationTeamCalendar = ({ projects }) => {
+const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
   const [weekStartDate, setWeekStartDate] = useState(startOfDay(new Date()));
-  const [assignments, setAssignments] = useState([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -291,7 +313,7 @@ const InstallationTeamCalendar = ({ projects }) => {
   };
 
   // Handle project drop on a team
-  const handleDropProject = async (projectId, team) => {
+  const handleDropProject = async (projectId: string, team: string) => {
     try {
       // Check if an assignment already exists
       const existingAssignmentIndex = assignments.findIndex(a => a.project_id === projectId);
@@ -353,7 +375,7 @@ const InstallationTeamCalendar = ({ projects }) => {
   };
 
   // Handle project extension (duration change)
-  const handleExtendProject = async (projectId, direction) => {
+  const handleExtendProject = async (projectId: string, direction: string) => {
     try {
       // Find the assignment
       const assignmentIndex = assignments.findIndex(a => a.project_id === projectId);
