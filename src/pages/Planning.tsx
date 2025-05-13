@@ -26,7 +26,7 @@ import Navbar from '@/components/Navbar';
 import PlanningTimeline from '@/components/PlanningTimeline';
 import PlanningControls from '@/components/PlanningControls';
 import { employeeService } from '@/services/dataService';
-import { planningService } from '@/services/planningService';
+import { planningService, Schedule } from '@/services/planningService';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
@@ -46,6 +46,8 @@ const Planning = () => {
   const [generationSuccess, setGenerationSuccess] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("all");
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [isLoadingSchedules, setIsLoadingSchedules] = useState(false);
   const { currentEmployee } = useAuth();
   const { toast } = useToast();
   const isAdmin = currentEmployee?.role === 'admin';
@@ -74,6 +76,40 @@ const Planning = () => {
 
     fetchEmployees();
   }, [toast, currentEmployee, isAdmin]);
+
+  // Add a useEffect to fetch schedules when selectedDate or employees change
+  useEffect(() => {
+    const fetchSchedules = async () => {
+      setIsLoadingSchedules(true);
+      try {
+        let fetchedSchedules: Schedule[] = [];
+        
+        if (activeTab === "all") {
+          // Fetch all schedules for the selected date
+          fetchedSchedules = await planningService.getSchedulesByDate(selectedDate);
+        } else if (activeTab === "me" && currentEmployee) {
+          // Fetch schedules for current employee on the selected date
+          fetchedSchedules = await planningService.getSchedulesByEmployeeAndDate(currentEmployee.id, selectedDate);
+        } else if (activeTab === "selected" && selectedEmployee) {
+          // Fetch schedules for selected employee on the selected date
+          fetchedSchedules = await planningService.getSchedulesByEmployeeAndDate(selectedEmployee, selectedDate);
+        }
+        
+        setSchedules(fetchedSchedules);
+      } catch (error) {
+        console.error('Error fetching schedules:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load schedules",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoadingSchedules(false);
+      }
+    };
+
+    fetchSchedules();
+  }, [selectedDate, activeTab, currentEmployee, selectedEmployee, toast]);
 
   const handleGeneratePlan = async () => {
     if (!isAdmin) {
@@ -309,8 +345,10 @@ const Planning = () => {
 
           <PlanningTimeline 
             selectedDate={selectedDate}
-            employees={isAdmin ? getFilteredEmployees() : employees.filter(emp => emp.id === currentEmployee?.id)}
+            employees={getFilteredEmployees()}
             isAdmin={isAdmin}
+            schedules={schedules}
+            isLoading={isLoadingSchedules}
           />
           
           <div className="mt-6">
