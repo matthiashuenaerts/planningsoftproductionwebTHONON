@@ -34,6 +34,22 @@ export const rushOrderService = {
         const fileName = `${data.id}-${Date.now()}.${fileExt}`;
         const filePath = `rush-orders/${fileName}`;
         
+        // First check if storage bucket exists, create if needed
+        const { data: buckets } = await supabase
+          .storage
+          .listBuckets();
+        
+        if (!buckets?.find(bucket => bucket.name === 'attachments')) {
+          const { error: createBucketError } = await supabase
+            .storage
+            .createBucket('attachments', { public: true });
+            
+          if (createBucketError) {
+            console.error('Error creating bucket:', createBucketError);
+            throw createBucketError;
+          }
+        }
+        
         const { error: uploadError } = await supabase.storage
           .from('attachments')
           .upload(filePath, imageFile);
@@ -56,7 +72,7 @@ export const rushOrderService = {
         data.image_url = publicUrlData.publicUrl;
       }
       
-      return data;
+      return data as RushOrder;
     } catch (error: any) {
       console.error('Error creating rush order:', error);
       toast({
@@ -136,7 +152,7 @@ export const rushOrderService = {
         .order('created_at', { ascending: false });
         
       if (error) throw error;
-      return data || [];
+      return data as RushOrder[] || [];
     } catch (error: any) {
       console.error('Error fetching rush orders:', error);
       toast({
@@ -169,7 +185,7 @@ export const rushOrderService = {
         .single();
         
       if (error) throw error;
-      return data;
+      return data as RushOrder;
     } catch (error: any) {
       console.error(`Error fetching rush order ${id}:`, error);
       toast({
@@ -181,7 +197,7 @@ export const rushOrderService = {
     }
   },
   
-  async updateRushOrderStatus(id: string, status: "pending" | "in_progress" | "completed"): Promise<boolean> {
+  async updateRushOrderStatus(id: string, status: string): Promise<boolean> {
     try {
       const { error } = await supabase
         .from('rush_orders')
@@ -291,7 +307,7 @@ export const rushOrderService = {
       
       if (ordersError) throw ordersError;
       
-      return rushOrders || [];
+      return rushOrders as RushOrder[] || [];
     } catch (error: any) {
       console.error('Error fetching rush orders for workstation:', error);
       return [];

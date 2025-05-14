@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
@@ -113,7 +112,7 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
   };
   
   // Handle form submission
-  const onSubmit = async (data: RushOrderFormData) => {
+  const onSubmit = async (formData: RushOrderFormData) => {
     if (!currentEmployee) {
       toast({
         title: "Error",
@@ -127,33 +126,33 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
       setIsSubmitting(true);
       
       // Format deadline
-      const formattedDeadline = format(data.deadline, "yyyy-MM-dd'T'HH:mm:ss");
+      const formattedDeadline = format(formData.deadline, "yyyy-MM-dd'T'HH:mm:ss");
       
       // Create rush order
       const rushOrder = await rushOrderService.createRushOrder(
-        data.title,
-        data.description,
+        formData.title,
+        formData.description,
         formattedDeadline,
         currentEmployee.id,
-        data.image // This is now correctly typed in RushOrderFormData
+        formData.image
       );
       
       if (!rushOrder) throw new Error("Failed to create rush order");
       
       // Assign tasks
-      if (data.selectedTasks.length > 0) {
-        await rushOrderService.assignTasksToRushOrder(rushOrder.id, data.selectedTasks);
+      if (formData.selectedTasks.length > 0) {
+        await rushOrderService.assignTasksToRushOrder(rushOrder.id, formData.selectedTasks);
       }
       
       // Assign users
-      if (data.assignedUsers.length > 0) {
-        await rushOrderService.assignUsersToRushOrder(rushOrder.id, data.assignedUsers);
+      if (formData.assignedUsers.length > 0) {
+        await rushOrderService.assignUsersToRushOrder(rushOrder.id, formData.assignedUsers);
       }
       
       // Send notifications to all users
       await rushOrderService.notifyAllUsers(
         rushOrder.id, 
-        `New rush order created: ${data.title}`
+        `New rush order created: ${formData.title}`
       );
       
       toast({
@@ -186,8 +185,6 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
   const triggerFileInput = () => {
     fileInputRef.current?.click();
   };
-  
-  const { data: imageFile } = watch();
   
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
