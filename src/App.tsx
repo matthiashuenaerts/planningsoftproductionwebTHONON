@@ -1,4 +1,5 @@
-import { Toaster } from "@/components/ui/toaster";
+
+import { Toaster } from "@/hooks/use-toast";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -17,6 +18,8 @@ import Planning from "./pages/Planning";
 import Settings from "./pages/Settings";
 import Orders from "./pages/Orders";
 import ProjectOrders from "./pages/ProjectOrders";
+import RushOrders from "./pages/RushOrders";
+import RushOrderDetails from "./pages/RushOrderDetails";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -79,6 +82,16 @@ const App = () => (
               <Route path="/projects/:projectId/orders" element={
                 <ProtectedRoute>
                   <ProjectOrders />
+                </ProtectedRoute>
+              } />
+              <Route path="/rush-orders" element={
+                <ProtectedRoute>
+                  <RushOrders />
+                </ProtectedRoute>
+              } />
+              <Route path="/rush-orders/:rushOrderId" element={
+                <ProtectedRoute>
+                  <RushOrderDetails />
                 </ProtectedRoute>
               } />
               <Route path="*" element={<NotFound />} />

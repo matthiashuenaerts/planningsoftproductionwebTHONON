@@ -1,14 +1,21 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Calendar, LogOut, LayoutDashboard, List, Settings as SettingsIcon, Package, CalendarClock, CalendarCheck } from 'lucide-react';
+import { Calendar, LogOut, LayoutDashboard, List, Settings as SettingsIcon, Package, CalendarClock, CalendarCheck, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import NotificationDropdown from '@/components/NotificationDropdown';
 
 const Navbar: React.FC = () => {
   const location = useLocation();
   const { currentEmployee, logout } = useAuth();
   const isAdmin = currentEmployee?.role === 'admin';
-
+  const isManager = currentEmployee?.role === 'manager';
+  const isAdminOrManager = isAdmin || isManager;
+  const isInstallationTeam = currentEmployee?.role === 'installation_team';
+  
+  // Show rush orders menu item to admin, manager, and installation team roles
+  const canAccessRushOrders = isAdminOrManager || isInstallationTeam;
+  
   return (
     <nav className="bg-sidebar text-sidebar-foreground p-4 flex flex-col h-full">
       <div className="flex items-center justify-center mb-8 mt-2">
@@ -58,6 +65,17 @@ const Navbar: React.FC = () => {
           title="Orders" 
           active={location.pathname === '/orders' || location.pathname.includes('/orders/')} 
         />
+        
+        {canAccessRushOrders && (
+          <NavItem 
+            to="/rush-orders" 
+            icon={<AlertTriangle className="w-5 h-5 text-red-500" />} 
+            title="Rush Orders" 
+            active={location.pathname === '/rush-orders' || location.pathname.includes('/rush-orders/')} 
+            className="text-red-500 font-medium"
+          />
+        )}
+        
         {isAdmin && (
           <NavItem 
             to="/settings" 
@@ -79,6 +97,9 @@ const Navbar: React.FC = () => {
             <p className="text-sm font-medium">{currentEmployee?.name || 'User'}</p>
             <p className="text-xs text-sidebar-foreground/70">{currentEmployee?.role || 'Employee'}</p>
           </div>
+          
+          <NotificationDropdown />
+          
           <button 
             onClick={logout} 
             className="p-2 rounded-md hover:bg-sidebar-accent/50 transition-colors"
@@ -97,9 +118,10 @@ interface NavItemProps {
   icon: React.ReactNode;
   title: string;
   active: boolean;
+  className?: string;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ to, icon, title, active }) => {
+const NavItem: React.FC<NavItemProps> = ({ to, icon, title, active, className }) => {
   return (
     <Link
       to={to}
@@ -107,7 +129,7 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, title, active }) => {
         active 
           ? "bg-sidebar-accent text-sidebar-accent-foreground" 
           : "hover:bg-sidebar-accent/50"
-      }`}
+      } ${className || ''}`}
     >
       {icon}
       <span className="text-sm font-medium">{title}</span>
