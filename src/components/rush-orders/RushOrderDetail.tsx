@@ -63,7 +63,7 @@ const RushOrderDetail: React.FC<RushOrderDetailProps> = ({ rushOrderId, onStatus
           description: `Rush order status changed to ${newStatus.replace('_', ' ')}`,
         });
         
-        await refetch();
+        refetch();
         if (onStatusChange) onStatusChange();
       } else {
         throw new Error("Failed to update status");

@@ -31,8 +31,8 @@ const RushOrders = () => {
   };
   
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      <div className="w-64 bg-sidebar fixed top-0 bottom-0 left-0 shadow-md">
+    <div className="flex min-h-screen">
+      <div className="w-64 bg-sidebar fixed top-0 bottom-0">
         <Navbar />
       </div>
       <div className="ml-64 w-full p-6">
