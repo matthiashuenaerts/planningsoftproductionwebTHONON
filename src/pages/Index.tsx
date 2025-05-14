@@ -15,8 +15,8 @@ const Index = () => {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <div className="w-64 bg-sidebar fixed top-0 bottom-0">
+    <div className="flex min-h-screen bg-gray-100">
+      <div className="w-64 bg-sidebar fixed top-0 bottom-0 left-0 shadow-md">
         <Navbar />
       </div>
       <div className="ml-64 w-full p-6">
@@ -24,7 +24,7 @@ const Index = () => {
           <h1 className="text-3xl font-bold mb-6">PhaseFlow Dashboard</h1>
           <Dashboard />
           {currentEmployee?.role === 'admin' && (
-            <div className="mt-8 p-6 bg-slate-50 rounded-lg border border-slate-200">
+            <div className="mt-8 p-6 bg-white rounded-lg shadow border border-slate-200">
               <h2 className="text-2xl font-semibold mb-4">User Management</h2>
               <p className="mb-4 text-slate-600">As an administrator, you can add and manage users in the system.</p>
               <UserManagement />
