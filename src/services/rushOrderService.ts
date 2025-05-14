@@ -31,6 +31,9 @@ export const rushOrderService = {
       
       // Upload image if provided
       if (imageFile && data) {
+        // Ensure storage bucket exists
+        await ensureStorageBucket('attachments');
+        
         const fileExt = imageFile.name.split('.').pop();
         const fileName = `${data.id}-${Date.now()}.${fileExt}`;
         const filePath = `rush-orders/${fileName}`;
@@ -57,7 +60,7 @@ export const rushOrderService = {
         data.image_url = publicUrlData.publicUrl;
       }
       
-      return data;
+      return data as RushOrder;
     } catch (error: any) {
       console.error('Error creating rush order:', error);
       toast({
@@ -137,7 +140,7 @@ export const rushOrderService = {
         .order('created_at', { ascending: false });
         
       if (error) throw error;
-      return data || [];
+      return data as RushOrder[] || [];
     } catch (error: any) {
       console.error('Error fetching rush orders:', error);
       toast({
@@ -170,7 +173,7 @@ export const rushOrderService = {
         .single();
         
       if (error) throw error;
-      return data;
+      return data as RushOrder;
     } catch (error: any) {
       console.error(`Error fetching rush order ${id}:`, error);
       toast({
@@ -292,7 +295,7 @@ export const rushOrderService = {
       
       if (ordersError) throw ordersError;
       
-      return rushOrders || [];
+      return rushOrders as RushOrder[] || [];
     } catch (error: any) {
       console.error('Error fetching rush orders for workstation:', error);
       return [];

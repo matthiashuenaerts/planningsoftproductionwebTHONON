@@ -68,19 +68,16 @@ const RushOrders = () => {
               <TabsTrigger value="completed">Completed</TabsTrigger>
             </TabsList>
             <TabsContent value="all" className="mt-6">
-              <RushOrderList />
+              <RushOrderList statusFilter="all" />
             </TabsContent>
             <TabsContent value="pending" className="mt-6">
-              {/* Filtered list will go here in future enhancement */}
-              <RushOrderList />
+              <RushOrderList statusFilter="pending" />
             </TabsContent>
             <TabsContent value="in_progress" className="mt-6">
-              {/* Filtered list will go here in future enhancement */}
-              <RushOrderList />
+              <RushOrderList statusFilter="in_progress" />
             </TabsContent>
             <TabsContent value="completed" className="mt-6">
-              {/* Filtered list will go here in future enhancement */}
-              <RushOrderList />
+              <RushOrderList statusFilter="completed" />
             </TabsContent>
           </Tabs>
         </div>

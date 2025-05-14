@@ -11,12 +11,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 
-const RushOrderList: React.FC = () => {
+interface RushOrderListProps {
+  statusFilter?: "pending" | "in_progress" | "completed" | "all";
+}
+
+const RushOrderList: React.FC<RushOrderListProps> = ({ statusFilter = "all" }) => {
   const { toast } = useToast();
   const navigate = useNavigate();
   
   const { data: rushOrders, isLoading, error, refetch } = useQuery({
-    queryKey: ['rushOrders'],
+    queryKey: ['rushOrders', statusFilter],
     queryFn: rushOrderService.getAllRushOrders,
   });
   
@@ -32,6 +36,11 @@ const RushOrderList: React.FC = () => {
         return <Badge variant="outline">Unknown</Badge>;
     }
   };
+
+  // Filter the rush orders based on the statusFilter prop
+  const filteredOrders = rushOrders?.filter(order => 
+    statusFilter === "all" ? true : order.status === statusFilter
+  );
   
   if (isLoading) {
     return (
@@ -74,7 +83,7 @@ const RushOrderList: React.FC = () => {
     );
   }
   
-  if (!rushOrders || rushOrders.length === 0) {
+  if (!filteredOrders || filteredOrders.length === 0) {
     return (
       <Card className="bg-gray-50 border-gray-200 text-center py-8">
         <CardContent>
@@ -86,7 +95,7 @@ const RushOrderList: React.FC = () => {
   
   return (
     <div className="space-y-4">
-      {rushOrders.map((order: RushOrder) => (
+      {filteredOrders.map((order: RushOrder) => (
         <Card key={order.id} className="shadow-sm transition-shadow hover:shadow-md">
           <CardHeader className="pb-4">
             <div className="flex justify-between items-start">
