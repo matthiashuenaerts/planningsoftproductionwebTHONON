@@ -22,8 +22,8 @@ export interface RushOrder {
   description: string;
   deadline: string;
   image_url?: string;
-  status: string; // Changed from enum to string to match what comes from the database
-  priority: string; // Changed from enum to string to match what comes from the database
+  status: "pending" | "in_progress" | "completed";
+  priority: "high" | "critical";
   created_by: string;
   created_at: string;
   updated_at: string;
