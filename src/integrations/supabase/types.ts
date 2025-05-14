@@ -75,6 +75,48 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          read: boolean
+          rush_order_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          read?: boolean
+          rush_order_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          read?: boolean
+          rush_order_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_rush_order_id_fkey"
+            columns: ["rush_order_id"]
+            isOneToOne: false
+            referencedRelation: "rush_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_attachments: {
         Row: {
           created_at: string
@@ -344,6 +386,117 @@ export type Database = {
           progress?: number | null
           start_date?: string
           status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      rush_order_assignments: {
+        Row: {
+          created_at: string
+          employee_id: string
+          id: string
+          rush_order_id: string
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          id?: string
+          rush_order_id: string
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          id?: string
+          rush_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rush_order_assignments_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rush_order_assignments_rush_order_id_fkey"
+            columns: ["rush_order_id"]
+            isOneToOne: false
+            referencedRelation: "rush_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rush_order_tasks: {
+        Row: {
+          created_at: string
+          id: string
+          rush_order_id: string
+          standard_task_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          rush_order_id: string
+          standard_task_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          rush_order_id?: string
+          standard_task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rush_order_tasks_rush_order_id_fkey"
+            columns: ["rush_order_id"]
+            isOneToOne: false
+            referencedRelation: "rush_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rush_order_tasks_standard_task_id_fkey"
+            columns: ["standard_task_id"]
+            isOneToOne: false
+            referencedRelation: "standard_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rush_orders: {
+        Row: {
+          created_at: string
+          created_by: string
+          deadline: string
+          description: string
+          id: string
+          image_url: string | null
+          priority: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          deadline: string
+          description: string
+          id?: string
+          image_url?: string | null
+          priority?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          deadline?: string
+          description?: string
+          id?: string
+          image_url?: string | null
+          priority?: string
+          status?: string
+          title?: string
           updated_at?: string
         }
         Relationships: []
