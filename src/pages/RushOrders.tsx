@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -23,6 +22,7 @@ const RushOrders = () => {
   const queryClient = useQueryClient();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   
+  // Keep this existing check - only admin, manager, installation_team can create rush orders
   const canCreateRushOrder = currentEmployee && ['admin', 'manager', 'installation_team'].includes(currentEmployee.role);
   
   const handleCreateSuccess = () => {
@@ -52,6 +52,7 @@ const RushOrders = () => {
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold">Rush Orders</h1>
             
+            {/* Only show add button to users with permission */}
             {canCreateRushOrder && (
               <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
                 <DialogTrigger asChild>

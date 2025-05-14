@@ -7,7 +7,13 @@ import { NavLink } from 'react-router-dom';
 const Navbar = () => {
   const { currentEmployee, logout } = useAuth();
   
-  const isAdminOrManager = currentEmployee && (currentEmployee.role === 'admin' || currentEmployee.role === 'manager' || currentEmployee.role === 'installation_team');
+  // Allow admin, manager, installation_team, and worker roles to see the Rush Orders menu
+  const canSeeRushOrders = currentEmployee && 
+    ['admin', 'manager', 'installation_team', 'worker'].includes(currentEmployee.role);
+  
+  // Only admin, manager, and installation_team can add new rush orders
+  const canCreateRushOrder = currentEmployee && 
+    ['admin', 'manager', 'installation_team'].includes(currentEmployee.role);
   
   return (
     <div className="h-full px-3 py-4 overflow-y-auto bg-sky-800 text-white">
@@ -45,7 +51,7 @@ const Navbar = () => {
                 <span className="ml-3">Daily Tasks</span>
               </NavLink>
             </li>
-            {isAdminOrManager && (
+            {currentEmployee && ['admin', 'manager', 'installation_team'].includes(currentEmployee.role) && (
               <li>
                 <NavLink to="/planning" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group">
                   <Users className="w-5 h-5 text-white group-hover:text-white" />
@@ -53,7 +59,7 @@ const Navbar = () => {
                 </NavLink>
               </li>
             )}
-            {isAdminOrManager && (
+            {currentEmployee && ['admin', 'manager', 'installation_team'].includes(currentEmployee.role) && (
               <li>
                 <NavLink to="/orders" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group">
                   <PackagePlus className="w-5 h-5 text-white group-hover:text-white" />
@@ -61,7 +67,7 @@ const Navbar = () => {
                 </NavLink>
               </li>
             )}
-            {isAdminOrManager && (
+            {canSeeRushOrders && (
               <li>
                 <NavLink to="/rush-orders" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group">
                   <PackagePlus className="w-5 h-5 text-white group-hover:text-white" />
