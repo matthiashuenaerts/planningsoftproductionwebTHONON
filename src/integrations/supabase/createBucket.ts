@@ -1,41 +1,36 @@
 
-import { supabase } from './client';
+import { supabase } from "./client";
 
-// Function to ensure the project_files bucket exists and has proper permissions
-export const ensureStorageBucket = async () => {
+export const ensureStorageBucket = async (bucketName: string): Promise<void> => {
   try {
-    console.log("Checking if storage buckets are ready...");
-    
-    // Check if the attachments bucket exists
-    const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
-    
-    if (bucketsError) {
-      console.error('Error listing buckets:', bucketsError);
-      return { success: false, error: bucketsError };
+    // Check if the bucket exists
+    const { data: buckets, error: listError } = await supabase
+      .storage
+      .listBuckets();
+      
+    if (listError) {
+      console.error('Error checking for bucket:', listError);
+      return;
     }
     
-    // Check if our buckets exist
-    const attachmentsBucketExists = buckets.some(bucket => bucket.name === 'attachments');
-    const projectFilesBucketExists = buckets.some(bucket => bucket.name === 'project_files');
+    // If the bucket doesn't exist, create it
+    const bucketExists = buckets?.some(bucket => bucket.name === bucketName);
     
-    if (attachmentsBucketExists && projectFilesBucketExists) {
-      console.log("All required storage buckets exist");
-      return { success: true, data: { message: "All required buckets exist" } };
+    if (!bucketExists) {
+      const { error: createError } = await supabase
+        .storage
+        .createBucket(bucketName, {
+          public: true, // Make files publicly accessible
+        });
+        
+      if (createError) {
+        console.error('Error creating bucket:', createError);
+        return;
+      }
+      
+      console.log(`Storage bucket '${bucketName}' created successfully`);
     }
-    
-    // If any bucket doesn't exist, we'll use the edge function to create them
-    console.log("One or more required buckets don't exist, creating them...");
-    const { data, error } = await supabase.functions.invoke('create-storage-bucket');
-    
-    if (error) {
-      console.error('Error ensuring storage buckets exist:', error);
-      return { success: false, error };
-    }
-    
-    console.log("Storage bucket response:", data);
-    return { success: true, data };
-  } catch (err) {
-    console.error('Error in ensureStorageBucket function:', err);
-    return { success: false, error: err };
+  } catch (error) {
+    console.error('Error in ensureStorageBucket:', error);
   }
 };

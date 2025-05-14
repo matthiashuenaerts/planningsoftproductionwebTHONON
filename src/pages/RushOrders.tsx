@@ -15,7 +15,8 @@ import { useAuth } from '@/context/AuthContext';
 import Navbar from '@/components/Navbar';
 import NewRushOrderForm from '@/components/rush-orders/NewRushOrderForm';
 import RushOrderList from '@/components/rush-orders/RushOrderList';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { rushOrderService } from '@/services/rushOrderService';
 
 const RushOrders = () => {
   const { currentEmployee } = useAuth();
@@ -29,6 +30,17 @@ const RushOrders = () => {
     // Refresh the rush orders list
     queryClient.invalidateQueries({ queryKey: ['rushOrders'] });
   };
+
+  // Fetch all rush orders to get counts
+  const { data: allRushOrders } = useQuery({
+    queryKey: ['rushOrders', 'all'],
+    queryFn: rushOrderService.getAllRushOrders,
+  });
+
+  // Count orders by status
+  const pendingCount = allRushOrders?.filter(order => order.status === 'pending').length || 0;
+  const inProgressCount = allRushOrders?.filter(order => order.status === 'in_progress').length || 0;
+  const completedCount = allRushOrders?.filter(order => order.status === 'completed').length || 0;
   
   return (
     <div className="flex min-h-screen">
@@ -60,16 +72,18 @@ const RushOrders = () => {
             )}
           </div>
           
-          <Tabs defaultValue="all" className="mb-6">
+          <Tabs defaultValue="pending" className="mb-6">
             <TabsList>
-              <TabsTrigger value="all">All Rush Orders</TabsTrigger>
-              <TabsTrigger value="pending">Pending</TabsTrigger>
-              <TabsTrigger value="in_progress">In Progress</TabsTrigger>
-              <TabsTrigger value="completed">Completed</TabsTrigger>
+              <TabsTrigger value="pending">
+                Pending ({pendingCount})
+              </TabsTrigger>
+              <TabsTrigger value="in_progress">
+                In Progress ({inProgressCount})
+              </TabsTrigger>
+              <TabsTrigger value="completed">
+                Completed ({completedCount})
+              </TabsTrigger>
             </TabsList>
-            <TabsContent value="all" className="mt-6">
-              <RushOrderList statusFilter="all" />
-            </TabsContent>
             <TabsContent value="pending" className="mt-6">
               <RushOrderList statusFilter="pending" />
             </TabsContent>
