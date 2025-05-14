@@ -120,7 +120,7 @@ const OrderAttachmentUploader: React.FC<OrderAttachmentUploaderProps> = ({
         onChange={handleFileChange}
         className="hidden"
         accept="image/*"
-        capture="environment"
+        capture="user"
       />
       <Button 
         variant="outline" 
