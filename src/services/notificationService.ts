@@ -1,117 +1,92 @@
 
-import { supabase } from '@/integrations/supabase/client';
-import { Notification, CreateNotificationParams } from '@/types/notification';
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
-class NotificationService {
-  /**
-   * Get all notifications for a specific user
-   */
-  async getUserNotifications(userId: string): Promise<Notification[]> {
-    const { data, error } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching notifications:', error);
-      throw new Error('Failed to fetch notifications');
-    }
-    
-    return (data || []) as Notification[];
-  }
-  
-  /**
-   * Get unread notifications count for a user
-   */
-  async getUnreadNotificationsCount(userId: string): Promise<number> {
-    const { count, error } = await supabase
-      .from('notifications')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('read', false);
-    
-    if (error) {
-      console.error('Error fetching unread notifications count:', error);
-      throw new Error('Failed to fetch unread notifications count');
-    }
-    
-    return count || 0;
-  }
-  
-  /**
-   * Mark notification as read
-   */
-  async markAsRead(notificationId: string): Promise<void> {
-    const { error } = await supabase
-      .from('notifications')
-      .update({ read: true })
-      .eq('id', notificationId);
-    
-    if (error) {
-      console.error('Error marking notification as read:', error);
-      throw new Error('Failed to mark notification as read');
-    }
-  }
-  
-  /**
-   * Mark all notifications for a user as read
-   */
-  async markAllAsRead(userId: string): Promise<void> {
-    const { error } = await supabase
-      .from('notifications')
-      .update({ read: true })
-      .eq('user_id', userId);
-    
-    if (error) {
-      console.error('Error marking all notifications as read:', error);
-      throw new Error('Failed to mark all notifications as read');
-    }
-  }
-  
-  /**
-   * Create a new notification
-   */
-  async createNotification(params: CreateNotificationParams): Promise<Notification> {
-    const { data, error } = await supabase
-      .from('notifications')
-      .insert({
-        user_id: params.user_id,
-        message: params.message,
-        rush_order_id: params.rush_order_id || null,
-        read: false
-      })
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating notification:', error);
-      throw new Error('Failed to create notification');
-    }
-    
-    return data as Notification;
-  }
-  
-  /**
-   * Create notifications for multiple users with the same message
-   */
-  async createNotificationsForUsers(userIds: string[], message: string, rush_order_id?: string): Promise<void> {
-    const notifications = userIds.map(userId => ({
-      user_id: userId,
-      message: message,
-      rush_order_id: rush_order_id || null,
-      read: false
-    }));
-    
-    const { error } = await supabase
-      .from('notifications')
-      .insert(notifications);
-    
-    if (error) {
-      console.error('Error creating multiple notifications:', error);
-      throw new Error('Failed to create notifications');
-    }
-  }
+export interface Notification {
+  id: string;
+  user_id: string;
+  message: string;
+  read: boolean;
+  rush_order_id?: string;
+  created_at: string;
 }
 
-export const notificationService = new NotificationService();
+export const notificationService = {
+  async getUserNotifications(userId: string): Promise<Notification[]> {
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+        
+      if (error) throw error;
+      return data || [];
+    } catch (error: any) {
+      console.error('Error fetching notifications:', error);
+      return [];
+    }
+  },
+  
+  async getUnreadCount(userId: string): Promise<number> {
+    try {
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('read', false);
+        
+      if (error) throw error;
+      return count || 0;
+    } catch (error: any) {
+      console.error('Error fetching unread count:', error);
+      return 0;
+    }
+  },
+  
+  async markAsRead(notificationId: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('id', notificationId);
+        
+      if (error) throw error;
+      return true;
+    } catch (error: any) {
+      console.error('Error marking notification as read:', error);
+      return false;
+    }
+  },
+  
+  async markAllAsRead(userId: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('user_id', userId)
+        .eq('read', false);
+        
+      if (error) throw error;
+      return true;
+    } catch (error: any) {
+      console.error('Error marking all notifications as read:', error);
+      return false;
+    }
+  },
+  
+  async deleteNotification(notificationId: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('id', notificationId);
+        
+      if (error) throw error;
+      return true;
+    } catch (error: any) {
+      console.error('Error deleting notification:', error);
+      return false;
+    }
+  }
+};
