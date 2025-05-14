@@ -28,7 +28,7 @@ interface Employee {
 }
 
 const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) => {
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<RushOrderFormData>({
+  const { register, handleSubmit: formHandleSubmit, reset, setValue, watch, formState: { errors } } = useForm<RushOrderFormData>({
     defaultValues: {
       title: '',
       description: '',
@@ -71,7 +71,7 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
   // Ensure storage bucket exists on component mount
   useEffect(() => {
     const checkBuckets = async () => {
-      await ensureStorageBucket();
+      await ensureStorageBucket('attachments');
     };
     checkBuckets();
   }, []);
@@ -122,18 +122,11 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
   
   // Handle form submission
   const onSubmit = async (data: RushOrderFormData) => {
-    if (!currentEmployee) {
-      toast({
-        title: "Error",
-        description: "You must be logged in to create a rush order",
-        variant: "destructive"
-      });
-      return;
-    }
+    if (!currentEmployee) return;
+    
+    setIsSubmitting(true);
     
     try {
-      setIsSubmitting(true);
-      
       // Format deadline
       const formattedDeadline = format(data.deadline, "yyyy-MM-dd'T'HH:mm:ss");
       
@@ -177,13 +170,13 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
       
       // Call onSuccess callback
       if (onSuccess) onSuccess();
-    } catch (error: any) {
-      console.error("Error creating rush order:", error);
-      toast({
-        title: "Error",
-        description: `Failed to create rush order: ${error.message}`,
-        variant: "destructive"
-      });
+    } catch (error) {
+      console.error("Error submitting rush order:", error);
+      notificationService.showNotification(
+        "An error occurred while creating the rush order.",
+        "destructive", 
+        "Error"
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -198,7 +191,7 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
   const { data: imageFile } = watch();
   
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={formHandleSubmit(onSubmit)} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-6">
           <div className="space-y-2">

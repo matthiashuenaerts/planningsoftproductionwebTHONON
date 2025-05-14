@@ -12,7 +12,7 @@ export const initializeDatabase = async () => {
     }
     
     // Also ensure storage bucket exists with proper permissions
-    const storageResult = await ensureStorageBucket();
+    const storageResult = await ensureStorageBucket('project_files');
     if (!storageResult.success) {
       console.warn("Warning: Could not initialize storage bucket:", storageResult.error);
     }

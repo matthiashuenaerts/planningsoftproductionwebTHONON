@@ -85,7 +85,7 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
     try {
       // First ensure the storage bucket exists with proper permissions
       console.log("Initializing storage bucket...");
-      const bucketResult = await ensureStorageBucket();
+      const bucketResult = await ensureStorageBucket('project_files');
       
       if (!bucketResult.success) {
         console.error("Failed to ensure storage bucket:", bucketResult.error);

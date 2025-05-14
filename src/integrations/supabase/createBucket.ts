@@ -1,7 +1,13 @@
 
 import { supabase } from "./client";
 
-export const ensureStorageBucket = async (bucketName: string): Promise<void> => {
+interface StorageBucketResult {
+  success: boolean;
+  data?: any;
+  error?: Error;
+}
+
+export const ensureStorageBucket = async (bucketName: string = 'project_files'): Promise<StorageBucketResult> => {
   try {
     // Check if the bucket exists
     const { data: buckets, error: listError } = await supabase
@@ -10,7 +16,10 @@ export const ensureStorageBucket = async (bucketName: string): Promise<void> => 
       
     if (listError) {
       console.error('Error checking for bucket:', listError);
-      return;
+      return {
+        success: false,
+        error: listError
+      };
     }
     
     // If the bucket doesn't exist, create it
@@ -25,12 +34,24 @@ export const ensureStorageBucket = async (bucketName: string): Promise<void> => 
         
       if (createError) {
         console.error('Error creating bucket:', createError);
-        return;
+        return {
+          success: false,
+          error: createError
+        };
       }
       
       console.log(`Storage bucket '${bucketName}' created successfully`);
     }
+    
+    return {
+      success: true,
+      data: { bucketName, exists: bucketExists }
+    };
   } catch (error) {
     console.error('Error in ensureStorageBucket:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error : new Error('Unknown error initializing storage')
+    };
   }
 };
