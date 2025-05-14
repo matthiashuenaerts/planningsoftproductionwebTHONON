@@ -1,4 +1,6 @@
 
+import { StandardTask } from "@/services/standardTasksService";
+
 export interface RushOrderTask {
   id: string;
   rush_order_id: string;
