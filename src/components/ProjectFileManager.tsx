@@ -200,7 +200,10 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
       // First, ensure bucket is initialized
       if (!bucketInitialized) {
         console.log("Bucket not initialized yet, initializing first...");
-        await ensureStorageBucket();
+        const result = await ensureStorageBucket('project_files');
+        if (!result.success) {
+          throw new Error(`Failed to initialize storage: ${result.error?.message}`);
+        }
         setBucketInitialized(true);
       }
       
@@ -244,13 +247,13 @@ const ProjectFileManager: React.FC<ProjectFileManagerProps> = ({ projectId }) =>
       let errorMessage = error.message;
       
       // Check for specific RLS policy error
-      if (error.message.includes('row-level security policy') || 
-          error.message.includes('Permission denied')) {
+      if (error.message?.includes('row-level security policy') || 
+          error.message?.includes('Permission denied')) {
         errorMessage = 'Permission denied: You may need to log out and log back in to refresh your credentials.';
         
         // Try to refresh the bucket policies
         try {
-          await ensureStorageBucket();
+          await ensureStorageBucket('project_files');
           setBucketInitialized(true);
         } catch (e) {
           console.error("Error refreshing bucket policies:", e);

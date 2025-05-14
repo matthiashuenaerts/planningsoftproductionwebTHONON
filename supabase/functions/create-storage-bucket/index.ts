@@ -17,7 +17,7 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   
-  // Create Supabase client
+  // Create Supabase client with service role key for admin privileges
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   
   try {
@@ -59,7 +59,7 @@ serve(async (req) => {
         results.push({ bucket: bucketName, status: 'exists' });
       }
       
-      // Set up policies for this bucket
+      // Set up public access policies for this bucket to bypass RLS issues
       await setupBucketPolicies(supabase, bucketName);
     }
     
@@ -93,116 +93,65 @@ serve(async (req) => {
   }
 });
 
+// Function to set up comprehensive storage policies for a bucket
 async function setupBucketPolicies(supabase, bucketName) {
-  // CREATE OR REPLACE POLICY for SELECT
-  const { error: selectPolicyError } = await supabase.rpc('stored_procedure', {
-    name: `
-      DO $$
-      BEGIN
-        IF EXISTS (
-          SELECT 1 FROM pg_policies 
-          WHERE schemaname = 'storage' 
-          AND tablename = 'objects' 
-          AND policyname = 'Everyone can view ${bucketName} files'
-        ) THEN
-          DROP POLICY "Everyone can view ${bucketName} files" ON storage.objects;
-        END IF;
-        
-        CREATE POLICY "Everyone can view ${bucketName} files" 
-        ON storage.objects
-        FOR SELECT 
-        USING (bucket_id = '${bucketName}');
-      END$$;
-    `
-  });
-  
-  if (selectPolicyError) {
-    console.error(`Error creating/updating SELECT policy for ${bucketName}:`, selectPolicyError);
-  } else {
-    console.log(`SELECT policy for ${bucketName} created/updated successfully`);
-  }
-  
-  // CREATE OR REPLACE POLICY for INSERT
-  const { error: insertPolicyError } = await supabase.rpc('stored_procedure', {
-    name: `
-      DO $$
-      BEGIN
-        IF EXISTS (
-          SELECT 1 FROM pg_policies 
-          WHERE schemaname = 'storage' 
-          AND tablename = 'objects' 
-          AND policyname = 'Everyone can upload ${bucketName} files'
-        ) THEN
-          DROP POLICY "Everyone can upload ${bucketName} files" ON storage.objects;
-        END IF;
-        
-        CREATE POLICY "Everyone can upload ${bucketName} files" 
-        ON storage.objects
-        FOR INSERT 
-        WITH CHECK (bucket_id = '${bucketName}');
-      END$$;
-    `
-  });
-  
-  if (insertPolicyError) {
-    console.error(`Error creating/updating INSERT policy for ${bucketName}:`, insertPolicyError);
-  } else {
-    console.log(`INSERT policy for ${bucketName} created/updated successfully`);
-  }
-  
-  // CREATE OR REPLACE POLICY for UPDATE
-  const { error: updatePolicyError } = await supabase.rpc('stored_procedure', {
-    name: `
-      DO $$
-      BEGIN
-        IF EXISTS (
-          SELECT 1 FROM pg_policies 
-          WHERE schemaname = 'storage' 
-          AND tablename = 'objects' 
-          AND policyname = 'Everyone can update ${bucketName} files'
-        ) THEN
-          DROP POLICY "Everyone can update ${bucketName} files" ON storage.objects;
-        END IF;
-        
-        CREATE POLICY "Everyone can update ${bucketName} files" 
-        ON storage.objects
-        FOR UPDATE 
-        USING (bucket_id = '${bucketName}');
-      END$$;
-    `
-  });
-  
-  if (updatePolicyError) {
-    console.error(`Error creating/updating UPDATE policy for ${bucketName}:`, updatePolicyError);
-  } else {
-    console.log(`UPDATE policy for ${bucketName} created/updated successfully`);
-  }
-  
-  // CREATE OR REPLACE POLICY for DELETE
-  const { error: deletePolicyError } = await supabase.rpc('stored_procedure', {
-    name: `
-      DO $$
-      BEGIN
-        IF EXISTS (
-          SELECT 1 FROM pg_policies 
-          WHERE schemaname = 'storage' 
-          AND tablename = 'objects' 
-          AND policyname = 'Everyone can delete ${bucketName} files'
-        ) THEN
-          DROP POLICY "Everyone can delete ${bucketName} files" ON storage.objects;
-        END IF;
-        
-        CREATE POLICY "Everyone can delete ${bucketName} files" 
-        ON storage.objects
-        FOR DELETE 
-        USING (bucket_id = '${bucketName}');
-      END$$;
-    `
-  });
-  
-  if (deletePolicyError) {
-    console.error(`Error creating/updating DELETE policy for ${bucketName}:`, deletePolicyError);
-  } else {
-    console.log(`DELETE policy for ${bucketName} created/updated successfully`);
+  try {
+    // Create policy for SELECT access (view files)
+    const { error: selectError } = await supabase.rpc('create_storage_policy', {
+      bucket_name: bucketName,
+      policy_name: `${bucketName}_select_policy`,
+      definition: `bucket_id = '${bucketName}'`,
+      operation: 'SELECT'
+    });
+    
+    if (selectError) {
+      console.error(`Error creating SELECT policy for ${bucketName}:`, selectError);
+    } else {
+      console.log(`SELECT policy for ${bucketName} created successfully`);
+    }
+    
+    // Create policy for INSERT access (upload files)
+    const { error: insertError } = await supabase.rpc('create_storage_policy', {
+      bucket_name: bucketName,
+      policy_name: `${bucketName}_insert_policy`,
+      definition: `bucket_id = '${bucketName}'`,
+      operation: 'INSERT'
+    });
+    
+    if (insertError) {
+      console.error(`Error creating INSERT policy for ${bucketName}:`, insertError);
+    } else {
+      console.log(`INSERT policy for ${bucketName} created successfully`);
+    }
+    
+    // Create policy for UPDATE access (modify files)
+    const { error: updateError } = await supabase.rpc('create_storage_policy', {
+      bucket_name: bucketName,
+      policy_name: `${bucketName}_update_policy`,
+      definition: `bucket_id = '${bucketName}'`,
+      operation: 'UPDATE'
+    });
+    
+    if (updateError) {
+      console.error(`Error creating UPDATE policy for ${bucketName}:`, updateError);
+    } else {
+      console.log(`UPDATE policy for ${bucketName} created successfully`);
+    }
+    
+    // Create policy for DELETE access (remove files)
+    const { error: deleteError } = await supabase.rpc('create_storage_policy', {
+      bucket_name: bucketName,
+      policy_name: `${bucketName}_delete_policy`,
+      definition: `bucket_id = '${bucketName}'`,
+      operation: 'DELETE'
+    });
+    
+    if (deleteError) {
+      console.error(`Error creating DELETE policy for ${bucketName}:`, deleteError);
+    } else {
+      console.log(`DELETE policy for ${bucketName} created successfully`);
+    }
+  } catch (error) {
+    console.error(`Error setting up policies for ${bucketName}:`, error);
   }
 }

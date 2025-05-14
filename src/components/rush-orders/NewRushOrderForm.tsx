@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { CheckboxCard } from '@/components/settings/CheckboxCard';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, Camera } from 'lucide-react';
@@ -71,10 +72,18 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
   // Ensure storage bucket exists on component mount
   useEffect(() => {
     const checkBuckets = async () => {
-      await ensureStorageBucket('attachments');
+      const result = await ensureStorageBucket('attachments');
+      if (!result.success) {
+        console.error("Failed to ensure attachments bucket:", result.error);
+        toast({
+          title: "Storage Error",
+          description: "There was a problem setting up file storage. Some features might be limited.",
+          variant: "destructive"
+        });
+      }
     };
     checkBuckets();
-  }, []);
+  }, [toast]);
   
   // Update form when selections change
   useEffect(() => {
@@ -170,13 +179,13 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
       
       // Call onSuccess callback
       if (onSuccess) onSuccess();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error submitting rush order:", error);
-      notificationService.showNotification(
-        "An error occurred while creating the rush order.",
-        "destructive", 
-        "Error"
-      );
+      toast({
+        title: "Error",
+        description: `An error occurred while creating the rush order: ${error.message}`,
+        variant: "destructive"
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -188,7 +197,7 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
     fileInputRef.current?.click();
   };
   
-  const { data: imageFile } = watch();
+  const watchData = watch();
   
   return (
     <form onSubmit={formHandleSubmit(onSubmit)} className="space-y-6">
