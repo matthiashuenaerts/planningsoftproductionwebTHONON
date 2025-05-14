@@ -1,7 +1,7 @@
 
 import { supabase } from "./client";
 
-export const ensureStorageBucket = async (bucketName: string): Promise<void> => {
+export const ensureStorageBucket = async (bucketName: string = 'attachments'): Promise<void> => {
   try {
     // Check if the bucket exists
     const { data: buckets, error: listError } = await supabase

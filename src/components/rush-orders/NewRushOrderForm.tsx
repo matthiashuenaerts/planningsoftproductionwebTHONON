@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { CheckboxCard } from '@/components/settings/CheckboxCard';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, Camera } from 'lucide-react';
@@ -29,7 +30,7 @@ interface Employee {
 }
 
 const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) => {
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<RushOrderFormData>({
+  const { register, handleSubmit: submitForm, reset, setValue, watch, formState: { errors } } = useForm<RushOrderFormData>({
     defaultValues: {
       title: '',
       description: '',
@@ -72,7 +73,7 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
   // Ensure storage bucket exists on component mount
   useEffect(() => {
     const checkBuckets = async () => {
-      await ensureStorageBucket();
+      await ensureStorageBucket('attachments');
     };
     checkBuckets();
   }, []);
@@ -122,7 +123,7 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
   };
   
   // Handle form submission
-  const handleSubmit = async (data: RushOrderFormData) => {
+  const onSubmit = async (data: RushOrderFormData) => {
     if (!currentEmployee) return;
     
     setIsSubmitting(true);
@@ -199,10 +200,8 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
     fileInputRef.current?.click();
   };
   
-  const { data: imageFile } = watch();
-  
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={submitForm(onSubmit)} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-6">
           <div className="space-y-2">
