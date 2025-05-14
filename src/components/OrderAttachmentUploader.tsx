@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { Paperclip, Camera } from 'lucide-react';
 import { orderService } from '@/services/orderService';
 
@@ -120,7 +120,7 @@ const OrderAttachmentUploader: React.FC<OrderAttachmentUploaderProps> = ({
         onChange={handleFileChange}
         className="hidden"
         accept="image/*"
-        capture="user"
+        capture="environment"
       />
       <Button 
         variant="outline" 
