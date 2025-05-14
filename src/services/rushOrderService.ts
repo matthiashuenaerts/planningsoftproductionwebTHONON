@@ -1,8 +1,8 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { RushOrder, RushOrderTask, RushOrderAssignment } from "@/types/rushOrder";
 import { toast } from "@/hooks/use-toast";
 import { ensureStorageBucket } from "@/integrations/supabase/createBucket";
+import { notificationService } from "./notificationService";
 
 export const rushOrderService = {
   async createRushOrder(
@@ -60,14 +60,12 @@ export const rushOrderService = {
         data.image_url = publicUrlData.publicUrl;
       }
       
+      // Show notification
+      notificationService.showNotification("Rush order created successfully", "default", "Success");
       return data as RushOrder;
     } catch (error: any) {
       console.error('Error creating rush order:', error);
-      toast({
-        title: "Error",
-        description: `Failed to create rush order: ${error.message}`,
-        variant: "destructive"
-      });
+      notificationService.showNotification(`Failed to create rush order: ${error.message}`, "destructive", "Error");
       return null;
     }
   },
@@ -119,7 +117,7 @@ export const rushOrderService = {
       return false;
     }
   },
-
+  
   async getAllRushOrders(): Promise<RushOrder[]> {
     try {
       const { data, error } = await supabase
@@ -143,11 +141,7 @@ export const rushOrderService = {
       return data as RushOrder[] || [];
     } catch (error: any) {
       console.error('Error fetching rush orders:', error);
-      toast({
-        title: "Error",
-        description: `Failed to fetch rush orders: ${error.message}`,
-        variant: "destructive"
-      });
+      notificationService.showNotification(`Failed to fetch rush orders: ${error.message}`, "destructive", "Error");
       return [];
     }
   },

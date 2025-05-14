@@ -1,155 +1,191 @@
-
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rushOrderService } from '@/services/rushOrderService';
 import { RushOrder } from '@/types/rushOrder';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { format, parseISO } from 'date-fns';
-import { Skeleton } from '@/components/ui/skeleton';
-import { useToast } from '@/hooks/use-toast';
+import { MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useNavigate } from 'react-router-dom';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { notificationService } from "@/services/notificationService";
 
 interface RushOrderListProps {
-  statusFilter?: "pending" | "in_progress" | "completed" | "all";
+  statusFilter?: "pending" | "in_progress" | "completed";
 }
 
-const RushOrderList: React.FC<RushOrderListProps> = ({ statusFilter = "all" }) => {
-  const { toast } = useToast();
+const RushOrderList: React.FC<RushOrderListProps> = ({ statusFilter }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   
-  const { data: rushOrders, isLoading, error, refetch } = useQuery({
+  const { data: rushOrders, isLoading, isError } = useQuery({
     queryKey: ['rushOrders', statusFilter],
     queryFn: rushOrderService.getAllRushOrders,
   });
   
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">Pending</Badge>;
-      case 'in_progress':
-        return <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300">In Progress</Badge>;
-      case 'completed':
-        return <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">Completed</Badge>;
-      default:
-        return <Badge variant="outline">Unknown</Badge>;
+  const filteredOrders = statusFilter
+    ? rushOrders?.filter(order => order.status === statusFilter)
+    : rushOrders;
+  
+  const handleStatusChange = async (order: RushOrder, newStatus: "pending" | "in_progress" | "completed") => {
+    try {
+      const success = await rushOrderService.updateRushOrderStatus(order.id, newStatus);
+      
+      if (success) {
+        notificationService.showNotification(
+          `Rush order "${order.title}" status updated to ${newStatus.replace('_', ' ')}`,
+          "default",
+          "Status Updated"
+        );
+        
+        // Refresh data
+        queryClient.invalidateQueries({ queryKey: ['rushOrders'] });
+      }
+    } catch (error) {
+      console.error('Error updating rush order status:', error);
+      notificationService.showNotification(
+        "Failed to update rush order status. Please try again.",
+        "destructive",
+        "Error"
+      );
     }
   };
 
-  // Filter the rush orders based on the statusFilter prop
-  const filteredOrders = rushOrders?.filter(order => 
-    statusFilter === "all" ? true : order.status === statusFilter
-  );
+  const handleDelete = async (orderId: string, orderTitle: string) => {
+    try {
+      // Optimistically update the cache
+      queryClient.setQueryData(['rushOrders', statusFilter], (old: RushOrder[] | undefined) => {
+        if (!old) return [];
+        return old.filter(order => order.id !== orderId);
+      });
+  
+      // Call the delete API
+      await rushOrderService.deleteNotification(orderId);
+  
+      // Show success notification
+      notificationService.showNotification(
+        `Rush order "${orderTitle}" deleted successfully`,
+        "default",
+        "Order Deleted"
+      );
+  
+      // Refresh data
+      queryClient.invalidateQueries({ queryKey: ['rushOrders'] });
+    } catch (error) {
+      console.error('Error deleting rush order:', error);
+      notificationService.showNotification(
+        "Failed to delete rush order. Please try again.",
+        "destructive",
+        "Error"
+      );
+      // On error, rollback the optimistic update
+      queryClient.invalidateQueries({ queryKey: ['rushOrders'] });
+    }
+  };
   
   if (isLoading) {
-    return (
-      <div className="space-y-4">
-        {[1, 2, 3].map((i) => (
-          <Card key={i} className="shadow-sm">
-            <CardHeader className="pb-4">
-              <Skeleton className="h-6 w-2/3" />
-              <div className="flex justify-between">
-                <Skeleton className="h-4 w-1/4" />
-                <Skeleton className="h-4 w-1/6" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-16 w-full" />
-            </CardContent>
-            <CardFooter>
-              <div className="w-full flex justify-between">
-                <Skeleton className="h-10 w-20" />
-                <Skeleton className="h-10 w-32" />
-              </div>
-            </CardFooter>
-          </Card>
-        ))}
-      </div>
-    );
+    return <div>Loading rush orders...</div>;
   }
   
-  if (error) {
-    return (
-      <Card className="bg-red-50 border-red-200">
-        <CardHeader>
-          <CardTitle>Error Loading Rush Orders</CardTitle>
-          <CardDescription>There was a problem loading the rush orders.</CardDescription>
-        </CardHeader>
-        <CardFooter>
-          <Button onClick={() => refetch()}>Try Again</Button>
-        </CardFooter>
-      </Card>
-    );
-  }
-  
-  if (!filteredOrders || filteredOrders.length === 0) {
-    return (
-      <Card className="bg-gray-50 border-gray-200 text-center py-8">
-        <CardContent>
-          <p className="text-gray-500">No rush orders found</p>
-        </CardContent>
-      </Card>
-    );
+  if (isError) {
+    return <div>Error fetching rush orders.</div>;
   }
   
   return (
-    <div className="space-y-4">
-      {filteredOrders.map((order: RushOrder) => (
-        <Card key={order.id} className="shadow-sm transition-shadow hover:shadow-md">
-          <CardHeader className="pb-4">
-            <div className="flex justify-between items-start">
-              <CardTitle>{order.title}</CardTitle>
-              {getStatusBadge(order.status)}
-            </div>
-            <CardDescription className="flex justify-between">
-              <span>Created: {format(parseISO(order.created_at), 'MMM d, yyyy')}</span>
-              <span className="font-medium text-red-600">
-                Deadline: {format(parseISO(order.deadline), 'MMM d, yyyy')}
-              </span>
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-700 line-clamp-2">{order.description}</p>
-            
-            {order.image_url && (
-              <div className="mt-4">
-                <img 
-                  src={order.image_url} 
-                  alt={order.title} 
-                  className="h-40 w-full object-cover rounded-md"
-                />
-              </div>
-            )}
-            
-            <div className="mt-4 grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-gray-500">Tasks</p>
-                <p className="text-sm font-medium">{order.tasks?.length || 0} tasks assigned</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Assigned to</p>
-                <p className="text-sm font-medium">{order.assignments?.length || 0} team members</p>
-              </div>
-            </div>
-          </CardContent>
-          <CardFooter>
-            <div className="w-full flex justify-between">
-              <Badge variant="outline" className={`
-                ${order.priority === 'critical' ? 'bg-red-100 text-red-800 border-red-300' : 'bg-orange-100 text-orange-800 border-orange-300'}
-              `}>
-                {order.priority === 'critical' ? 'CRITICAL' : 'HIGH'}
-              </Badge>
-              <Button 
-                variant="outline"
-                onClick={() => navigate(`/rush-orders/${order.id}`)}
-              >
-                View Details
-              </Button>
-            </div>
-          </CardFooter>
-        </Card>
-      ))}
+    <div className="container mx-auto">
+      <Table>
+        <TableCaption>A list of your rush orders.</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[100px]">Order #</TableHead>
+            <TableHead>Title</TableHead>
+            <TableHead>Description</TableHead>
+            <TableHead>Deadline</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {filteredOrders?.map((order) => (
+            <TableRow key={order.id}>
+              <TableCell className="font-medium">{order.id}</TableCell>
+              <TableCell>{order.title}</TableCell>
+              <TableCell>{order.description}</TableCell>
+              <TableCell>{new Date(order.deadline).toLocaleDateString()}</TableCell>
+              <TableCell>
+                <Badge variant="outline">{order.status}</Badge>
+              </TableCell>
+              <TableCell className="text-right">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="h-8 w-8 p-0">
+                      <span className="sr-only">Open menu</span>
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => navigate(`/rush-orders/${order.id}`)}>
+                      <Pencil className="mr-2 h-4 w-4" />
+                      <span>Edit</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <DropdownMenuItem>
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            <span>Delete</span>
+                          </DropdownMenuItem>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This action cannot be undone. This will permanently delete the rush
+                              order and remove all of its data.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(order.id, order.title)}>Continue</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 };

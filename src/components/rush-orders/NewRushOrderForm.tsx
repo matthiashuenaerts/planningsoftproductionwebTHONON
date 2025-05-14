@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { supabase } from "@/integrations/supabase/client";
 import { ensureStorageBucket } from "@/integrations/supabase/createBucket";
+import { notificationService } from "@/services/notificationService";
 
 interface Employee {
   id: string;
@@ -121,69 +122,72 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
   };
   
   // Handle form submission
-  const onSubmit = async (data: RushOrderFormData) => {
-    if (!currentEmployee) {
-      toast({
-        title: "Error",
-        description: "You must be logged in to create a rush order",
-        variant: "destructive"
-      });
-      return;
-    }
+  const handleSubmit = async (data: RushOrderFormData) => {
+    if (!currentEmployee) return;
+    
+    setIsSubmitting(true);
     
     try {
-      setIsSubmitting(true);
-      
-      // Format deadline
-      const formattedDeadline = format(data.deadline, "yyyy-MM-dd'T'HH:mm:ss");
-      
       // Create rush order
       const rushOrder = await rushOrderService.createRushOrder(
         data.title,
         data.description,
-        formattedDeadline,
+        data.deadline.toISOString(),
         currentEmployee.id,
         data.image
       );
       
-      if (!rushOrder) throw new Error("Failed to create rush order");
+      if (!rushOrder) {
+        notificationService.showNotification(
+          "Failed to create rush order. Please try again.",
+          "destructive",
+          "Error"
+        );
+        setIsSubmitting(false);
+        return;
+      }
       
-      // Assign tasks
+      // Assign tasks if selected
       if (data.selectedTasks.length > 0) {
         await rushOrderService.assignTasksToRushOrder(rushOrder.id, data.selectedTasks);
       }
       
-      // Assign users
+      // Assign users if selected
       if (data.assignedUsers.length > 0) {
         await rushOrderService.assignUsersToRushOrder(rushOrder.id, data.assignedUsers);
+        
+        // Create notifications for assigned users
+        for (const userId of data.assignedUsers) {
+          await rushOrderService.createNotification(
+            userId,
+            rushOrder.id,
+            `You've been assigned to rush order: ${data.title}`
+          );
+        }
       }
       
-      // Send notifications to all users
+      // Notify relevant stakeholders
       await rushOrderService.notifyAllUsers(
-        rushOrder.id, 
+        rushOrder.id,
         `New rush order created: ${data.title}`
       );
       
-      toast({
-        title: "Success",
-        description: "Rush order created successfully"
-      });
+      notificationService.showNotification(
+        "Rush order created successfully!",
+        "default",
+        "Success"
+      );
       
-      // Reset form
-      reset();
-      setImagePreview(null);
-      setSelectedTaskIds([]);
-      setSelectedUserIds([]);
-      
-      // Call onSuccess callback
+      // Close form and refresh data
       if (onSuccess) onSuccess();
-    } catch (error: any) {
-      console.error("Error creating rush order:", error);
-      toast({
-        title: "Error",
-        description: `Failed to create rush order: ${error.message}`,
-        variant: "destructive"
-      });
+      
+    } catch (error) {
+      console.error("Error submitting rush order:", error);
+      notificationService.showNotification(
+        "An error occurred while creating the rush order.",
+        "destructive", 
+        "Error"
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -198,7 +202,7 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
   const { data: imageFile } = watch();
   
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-6">
           <div className="space-y-2">
