@@ -1,6 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
+// Type definitions to support imports across the app
 export interface StandardTask {
   id: string;
   name: string;
@@ -19,6 +20,34 @@ export interface Employee {
   created_at: string;
 }
 
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  status: string;
+  priority: string;
+  due_date: string;
+  assignee_id?: string;
+  phase_id: string;
+  workstation: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  client: string;
+  start_date: string;
+  installation_date: string;
+  status: string;
+  progress: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Main data service
 export const dataService = {
   // Employee-related functions
   async getEmployees(): Promise<Employee[]> {
@@ -78,4 +107,31 @@ export const dataService = {
       throw new Error('Failed to fetch tasks by workstation');
     }
   }
+};
+
+// Service exports to maintain compatibility with existing code
+export const employeeService = {
+  getEmployees: dataService.getEmployees,
+  getEmployeeById: dataService.getEmployeeById,
+};
+
+export const taskService = {
+  getOpenTasksByEmployeeOrWorkstation: async (employeeId: string, workstation?: string) => {
+    // Implementation as needed - returning empty array for now
+    return [];
+  }
+};
+
+export const projectService = {
+  // Add project service methods as needed
+  getAll: async (): Promise<Project[]> => {
+    return [];
+  },
+  getById: async (id: string): Promise<Project | null> => {
+    return null;
+  }
+};
+
+export const phaseService = {
+  // Add phase service methods as needed
 };

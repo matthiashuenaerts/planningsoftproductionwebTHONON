@@ -8,8 +8,9 @@ class NotificationService {
    */
   async getUserNotifications(userId: string): Promise<Notification[]> {
     const { data, error } = await supabase
-      .rpc('get_user_notifications', { user_id_param: userId })
+      .from('notifications')
       .select('*')
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -24,15 +25,18 @@ class NotificationService {
    * Get unread notifications count for a user
    */
   async getUnreadNotificationsCount(userId: string): Promise<number> {
-    const { data, error } = await supabase
-      .rpc('get_unread_notifications_count', { user_id_param: userId });
+    const { count, error } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('read', false);
     
     if (error) {
       console.error('Error fetching unread notifications count:', error);
       throw new Error('Failed to fetch unread notifications count');
     }
     
-    return data || 0;
+    return count || 0;
   }
   
   /**
@@ -40,7 +44,9 @@ class NotificationService {
    */
   async markAsRead(notificationId: string): Promise<void> {
     const { error } = await supabase
-      .rpc('mark_notification_as_read', { notification_id_param: notificationId });
+      .from('notifications')
+      .update({ read: true })
+      .eq('id', notificationId);
     
     if (error) {
       console.error('Error marking notification as read:', error);
@@ -53,7 +59,9 @@ class NotificationService {
    */
   async markAllAsRead(userId: string): Promise<void> {
     const { error } = await supabase
-      .rpc('mark_all_notifications_as_read', { user_id_param: userId });
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', userId);
     
     if (error) {
       console.error('Error marking all notifications as read:', error);
@@ -66,11 +74,15 @@ class NotificationService {
    */
   async createNotification(params: CreateNotificationParams): Promise<Notification> {
     const { data, error } = await supabase
-      .rpc('create_notification', {
-        user_id_param: params.user_id,
-        message_param: params.message,
-        rush_order_id_param: params.rush_order_id || null
-      });
+      .from('notifications')
+      .insert({
+        user_id: params.user_id,
+        message: params.message,
+        rush_order_id: params.rush_order_id || null,
+        read: false
+      })
+      .select()
+      .single();
     
     if (error) {
       console.error('Error creating notification:', error);
@@ -84,12 +96,16 @@ class NotificationService {
    * Create notifications for multiple users with the same message
    */
   async createNotificationsForUsers(userIds: string[], message: string, rush_order_id?: string): Promise<void> {
+    const notifications = userIds.map(userId => ({
+      user_id: userId,
+      message: message,
+      rush_order_id: rush_order_id || null,
+      read: false
+    }));
+    
     const { error } = await supabase
-      .rpc('create_notifications_for_users', { 
-        user_ids_param: userIds,
-        message_param: message,
-        rush_order_id_param: rush_order_id || null
-      });
+      .from('notifications')
+      .insert(notifications);
     
     if (error) {
       console.error('Error creating multiple notifications:', error);

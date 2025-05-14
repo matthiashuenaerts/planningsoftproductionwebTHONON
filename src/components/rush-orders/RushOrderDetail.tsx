@@ -29,7 +29,7 @@ const RushOrderDetail: React.FC<RushOrderDetailProps> = ({ rushOrderId, onStatus
   // Query for getting standard task details for each task
   const { data: standardTasks } = useQuery({
     queryKey: ['standardTasks'],
-    queryFn: standardTasksService.getAll,
+    queryFn: () => standardTasksService.getAll(),
     enabled: !!rushOrder?.tasks,
   });
   
@@ -55,19 +55,15 @@ const RushOrderDetail: React.FC<RushOrderDetailProps> = ({ rushOrderId, onStatus
   const handleStatusUpdate = async (newStatus: "pending" | "in_progress" | "completed") => {
     try {
       setIsUpdating(true);
-      const success = await rushOrderService.updateRushOrderStatus(rushOrderId, newStatus);
+      await rushOrderService.updateRushOrderStatus(rushOrderId, newStatus);
       
-      if (success) {
-        toast({
-          title: "Status Updated",
-          description: `Rush order status changed to ${newStatus.replace('_', ' ')}`,
-        });
-        
-        refetch();
-        if (onStatusChange) onStatusChange();
-      } else {
-        throw new Error("Failed to update status");
-      }
+      toast({
+        title: "Status Updated",
+        description: `Rush order status changed to ${newStatus.replace('_', ' ')}`,
+      });
+      
+      refetch();
+      if (onStatusChange) onStatusChange();
     } catch (error: any) {
       toast({
         title: "Error",
@@ -80,8 +76,9 @@ const RushOrderDetail: React.FC<RushOrderDetailProps> = ({ rushOrderId, onStatus
   };
   
   const getTaskName = (taskId: string) => {
-    const task = standardTasks?.find(t => t.id === taskId);
-    return task ? `${task.task_name} (Task #${task.task_number})` : 'Unknown Task';
+    if (!standardTasks) return 'Unknown Task';
+    const task = standardTasks.find(t => t.id === taskId);
+    return task ? `${task.task_name || task.name} (Task #${task.task_number})` : 'Unknown Task';
   };
   
   const getEmployeeName = (employeeId: string) => {
@@ -174,7 +171,7 @@ const RushOrderDetail: React.FC<RushOrderDetailProps> = ({ rushOrderId, onStatus
                   {rushOrder.tasks.map((task) => (
                     <li key={task.id} className="flex items-center bg-gray-50 p-3 rounded-md">
                       <Check className="h-4 w-4 text-green-500 mr-2 flex-shrink-0" />
-                      <span className="text-sm">{getTaskName(task.standard_task_id)}</span>
+                      <span className="text-sm">{getTaskName(task.task_id || task.standard_task_id)}</span>
                     </li>
                   ))}
                 </ul>
