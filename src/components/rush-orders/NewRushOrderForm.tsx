@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
@@ -7,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { CheckboxCard } from '@/components/settings/CheckboxCard';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, Camera } from 'lucide-react';
@@ -20,7 +19,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { supabase } from "@/integrations/supabase/client";
 import { ensureStorageBucket } from "@/integrations/supabase/createBucket";
-import { notificationService } from "@/services/notificationService";
 
 interface Employee {
   id: string;
@@ -30,7 +28,7 @@ interface Employee {
 }
 
 const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) => {
-  const { register, handleSubmit: submitForm, reset, setValue, watch, formState: { errors } } = useForm<RushOrderFormData>({
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<RushOrderFormData>({
     defaultValues: {
       title: '',
       description: '',
@@ -73,7 +71,7 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
   // Ensure storage bucket exists on component mount
   useEffect(() => {
     const checkBuckets = async () => {
-      await ensureStorageBucket('attachments');
+      await ensureStorageBucket();
     };
     checkBuckets();
   }, []);
@@ -124,71 +122,68 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
   
   // Handle form submission
   const onSubmit = async (data: RushOrderFormData) => {
-    if (!currentEmployee) return;
-    
-    setIsSubmitting(true);
+    if (!currentEmployee) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to create a rush order",
+        variant: "destructive"
+      });
+      return;
+    }
     
     try {
+      setIsSubmitting(true);
+      
+      // Format deadline
+      const formattedDeadline = format(data.deadline, "yyyy-MM-dd'T'HH:mm:ss");
+      
       // Create rush order
       const rushOrder = await rushOrderService.createRushOrder(
         data.title,
         data.description,
-        data.deadline.toISOString(),
+        formattedDeadline,
         currentEmployee.id,
         data.image
       );
       
-      if (!rushOrder) {
-        notificationService.showNotification(
-          "Failed to create rush order. Please try again.",
-          "destructive",
-          "Error"
-        );
-        setIsSubmitting(false);
-        return;
-      }
+      if (!rushOrder) throw new Error("Failed to create rush order");
       
-      // Assign tasks if selected
+      // Assign tasks
       if (data.selectedTasks.length > 0) {
         await rushOrderService.assignTasksToRushOrder(rushOrder.id, data.selectedTasks);
       }
       
-      // Assign users if selected
+      // Assign users
       if (data.assignedUsers.length > 0) {
         await rushOrderService.assignUsersToRushOrder(rushOrder.id, data.assignedUsers);
-        
-        // Create notifications for assigned users
-        for (const userId of data.assignedUsers) {
-          await rushOrderService.createNotification(
-            userId,
-            rushOrder.id,
-            `You've been assigned to rush order: ${data.title}`
-          );
-        }
       }
       
-      // Notify relevant stakeholders
+      // Send notifications to all users
       await rushOrderService.notifyAllUsers(
-        rushOrder.id,
+        rushOrder.id, 
         `New rush order created: ${data.title}`
       );
       
-      notificationService.showNotification(
-        "Rush order created successfully!",
-        "default",
-        "Success"
-      );
+      toast({
+        title: "Success",
+        description: "Rush order created successfully"
+      });
       
-      // Close form and refresh data
+      // Reset form
+      reset();
+      setImagePreview(null);
+      setSelectedTaskIds([]);
+      setSelectedUserIds([]);
+      
+      // Call onSuccess callback
       if (onSuccess) onSuccess();
-      
-    } catch (error) {
-      console.error("Error submitting rush order:", error);
-      notificationService.showNotification(
-        "An error occurred while creating the rush order.",
-        "destructive", 
-        "Error"
-      );
+    } catch (error: any) {
+      console.error("Error creating rush order:", error);
+      toast({
+        title: "Error",
+        description: `Failed to create rush order: ${error.message}`,
+        variant: "destructive"
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -200,8 +195,10 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
     fileInputRef.current?.click();
   };
   
+  const { data: imageFile } = watch();
+  
   return (
-    <form onSubmit={submitForm(onSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-6">
           <div className="space-y-2">

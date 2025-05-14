@@ -88,14 +88,5 @@ export const notificationService = {
       console.error('Error deleting notification:', error);
       return false;
     }
-  },
-
-  showNotification(message: string, type: "default" | "destructive" = "default", title?: string): void {
-    toast({
-      title: title,
-      description: message,
-      variant: type,
-      duration: 5000,
-    });
   }
 };
