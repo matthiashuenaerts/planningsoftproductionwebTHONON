@@ -2,6 +2,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { RushOrder, RushOrderTask, RushOrderAssignment } from "@/types/rushOrder";
 import { toast } from "@/hooks/use-toast";
+import { ensureStorageBucket } from "@/integrations/supabase/createBucket";
 
 export const rushOrderService = {
   async createRushOrder(

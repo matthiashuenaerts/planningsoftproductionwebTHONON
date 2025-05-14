@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
@@ -19,6 +18,7 @@ import { RushOrderFormData } from '@/types/rushOrder';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { supabase } from "@/integrations/supabase/client";
+import { ensureStorageBucket } from "@/integrations/supabase/createBucket";
 
 interface Employee {
   id: string;
@@ -67,6 +67,14 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
       return data as Employee[];
     }
   });
+  
+  // Ensure storage bucket exists on component mount
+  useEffect(() => {
+    const checkBuckets = async () => {
+      await ensureStorageBucket();
+    };
+    checkBuckets();
+  }, []);
   
   // Update form when selections change
   useEffect(() => {
@@ -135,7 +143,7 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
         data.description,
         formattedDeadline,
         currentEmployee.id,
-        data.image // This is now correctly typed in RushOrderFormData
+        data.image
       );
       
       if (!rushOrder) throw new Error("Failed to create rush order");
