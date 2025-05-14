@@ -10,7 +10,7 @@ const Navbar = () => {
   const isAdminOrManager = currentEmployee && (currentEmployee.role === 'admin' || currentEmployee.role === 'manager' || currentEmployee.role === 'installation_team');
   
   return (
-    <div className="h-full px-3 py-4 overflow-y-auto bg-sky-600 text-white">
+    <div className="h-full px-3 py-4 overflow-y-auto bg-sky-700 text-white">
       <div className="flex flex-col h-full justify-between">
         <div>
           <h2 className="px-2 py-3 text-lg font-semibold mb-2">PhaseFlow</h2>
