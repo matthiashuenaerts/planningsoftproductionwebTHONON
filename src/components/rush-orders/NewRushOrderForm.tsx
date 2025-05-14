@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
@@ -134,7 +135,7 @@ const NewRushOrderForm: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) =
         data.description,
         formattedDeadline,
         currentEmployee.id,
-        data.image
+        data.image // This is now correctly typed in RushOrderFormData
       );
       
       if (!rushOrder) throw new Error("Failed to create rush order");
