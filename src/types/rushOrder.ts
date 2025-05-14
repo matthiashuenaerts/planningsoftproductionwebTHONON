@@ -22,8 +22,8 @@ export interface RushOrder {
   description: string;
   deadline: string;
   image_url?: string;
-  status: "pending" | "in_progress" | "completed";
-  priority: "high" | "critical";
+  status: "pending" | "in_progress" | "completed" | string;
+  priority: "high" | "critical" | string;
   created_by: string;
   created_at: string;
   updated_at: string;

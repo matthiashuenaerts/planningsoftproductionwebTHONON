@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -17,7 +18,7 @@ import { cn } from '@/lib/utils';
 
 const Navbar = () => {
   const location = useLocation();
-  const { currentEmployee, signOut } = useAuth();
+  const { currentEmployee, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   const { data: unreadCount = 0 } = useQuery({
@@ -136,7 +137,7 @@ const Navbar = () => {
                     <DropdownMenuItem asChild>
                       <Link to="/profile">Profile</Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={signOut}>
+                    <DropdownMenuItem onClick={logout}>
                       Sign out
                     </DropdownMenuItem>
                   </DropdownMenuContent>
