@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export interface StandardTask {
   id: string;
+  name: string;
   task_number: string;
   task_name: string;
   time_coefficient: number;
@@ -18,7 +19,14 @@ export const standardTasksService = {
       .order('task_number', { ascending: true });
     
     if (error) throw error;
-    return data as StandardTask[] || [];
+    return data.map(task => ({
+      ...task,
+      name: task.task_name  // Ensure name property is available
+    })) as StandardTask[] || [];
+  },
+
+  async getAllStandardTasks(): Promise<StandardTask[]> {
+    return this.getAll();
   },
 
   async getById(id: string): Promise<StandardTask | null> {
@@ -29,7 +37,7 @@ export const standardTasksService = {
       .maybeSingle();
     
     if (error) throw error;
-    return data as StandardTask;
+    return data ? { ...data, name: data.task_name } as StandardTask : null;
   },
 
   async getByTaskNumber(taskNumber: string): Promise<StandardTask | null> {
@@ -40,7 +48,7 @@ export const standardTasksService = {
       .maybeSingle();
     
     if (error) throw error;
-    return data as StandardTask;
+    return data ? { ...data, name: data.task_name } as StandardTask : null;
   },
 
   async updateTimeCoefficient(id: string, timeCoefficient: number): Promise<StandardTask | null> {
@@ -52,7 +60,7 @@ export const standardTasksService = {
       .maybeSingle();
     
     if (error) throw error;
-    return data as StandardTask;
+    return data ? { ...data, name: data.task_name } as StandardTask : null;
   },
 
   // Get task name parts by splitting the task name at underscores

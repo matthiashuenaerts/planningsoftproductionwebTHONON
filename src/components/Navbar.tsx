@@ -7,7 +7,11 @@ import { NavLink } from 'react-router-dom';
 const Navbar = () => {
   const { currentEmployee, logout } = useAuth();
   
-  const isAdminOrManager = currentEmployee && (currentEmployee.role === 'admin' || currentEmployee.role === 'manager' || currentEmployee.role === 'installation_team');
+  const isAdminOrManager = currentEmployee && (
+    currentEmployee.role === 'admin' || 
+    currentEmployee.role === 'manager' || 
+    currentEmployee.role === 'installation_team'
+  );
   
   return (
     <div className="h-full px-3 py-4 overflow-y-auto bg-gray-50 dark:bg-gray-800">

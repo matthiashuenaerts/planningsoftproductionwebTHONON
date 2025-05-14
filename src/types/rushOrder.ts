@@ -10,6 +10,17 @@ export interface RushOrder {
   created_by: string;
   created_at: string;
   updated_at: string;
+  // Relations
+  tasks?: {
+    id: string;
+    task_id: string;
+    task_name: string;
+  }[];
+  assignments?: {
+    id: string;
+    employee_id: string;
+    employee_name: string;
+  }[];
 }
 
 export interface CreateRushOrderParams {

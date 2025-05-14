@@ -10,8 +10,7 @@ class RushOrderService {
    */
   async getAllRushOrders(): Promise<RushOrder[]> {
     const { data, error } = await supabase
-      .from('rush_orders')
-      .select('*')
+      .rpc('get_rush_orders_with_details')
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -27,10 +26,7 @@ class RushOrderService {
    */
   async getRushOrderById(id: string): Promise<RushOrder> {
     const { data, error } = await supabase
-      .from('rush_orders')
-      .select('*')
-      .eq('id', id)
-      .single();
+      .rpc('get_rush_order_with_details', { rush_order_id_param: id });
     
     if (error) {
       console.error('Error fetching rush order:', error);
@@ -53,25 +49,11 @@ class RushOrderService {
       if (taskIds.length === 0) return [];
       
       const { data, error } = await supabase
-        .from('rush_order_tasks')
-        .select('rush_order_id')
-        .in('standard_task_id', taskIds);
+        .rpc('get_rush_orders_for_workstation', { task_ids_param: taskIds });
       
       if (error) throw error;
       
-      const rushOrderIds = [...new Set(data.map(item => item.rush_order_id))];
-      
-      if (rushOrderIds.length === 0) return [];
-      
-      const { data: rushOrders, error: rushOrdersError } = await supabase
-        .from('rush_orders')
-        .select('*')
-        .in('id', rushOrderIds)
-        .order('deadline', { ascending: true });
-      
-      if (rushOrdersError) throw rushOrdersError;
-      
-      return rushOrders as RushOrder[];
+      return data as RushOrder[];
     } catch (error) {
       console.error('Error fetching rush orders for workstation:', error);
       throw new Error('Failed to fetch rush orders for workstation');
@@ -110,51 +92,24 @@ class RushOrderService {
     try {
       // Create the rush order
       const { data: rushOrder, error } = await supabase
-        .from('rush_orders')
-        .insert([{
-          title: params.title,
-          description: params.description,
-          deadline: params.deadline.toISOString(),
-          image_url: params.imageUrl,
-          created_by: params.createdBy,
-          status: 'pending',
-          priority: 'critical'
-        }])
-        .select('*')
-        .single();
+        .rpc('create_rush_order', {
+          title_param: params.title,
+          description_param: params.description,
+          deadline_param: params.deadline.toISOString(),
+          image_url_param: params.imageUrl,
+          created_by_param: params.createdBy,
+          task_ids_param: params.taskIds,
+          assigned_employee_ids_param: params.assignedEmployeeIds
+        });
       
       if (error) throw error;
-      
-      // Create task associations
-      const rushOrderTasks = params.taskIds.map(taskId => ({
-        rush_order_id: rushOrder.id,
-        standard_task_id: taskId
-      }));
-      
-      const { error: taskError } = await supabase
-        .from('rush_order_tasks')
-        .insert(rushOrderTasks);
-      
-      if (taskError) throw taskError;
-      
-      // Create employee assignments
-      const rushOrderAssignments = params.assignedEmployeeIds.map(employeeId => ({
-        rush_order_id: rushOrder.id,
-        employee_id: employeeId
-      }));
-      
-      const { error: assignmentError } = await supabase
-        .from('rush_order_assignments')
-        .insert(rushOrderAssignments);
-      
-      if (assignmentError) throw assignmentError;
       
       // Get all employees to notify them
       const { data: employees } = await supabase
         .from('employees')
         .select('id');
       
-      if (employees) {
+      if (employees && employees.length > 0) {
         const employeeIds = employees.map(emp => emp.id);
         
         // Create a notification for all employees
@@ -177,9 +132,10 @@ class RushOrderService {
    */
   async updateRushOrderStatus(id: string, status: string): Promise<void> {
     const { error } = await supabase
-      .from('rush_orders')
-      .update({ status })
-      .eq('id', id);
+      .rpc('update_rush_order_status', { 
+        rush_order_id_param: id, 
+        status_param: status 
+      });
     
     if (error) {
       console.error('Error updating rush order status:', error);
