@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
   Table, 
@@ -12,19 +12,17 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { brokenPartsService } from '@/services/brokenPartsService';
 import { Button } from "@/components/ui/button";
-import { Plus, AlertTriangle, X, Eye, Image as ImageIcon } from 'lucide-react';
+import { Plus, AlertTriangle, X, Eye } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { toast } from "sonner";
 
 const BrokenPartsList: React.FC = () => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imageError, setImageError] = useState<Record<string, boolean>>({});
-  const [loadingImages, setLoadingImages] = useState<Record<string, boolean>>({});
 
   const { data: brokenParts = [], isLoading, error } = useQuery({
     queryKey: ['broken-parts'],
@@ -33,49 +31,19 @@ const BrokenPartsList: React.FC = () => {
     }
   });
 
-  useEffect(() => {
-    console.log("Broken parts loaded:", brokenParts);
-  }, [brokenParts]);
-
   const getImageUrl = (path: string) => {
     if (!path) return null;
-    
-    try {
-      const { data } = supabase.storage.from('broken_parts').getPublicUrl(path);
-      console.log(`Generated URL for ${path}:`, data.publicUrl);
-      return data.publicUrl;
-    } catch (error) {
-      console.error(`Failed to generate URL for ${path}:`, error);
-      return null;
-    }
+    const { data } = supabase.storage.from('broken_parts').getPublicUrl(path);
+    return data.publicUrl;
   };
 
-  const openImageDialog = (imagePath: string, partId: string) => {
+  const openImageDialog = (imagePath: string) => {
     if (!imagePath) return;
-    
-    setLoadingImages(prev => ({ ...prev, [partId]: true }));
-    const imageUrl = getImageUrl(imagePath);
-    
-    if (imageUrl) {
-      setSelectedImage(imageUrl);
-      console.log("Opening image dialog with URL:", imageUrl);
-    } else {
-      toast.error("Failed to load image");
-      console.error("Failed to generate image URL for", imagePath);
-    }
-    
-    setLoadingImages(prev => ({ ...prev, [partId]: false }));
+    setSelectedImage(getImageUrl(imagePath));
   };
 
   const handleImageError = (id: string) => {
-    console.error(`Image failed to load for part ${id}`);
     setImageError(prev => ({ ...prev, [id]: true }));
-    toast.error("Failed to load image");
-  };
-
-  const handleDialogImageError = () => {
-    console.error("Failed to load image in dialog:", selectedImage);
-    toast.error("Failed to load full image");
   };
 
   if (isLoading) {
@@ -137,39 +105,32 @@ const BrokenPartsList: React.FC = () => {
                       <TableCell>
                         {part.image_path ? (
                           <div className="relative">
-                            {loadingImages[part.id] ? (
-                              <Skeleton className="w-20 h-20 rounded-md" />
-                            ) : (
-                              <div 
-                                className="w-20 h-20 relative overflow-hidden rounded-md cursor-pointer"
-                                onClick={() => openImageDialog(part.image_path, part.id)}
-                                title="Click to view full image"
-                              >
-                                <AspectRatio ratio={1/1}>
-                                  {imageError[part.id] ? (
-                                    <div className="flex flex-col items-center justify-center w-full h-full bg-gray-100 p-1">
-                                      <AlertTriangle className="h-8 w-8 text-amber-500" />
-                                      <span className="text-xs text-gray-500 mt-1">Error</span>
-                                    </div>
-                                  ) : (
-                                    <img
-                                      src={getImageUrl(part.image_path)}
-                                      alt="Broken part"
-                                      className="object-cover w-full h-full"
-                                      onError={() => handleImageError(part.id)}
-                                    />
-                                  )}
-                                </AspectRatio>
-                                <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 flex items-center justify-center transition-all">
-                                  <Eye className="h-6 w-6 text-white opacity-0 hover:opacity-100" />
-                                </div>
+                            <div 
+                              className="w-20 h-20 relative overflow-hidden rounded-md cursor-pointer"
+                              onClick={() => openImageDialog(part.image_path)}
+                            >
+                              <AspectRatio ratio={1/1}>
+                                {imageError[part.id] ? (
+                                  <div className="flex items-center justify-center w-full h-full bg-gray-100">
+                                    <AlertTriangle className="h-8 w-8 text-amber-500" />
+                                  </div>
+                                ) : (
+                                  <img
+                                    src={getImageUrl(part.image_path)}
+                                    alt="Broken part"
+                                    className="object-cover w-full h-full"
+                                    onError={() => handleImageError(part.id)}
+                                  />
+                                )}
+                              </AspectRatio>
+                              <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 flex items-center justify-center transition-all">
+                                <Eye className="h-6 w-6 text-white opacity-0 hover:opacity-100" />
                               </div>
-                            )}
+                            </div>
                           </div>
                         ) : (
-                          <div className="w-20 h-20 bg-gray-100 flex flex-col items-center justify-center rounded-md text-gray-400">
-                            <ImageIcon className="h-8 w-8 mb-1" />
-                            <span className="text-xs">No image</span>
+                          <div className="w-20 h-20 bg-gray-100 flex items-center justify-center rounded-md text-gray-400">
+                            No image
                           </div>
                         )}
                       </TableCell>
@@ -223,7 +184,9 @@ const BrokenPartsList: React.FC = () => {
                 src={selectedImage} 
                 alt="Broken part full view" 
                 className="w-full object-contain max-h-[80vh]"
-                onError={handleDialogImageError}
+                onError={() => {
+                  console.error("Failed to load image in dialog");
+                }}
               />
             </div>
           )}
