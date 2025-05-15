@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Home, ListChecks, LayoutDashboard, Settings, Users, PackagePlus, Truck, LogOut, User } from 'lucide-react';
+import { Home, ListChecks, LayoutDashboard, Settings, Users, PackagePlus, Truck, LogOut, User, AlertTriangle } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 
 const Navbar = () => {
@@ -37,6 +37,12 @@ const Navbar = () => {
               <NavLink to="/workstations" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group">
                 <Truck className="w-5 h-5 text-white group-hover:text-white" />
                 <span className="ml-3">Workstations</span>
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/broken-parts" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group">
+                <AlertTriangle className="w-5 h-5 text-white group-hover:text-white" />
+                <span className="ml-3">Broken Parts</span>
               </NavLink>
             </li>
             <li>

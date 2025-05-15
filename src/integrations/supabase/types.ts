@@ -9,6 +9,61 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      broken_parts: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          image_path: string | null
+          project_id: string | null
+          reported_by: string
+          updated_at: string
+          workstation_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          image_path?: string | null
+          project_id?: string | null
+          reported_by: string
+          updated_at?: string
+          workstation_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          image_path?: string | null
+          project_id?: string | null
+          reported_by?: string
+          updated_at?: string
+          workstation_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broken_parts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broken_parts_reported_by_fkey"
+            columns: ["reported_by"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broken_parts_workstation_id_fkey"
+            columns: ["workstation_id"]
+            isOneToOne: false
+            referencedRelation: "workstations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_workstation_links: {
         Row: {
           created_at: string
