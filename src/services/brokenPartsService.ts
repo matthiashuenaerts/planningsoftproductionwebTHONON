@@ -19,6 +19,24 @@ export const brokenPartsService = {
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${employeeId}_${Date.now()}.${fileExt}`;
+      console.log(`Uploading file ${fileName} to broken_parts bucket`);
+      
+      // Check if bucket exists before upload
+      const { data: buckets, error: bucketError } = await supabase
+        .storage
+        .listBuckets();
+        
+      if (bucketError) {
+        console.error('Error checking buckets:', bucketError);
+        return null;
+      }
+      
+      const bucketExists = buckets.some(bucket => bucket.name === 'broken_parts');
+      if (!bucketExists) {
+        console.error('Bucket broken_parts does not exist');
+        toast.error('Storage configuration error');
+        return null;
+      }
       
       const { data, error } = await supabase.storage
         .from('broken_parts')
@@ -30,6 +48,7 @@ export const brokenPartsService = {
         return null;
       }
       
+      console.log('File uploaded successfully:', data.path);
       return data.path;
     } catch (error) {
       console.error('Error in uploadImage:', error);
@@ -41,6 +60,8 @@ export const brokenPartsService = {
   // Create a new broken part report
   async create(brokenPart: BrokenPart): Promise<BrokenPart | null> {
     try {
+      console.log('Creating broken part record:', brokenPart);
+      
       const { data, error } = await supabase
         .from('broken_parts')
         .insert([brokenPart])
@@ -53,6 +74,7 @@ export const brokenPartsService = {
         return null;
       }
       
+      console.log('Broken part created successfully:', data);
       toast.success('Broken part reported successfully');
       return data as BrokenPart;
     } catch (error) {
@@ -65,6 +87,8 @@ export const brokenPartsService = {
   // Get all broken parts
   async getAll(): Promise<BrokenPart[]> {
     try {
+      console.log('Fetching all broken parts');
+      
       const { data, error } = await supabase
         .from('broken_parts')
         .select(`
@@ -81,6 +105,7 @@ export const brokenPartsService = {
         return [];
       }
       
+      console.log('Broken parts fetched successfully:', data);
       return data || [];
     } catch (error) {
       console.error('Error in getAll:', error);
