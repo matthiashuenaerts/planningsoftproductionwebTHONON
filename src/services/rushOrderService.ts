@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { RushOrder, RushOrderTask, RushOrderAssignment } from "@/types/rushOrder";
 import { toast } from "@/hooks/use-toast";
@@ -74,16 +73,87 @@ export const rushOrderService = {
   
   async assignTasksToRushOrder(rushOrderId: string, taskIds: string[]): Promise<boolean> {
     try {
+      // First, create entries in rush_order_tasks for tracking
       const taskAssignments = taskIds.map(taskId => ({
         rush_order_id: rushOrderId,
         standard_task_id: taskId
       }));
       
-      const { error } = await supabase
+      const { error: linkError } = await supabase
         .from('rush_order_tasks')
         .insert(taskAssignments);
         
-      if (error) throw error;
+      if (linkError) throw linkError;
+      
+      // Get rush order details
+      const { data: rushOrder, error: rushOrderError } = await supabase
+        .from('rush_orders')
+        .select('*')
+        .eq('id', rushOrderId)
+        .single();
+      
+      if (rushOrderError) throw rushOrderError;
+      
+      // For each task, create an actual task in the tasks table
+      for (const taskId of taskIds) {
+        // Get info from the standard task
+        const { data: standardTask, error: taskError } = await supabase
+          .from('standard_tasks')
+          .select('*')
+          .eq('id', taskId)
+          .single();
+        
+        if (taskError) throw taskError;
+        
+        // Get workstations for this standard task
+        const { data: workstationLinks, error: workstationError } = await supabase
+          .from('standard_task_workstation_links')
+          .select('workstations(id, name)')
+          .eq('standard_task_id', taskId);
+        
+        if (workstationError) throw workstationError;
+        
+        const workstation = workstationLinks && workstationLinks.length > 0 && workstationLinks[0].workstations 
+          ? workstationLinks[0].workstations.name 
+          : 'Not assigned';
+        
+        // Get the default phase (most recent)
+        const { data: phases, error: phaseError } = await supabase
+          .from('phases')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(1);
+        
+        if (phaseError) throw phaseError;
+        
+        const phaseId = phases && phases.length > 0 ? phases[0].id : null;
+        
+        if (!phaseId) {
+          console.error('No phases found for task creation');
+          continue;
+        }
+        
+        // Create the task
+        const { error: createTaskError } = await supabase
+          .from('tasks')
+          .insert({
+            title: `🚨 RUSH: ${standardTask.task_name}`,
+            description: `Rush order task #${standardTask.task_number} from order: ${rushOrder.title}`,
+            workstation,
+            status: 'TODO',
+            priority: 'Urgent',
+            due_date: rushOrder.deadline.split('T')[0], // Just get the date part
+            phase_id: phaseId,
+            rush_order_id: rushOrderId,
+            is_rush: true
+          });
+        
+        if (createTaskError) {
+          console.error('Error creating task:', createTaskError);
+          throw createTaskError;
+        }
+      }
+      
       return true;
     } catch (error: any) {
       console.error('Error assigning tasks to rush order:', error);
@@ -119,7 +189,7 @@ export const rushOrderService = {
       return false;
     }
   },
-
+  
   async getAllRushOrders(): Promise<RushOrder[]> {
     try {
       const { data, error } = await supabase
@@ -259,7 +329,29 @@ export const rushOrderService = {
   
   async getRushOrdersForWorkstation(workstationId: string): Promise<RushOrder[]> {
     try {
-      // First get the standard task IDs associated with this workstation
+      // First check for rush order tasks directly in the tasks table
+      const { data: rushTasks, error: rushTasksError } = await supabase
+        .from('tasks')
+        .select('rush_order_id')
+        .eq('is_rush', true)
+        .in('status', ['TODO', 'IN_PROGRESS'])
+        .eq('workstation', (await supabase
+          .from('workstations')
+          .select('name')
+          .eq('id', workstationId)
+          .single()).data?.name);
+      
+      if (rushTasksError) throw rushTasksError;
+      
+      let rushOrderIds: string[] = [];
+      
+      if (rushTasks && rushTasks.length > 0) {
+        rushOrderIds = rushTasks
+          .filter(task => task.rush_order_id) // Filter out nulls
+          .map(task => task.rush_order_id as string);
+      }
+      
+      // Also get traditional workstation links as a fallback
       const { data: workstationTasks, error: taskError } = await supabase
         .from('standard_task_workstation_links')
         .select('standard_task_id')
@@ -267,31 +359,34 @@ export const rushOrderService = {
       
       if (taskError) throw taskError;
       
-      if (!workstationTasks || workstationTasks.length === 0) {
-        return [];
+      if (workstationTasks && workstationTasks.length > 0) {
+        const standardTaskIds = workstationTasks.map(wt => wt.standard_task_id);
+        
+        // Get rush orders that have tasks associated with this workstation
+        const { data: rushOrderTasks, error: rushOrderError } = await supabase
+          .from('rush_order_tasks')
+          .select('rush_order_id')
+          .in('standard_task_id', standardTaskIds);
+        
+        if (rushOrderError) throw rushOrderError;
+        
+        if (rushOrderTasks && rushOrderTasks.length > 0) {
+          // Add to existing order IDs, ensuring uniqueness
+          const additionalOrderIds = rushOrderTasks.map(rot => rot.rush_order_id);
+          rushOrderIds = [...new Set([...rushOrderIds, ...additionalOrderIds])];
+        }
       }
       
-      const standardTaskIds = workstationTasks.map(wt => wt.standard_task_id);
-      
-      // Now get rush orders that have tasks associated with this workstation
-      const { data: rushOrderTasks, error: rushOrderError } = await supabase
-        .from('rush_order_tasks')
-        .select('rush_order_id')
-        .in('standard_task_id', standardTaskIds);
-      
-      if (rushOrderError) throw rushOrderError;
-      
-      if (!rushOrderTasks || rushOrderTasks.length === 0) {
+      if (rushOrderIds.length === 0) {
         return [];
       }
-      
-      const rushOrderIds = [...new Set(rushOrderTasks.map(rot => rot.rush_order_id))];
       
       // Finally get the rush orders
       const { data: rushOrders, error: ordersError } = await supabase
         .from('rush_orders')
         .select('*')
-        .in('id', rushOrderIds);
+        .in('id', rushOrderIds)
+        .in('status', ['pending', 'in_progress']); // Only active ones
       
       if (ordersError) throw ordersError;
       
