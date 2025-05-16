@@ -11,6 +11,9 @@ export interface BrokenPart {
   reported_by: string;
   created_at?: string;
   updated_at?: string;
+  projects?: { name: string } | null;
+  workstations?: { name: string } | null;
+  employees?: { name: string } | null;
 }
 
 export const brokenPartsService = {
@@ -86,6 +89,52 @@ export const brokenPartsService = {
       console.error('Error in getAll:', error);
       toast.error('Failed to fetch broken parts');
       return [];
+    }
+  },
+  
+  // Get broken parts statistics
+  async getStatistics(timeFilter?: string): Promise<any> {
+    try {
+      let query = supabase
+        .from('broken_parts')
+        .select(`
+          *,
+          projects:project_id (name),
+          workstations:workstation_id (name), 
+          employees:reported_by (name)
+        `);
+        
+      if (timeFilter) {
+        // Apply time filtering if needed
+        // This would be implemented based on specific requirements
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('Error fetching statistics:', error);
+        toast.error('Failed to fetch statistics');
+        return null;
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('Error in getStatistics:', error);
+      toast.error('Failed to fetch statistics');
+      return null;
+    }
+  },
+  
+  // Get image URL from path
+  getImageUrl(path: string | null): string | null {
+    if (!path) return null;
+    
+    try {
+      const { data } = supabase.storage.from('broken_parts').getPublicUrl(path);
+      return data.publicUrl;
+    } catch (error) {
+      console.error('Error getting image URL:', error);
+      return null;
     }
   }
 };

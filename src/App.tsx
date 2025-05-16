@@ -21,6 +21,7 @@ import ProjectOrders from "./pages/ProjectOrders";
 import RushOrders from "./pages/RushOrders";
 import RushOrderDetails from "./pages/RushOrderDetails";
 import BrokenParts from "./pages/BrokenParts";
+import BrokenPartsSummary from "./pages/BrokenPartsSummary";
 import NewBrokenPart from "./pages/NewBrokenPart";
 import NotFound from "./pages/NotFound";
 
@@ -99,6 +100,11 @@ const App = () => (
               <Route path="/broken-parts" element={
                 <ProtectedRoute>
                   <BrokenParts />
+                </ProtectedRoute>
+              } />
+              <Route path="/broken-parts/summary" element={
+                <ProtectedRoute>
+                  <BrokenPartsSummary />
                 </ProtectedRoute>
               } />
               <Route path="/broken-parts/new" element={
