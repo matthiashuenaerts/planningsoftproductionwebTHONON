@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { rushOrderService } from '@/services/rushOrderService';
 import RushOrderWorkstationItem from '@/components/rush-orders/RushOrderWorkstationItem';

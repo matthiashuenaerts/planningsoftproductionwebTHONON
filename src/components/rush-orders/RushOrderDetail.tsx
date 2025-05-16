@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { rushOrderService } from '@/services/rushOrderService';
 import { standardTasksService } from '@/services/standardTasksService';
@@ -20,23 +20,11 @@ interface RushOrderDetailProps {
 const RushOrderDetail: React.FC<RushOrderDetailProps> = ({ rushOrderId, onStatusChange }) => {
   const { toast } = useToast();
   const [isUpdating, setIsUpdating] = useState(false);
-  const [rushTasks, setRushTasks] = useState<any[]>([]);
   
   const { data: rushOrder, isLoading, error, refetch } = useQuery({
     queryKey: ['rushOrder', rushOrderId],
     queryFn: () => rushOrderService.getRushOrderById(rushOrderId),
   });
-  
-  // Get rush order tasks from the tasks table
-  useEffect(() => {
-    if (rushOrderId) {
-      const fetchRushTasks = async () => {
-        const tasks = await rushOrderService.getRushOrderTasks(rushOrderId);
-        setRushTasks(tasks);
-      };
-      fetchRushTasks();
-    }
-  }, [rushOrderId]);
   
   // Query for getting standard task details for each task
   const { data: standardTasks } = useQuery({
@@ -179,14 +167,14 @@ const RushOrderDetail: React.FC<RushOrderDetailProps> = ({ rushOrderId, onStatus
                 <h3 className="text-md font-medium">Required Tasks</h3>
               </div>
               
-              {(!rushTasks || rushTasks.length === 0) ? (
+              {(!rushOrder.tasks || rushOrder.tasks.length === 0) ? (
                 <p className="text-gray-500 text-sm">No tasks assigned</p>
               ) : (
                 <ul className="space-y-2">
-                  {rushTasks.map((task) => (
+                  {rushOrder.tasks.map((task) => (
                     <li key={task.id} className="flex items-center bg-gray-50 p-3 rounded-md">
                       <Check className="h-4 w-4 text-green-500 mr-2 flex-shrink-0" />
-                      <span className="text-sm">{task.title}</span>
+                      <span className="text-sm">{getTaskName(task.standard_task_id)}</span>
                     </li>
                   ))}
                 </ul>
