@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +8,6 @@ import { workstationService } from '@/services/workstationService';
 import { supabase } from '@/integrations/supabase/client';
 import { StandardTask, standardTasksService } from '@/services/standardTasksService';
 import { Progress } from '@/components/ui/progress';
-import { AlertTriangle } from 'lucide-react';
 
 interface TaskListProps {
   tasks: Task[];
@@ -162,17 +160,11 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
     }
   };
 
-  // Helper function to get task border style based on rush status and due date
-  const getTaskCardClass = (task: Task) => {
-    // Rush tasks get red styling
-    if (task.is_rush) {
-      return 'border-l-4 border-l-red-500 bg-red-50 dark:bg-red-900/10';
-    }
-    
-    // Non-rush tasks follow the standard due date logic
+  // Helper function to get status color class
+  const getTaskStatusClass = (dueDate: string) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const taskDate = new Date(task.due_date);
+    const taskDate = new Date(dueDate);
     taskDate.setHours(0, 0, 0, 0);
     
     if (taskDate < today) {
@@ -202,18 +194,11 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
   const renderTaskTitle = (task: Task) => {
     return (
       <div>
-        {/* Display rush indicator and project name as main title */}
-        <span className="font-medium text-primary flex items-center gap-1">
-          {task.is_rush && (
-            <AlertTriangle className="h-4 w-4 text-red-500" />
-          )}
-          {task.project_name || 'Unknown Project'}
-        </span>
+        {/* Display project name as main title */}
+        <span className="font-medium text-primary">{task.project_name || 'Unknown Project'}</span>
         
         {/* Display task title as subtitle */}
-        <div className={`text-sm mt-1 font-medium ${task.is_rush ? 'text-red-700' : ''}`}>
-          {task.title}
-        </div>
+        <div className="text-sm mt-1 font-medium">{task.title}</div>
         
         {/* If there's standard task info, display it */}
         {getStandardTask(task) && (
@@ -280,11 +265,11 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
       <h3 className="text-lg font-medium mb-2">{title}</h3>
       <div className="space-y-3">
         {displayTasks.map((task) => (
-          <Card key={task.id} className={`${getTaskCardClass(task)} ${compact ? 'mb-2' : ''} relative overflow-hidden`}>
+          <Card key={task.id} className={`${getTaskStatusClass(task.due_date)} ${compact ? 'mb-2' : ''} relative overflow-hidden`}>
             {task.status === 'IN_PROGRESS' && (
               <div className="absolute inset-0 z-0">
                 <div 
-                  className={`h-full ${task.is_rush ? 'bg-red-50 dark:bg-red-900/10' : 'bg-green-50 dark:bg-green-900/20'}`} 
+                  className="h-full bg-green-50 dark:bg-green-900/20" 
                   style={{ width: `${getTaskProgress(task)}%` }}
                 />
               </div>
@@ -296,15 +281,15 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
                 </h4>
                 <div className="flex gap-2 items-center">
                   <Badge 
-                    variant={task.is_rush ? "destructive" : "outline"}
+                    variant="outline"
                     className={`
-                      ${!task.is_rush && (task.priority === 'High' || task.priority === 'Urgent') 
+                      ${task.priority === 'High' || task.priority === 'Urgent' 
                         ? 'border-red-500 text-red-500' 
-                        : !task.is_rush ? 'border-gray-300 text-gray-500' : ''
+                        : 'border-gray-300 text-gray-500'
                       } ${compact ? 'text-xs px-1 py-0' : ''}
                     `}
                   >
-                    {task.is_rush ? 'RUSH' : task.priority}
+                    {task.priority}
                   </Badge>
                   {onTaskStatusChange && (
                     <div>
@@ -339,12 +324,6 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, title = "Tasks", onTaskStatu
               {task.status === 'COMPLETED' && task.completed_by && task.completed_at && !compact && (
                 <div className="mb-3 text-sm bg-green-50 p-2 rounded border border-green-100">
                   <span className="font-medium text-green-700">Completed:</span> {formatDateTime(task.completed_at)} by {completedByNames[task.id] || 'Unknown'}
-                </div>
-              )}
-              
-              {task.rush_order_id && !compact && (
-                <div className="mb-3 text-sm bg-red-50 p-2 rounded border border-red-100">
-                  <span className="font-medium text-red-700">Rush Order Task</span>
                 </div>
               )}
               

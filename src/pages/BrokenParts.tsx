@@ -11,14 +11,14 @@ const BrokenParts: React.FC = () => {
   const { currentEmployee } = useAuth();
   
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <div className="w-64 bg-sidebar fixed top-0 bottom-0">
+    <div className="flex h-screen bg-gray-50">
+      <div className="w-64 h-full">
         <Navbar />
       </div>
-      <div className="ml-64 w-full p-6">
-        <div className="max-w-7xl mx-auto">
+      <div className="flex-1 overflow-auto">
+        <div className="container mx-auto px-4 py-6">
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold">Broken Parts</h1>
+            <h1 className="text-2xl font-bold">Broken Parts</h1>
             <div className="flex space-x-2">
               <Button variant="outline" asChild>
                 <Link to="/broken-parts/summary">

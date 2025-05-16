@@ -43,8 +43,6 @@ export interface Task {
   completed_at?: string | null; // Time when the task was completed
   completed_by?: string | null; // ID of the employee who completed the task
   status_changed_at?: string | null; // Time when the task status was last changed
-  rush_order_id?: string | null; // ID of the associated rush order, if any
-  is_rush?: boolean; // Flag indicating if this is a rush task
 }
 
 // Employee Types
@@ -370,7 +368,6 @@ export const taskService = {
       .from('tasks')
       .select('*')
       .eq('due_date', today)
-      .order('is_rush', { ascending: false }) // Rush orders first
       .order('priority', { ascending: false });
     
     if (error) throw error;
@@ -382,7 +379,6 @@ export const taskService = {
       .from('tasks')
       .select('*')
       .eq('due_date', dueDate)
-      .order('is_rush', { ascending: false }) // Rush orders first
       .order('priority', { ascending: false });
     
     if (error) throw error;

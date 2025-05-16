@@ -1,18 +1,15 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { useToast } from '@/components/ui/use-toast';
-import { format } from 'date-fns';
 import { rushOrderService } from '@/services/rushOrderService';
-import { AlertCircle, CheckCircle, Clock, User, PanelRight } from 'lucide-react';
+import { standardTasksService } from '@/services/standardTasksService';
 import { RushOrder } from '@/types/rushOrder';
-import { useAuth } from '@/context/AuthContext';
-import { Link } from 'react-router-dom';
-import { Task } from '@/services/dataService';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { format, parseISO } from 'date-fns';
+import { Check, Clock, UserCheck, ListChecks } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface RushOrderDetailProps {
@@ -22,10 +19,6 @@ interface RushOrderDetailProps {
 
 const RushOrderDetail: React.FC<RushOrderDetailProps> = ({ rushOrderId, onStatusChange }) => {
   const { toast } = useToast();
-  const { currentEmployee } = useAuth();
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [standardTasks, setStandardTasks] = useState<any[]>([]);
-  const [assignees, setAssignees] = useState<any[]>([]);
   const [isUpdating, setIsUpdating] = useState(false);
   
   const { data: rushOrder, isLoading, error, refetch } = useQuery({
@@ -33,112 +26,52 @@ const RushOrderDetail: React.FC<RushOrderDetailProps> = ({ rushOrderId, onStatus
     queryFn: () => rushOrderService.getRushOrderById(rushOrderId),
   });
   
-  // Fetch actual tasks linked to this rush order
-  useEffect(() => {
-    const fetchTasks = async () => {
-      if (!rushOrderId) return;
+  // Query for getting standard task details for each task
+  const { data: standardTasks } = useQuery({
+    queryKey: ['standardTasks'],
+    queryFn: standardTasksService.getAll,
+    enabled: !!rushOrder?.tasks,
+  });
+  
+  // Query for getting employee details for each assignment
+  const { data: assignedEmployees } = useQuery({
+    queryKey: ['assignedEmployees', rushOrderId],
+    queryFn: async () => {
+      if (!rushOrder?.assignments) return [];
       
-      try {
-        const { data, error } = await supabase
-          .from('tasks')
-          .select(`
-            *,
-            phases:phase_id(name, project_id),
-            projects:phases(project_id(name))
-          `)
-          .eq('rush_order_id', rushOrderId);
+      const employeeIds = rushOrder.assignments.map(a => a.employee_id);
+      
+      const { data, error } = await supabase
+        .from('employees')
+        .select('id, name, role')
+        .in('id', employeeIds);
         
-        if (error) throw error;
-        
-        if (data) {
-          setTasks(data as Task[]);
-        }
-      } catch (error) {
-        console.error('Error fetching rush order tasks:', error);
-      }
-    };
-    
-    fetchTasks();
-  }, [rushOrderId]);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!rushOrder?.assignments && rushOrder.assignments.length > 0,
+  });
   
-  // Fetch standard tasks and assignees for context
-  useEffect(() => {
-    if (!rushOrder) return;
-    
-    const fetchContextData = async () => {
-      try {
-        // Fetch standard task info
-        if (rushOrder.tasks && rushOrder.tasks.length > 0) {
-          const standardTaskIds = rushOrder.tasks.map(task => task.standard_task_id);
-          
-          const { data: stdTasks, error: stdTaskError } = await supabase
-            .from('standard_tasks')
-            .select('*')
-            .in('id', standardTaskIds);
-            
-          if (stdTaskError) throw stdTaskError;
-          
-          setStandardTasks(stdTasks || []);
-        }
-        
-        // Fetch assignee info
-        if (rushOrder.assignments && rushOrder.assignments.length > 0) {
-          const employeeIds = rushOrder.assignments.map(assign => assign.employee_id);
-          
-          const { data: employees, error: empError } = await supabase
-            .from('employees')
-            .select('id, name, role')
-            .in('id', employeeIds);
-            
-          if (empError) throw empError;
-          
-          setAssignees(employees || []);
-        }
-      } catch (error) {
-        console.error('Error fetching context data:', error);
-      }
-    };
-    
-    fetchContextData();
-  }, [rushOrder]);
-  
-  const handleStatusChange = async (newStatus: "pending" | "in_progress" | "completed") => {
-    if (!rushOrder || !currentEmployee) return;
-    
-    setIsUpdating(true);
-    
+  const handleStatusUpdate = async (newStatus: "pending" | "in_progress" | "completed") => {
     try {
+      setIsUpdating(true);
       const success = await rushOrderService.updateRushOrderStatus(rushOrderId, newStatus);
       
-      if (!success) throw new Error("Failed to update status");
-      
-      // Create notification for all users when status changes
-      let message = '';
-      
-      switch(newStatus) {
-        case 'in_progress':
-          message = `Rush order "${rushOrder.title}" has been started`;
-          break;
-        case 'completed':
-          message = `Rush order "${rushOrder.title}" has been completed`;
-          break;
-        default:
-          message = `Rush order "${rushOrder.title}" status changed to ${newStatus}`;
+      if (success) {
+        toast({
+          title: "Status Updated",
+          description: `Rush order status changed to ${newStatus.replace('_', ' ')}`,
+        });
+        
+        refetch();
+        if (onStatusChange) onStatusChange();
+      } else {
+        throw new Error("Failed to update status");
       }
-      
-      await rushOrderService.notifyAllUsers(rushOrderId, message);
-      
-      toast({
-        description: `Rush order status updated to ${newStatus}`
-      });
-      
-      refetch();
-      if (onStatusChange) onStatusChange();
-    } catch (error) {
-      console.error('Error updating rush order status:', error);
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to update rush order status",
+        description: `Failed to update status: ${error.message}`,
         variant: "destructive"
       });
     } finally {
@@ -146,193 +79,172 @@ const RushOrderDetail: React.FC<RushOrderDetailProps> = ({ rushOrderId, onStatus
     }
   };
   
+  const getTaskName = (taskId: string) => {
+    const task = standardTasks?.find(t => t.id === taskId);
+    return task ? `${task.task_name} (Task #${task.task_number})` : 'Unknown Task';
+  };
+  
+  const getEmployeeName = (employeeId: string) => {
+    const employee = assignedEmployees?.find(e => e.id === employeeId);
+    return employee ? `${employee.name} (${employee.role})` : 'Unknown Employee';
+  };
+  
   if (isLoading) {
-    return (
-      <Card className="w-full">
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-center h-40">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
-        </CardContent>
-      </Card>
-    );
+    return <div className="text-center py-8">Loading rush order details...</div>;
   }
   
   if (error || !rushOrder) {
     return (
-      <Card className="w-full">
-        <CardContent className="pt-6">
-          <div className="flex flex-col items-center justify-center h-40 text-center">
-            <AlertCircle className="h-10 w-10 text-destructive mb-2" />
-            <p className="text-destructive">Failed to load rush order details</p>
-          </div>
-        </CardContent>
+      <Card className="bg-red-50 border-red-200">
+        <CardHeader>
+          <CardTitle>Error Loading Rush Order</CardTitle>
+          <CardDescription>There was a problem loading this rush order.</CardDescription>
+        </CardHeader>
+        <CardFooter>
+          <Button onClick={() => refetch()}>Try Again</Button>
+        </CardFooter>
       </Card>
     );
   }
   
   return (
     <div className="space-y-6">
-      <Card className="w-full">
+      <Card>
         <CardHeader>
-          <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
             <div>
-              <CardTitle className="text-2xl flex items-center gap-2">
-                {rushOrder.title}
-                <Badge 
-                  className={
-                    rushOrder.status === 'pending' 
-                      ? 'bg-yellow-500' 
-                      : rushOrder.status === 'in_progress' 
-                        ? 'bg-blue-500' 
-                        : 'bg-green-500'
-                  }
-                >
-                  {rushOrder.status}
-                </Badge>
-              </CardTitle>
-              <CardDescription className="text-sm mt-2">
-                Created on {format(new Date(rushOrder.created_at), 'MMMM d, yyyy')}
+              <CardTitle className="text-xl">{rushOrder.title}</CardTitle>
+              <CardDescription>
+                Created: {format(parseISO(rushOrder.created_at), 'MMM d, yyyy HH:mm')}
               </CardDescription>
             </div>
-            
-            <div className="flex flex-wrap gap-2">
-              {rushOrder.status === 'pending' && (
-                <Button 
-                  onClick={() => handleStatusChange('in_progress')}
-                  disabled={isUpdating}
-                >
-                  <Clock className="h-4 w-4 mr-2" />
-                  Start Work
-                </Button>
-              )}
-              {rushOrder.status === 'in_progress' && (
-                <Button 
-                  onClick={() => handleStatusChange('completed')}
-                  disabled={isUpdating}
-                  variant="default"
-                >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Mark Completed
-                </Button>
-              )}
-              {rushOrder.status === 'completed' && (
-                <Button 
-                  onClick={() => handleStatusChange('in_progress')}
-                  disabled={isUpdating}
-                  variant="outline"
-                >
-                  <Clock className="h-4 w-4 mr-2" />
-                  Reopen
-                </Button>
-              )}
-            </div>
+            <Badge className={`
+              ${rushOrder.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
+                rushOrder.status === 'in_progress' ? 'bg-blue-100 text-blue-800' : 
+                'bg-green-100 text-green-800'} 
+              px-3 py-1 text-sm capitalize
+            `}>
+              {rushOrder.status.replace('_', ' ')}
+            </Badge>
           </div>
         </CardHeader>
         
         <CardContent className="space-y-6">
-          <div>
-            <h3 className="font-medium mb-2">Description</h3>
-            <p className="text-gray-600 dark:text-gray-300">{rushOrder.description}</p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Deadline</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="font-semibold flex items-center">
-                  <Clock className="h-4 w-4 mr-2 text-amber-500" />
-                  {format(new Date(rushOrder.deadline), 'MMMM d, yyyy')}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <h3 className="text-sm font-medium text-gray-500 mb-1">Description</h3>
+              <p className="text-gray-800 whitespace-pre-wrap">{rushOrder.description}</p>
+            </div>
+            
+            <div>
+              <h3 className="text-sm font-medium text-gray-500 mb-1">Deadline</h3>
+              <div className="flex items-center">
+                <Clock className="h-4 w-4 text-red-500 mr-2" />
+                <p className="text-red-600 font-medium">
+                  {format(parseISO(rushOrder.deadline), 'MMMM d, yyyy HH:mm')}
                 </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Priority</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Badge variant="destructive">
-                  {rushOrder.priority}
-                </Badge>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Assigned Team Members</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {assignees.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {assignees.map(emp => (
-                      <Badge key={emp.id} variant="outline" className="flex items-center">
-                        <User className="h-3 w-3 mr-1" />
-                        {emp.name}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-gray-500 text-sm">No team members assigned</p>
-                )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
           
           {rushOrder.image_url && (
             <div>
-              <h3 className="font-medium mb-2">Image</h3>
-              <div className="max-w-md border rounded overflow-hidden">
+              <h3 className="text-sm font-medium text-gray-500 mb-2">Image</h3>
+              <div className="overflow-hidden rounded-lg border">
                 <img 
                   src={rushOrder.image_url} 
-                  alt="Rush order reference" 
-                  className="w-full h-auto object-contain"
+                  alt={rushOrder.title} 
+                  className="w-full h-auto max-h-96 object-contain"
                 />
               </div>
             </div>
           )}
           
-          <div>
-            <h3 className="font-medium mb-2">Tasks</h3>
-            <div className="space-y-2">
-              {tasks.length > 0 ? (
-                tasks.map(task => (
-                  <Card key={task.id} className="bg-red-50 border border-red-100">
-                    <CardContent className="p-4">
-                      <div className="flex flex-col md:flex-row md:justify-between gap-2">
-                        <div>
-                          <h4 className="font-medium text-red-700">{task.title}</h4>
-                          <p className="text-sm text-gray-600">{task.description}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={
-                            task.status === 'COMPLETED' 
-                              ? 'default' 
-                              : task.status === 'IN_PROGRESS'
-                                ? 'secondary'
-                                : 'outline'
-                          }>
-                            {task.status}
-                          </Badge>
-                          <Badge variant="outline">{task.workstation}</Badge>
-                          <Link to="/personal-tasks">
-                            <Button variant="ghost" size="sm">
-                              <PanelRight className="h-4 w-4" />
-                            </Button>
-                          </Link>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <div className="flex items-center mb-2">
+                <ListChecks className="h-5 w-5 text-blue-500 mr-2" />
+                <h3 className="text-md font-medium">Required Tasks</h3>
+              </div>
+              
+              {(!rushOrder.tasks || rushOrder.tasks.length === 0) ? (
+                <p className="text-gray-500 text-sm">No tasks assigned</p>
               ) : (
-                <p className="text-gray-500 text-sm">No tasks associated with this rush order</p>
+                <ul className="space-y-2">
+                  {rushOrder.tasks.map((task) => (
+                    <li key={task.id} className="flex items-center bg-gray-50 p-3 rounded-md">
+                      <Check className="h-4 w-4 text-green-500 mr-2 flex-shrink-0" />
+                      <span className="text-sm">{getTaskName(task.standard_task_id)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            
+            <div>
+              <div className="flex items-center mb-2">
+                <UserCheck className="h-5 w-5 text-indigo-500 mr-2" />
+                <h3 className="text-md font-medium">Assigned Team Members</h3>
+              </div>
+              
+              {(!rushOrder.assignments || rushOrder.assignments.length === 0) ? (
+                <p className="text-gray-500 text-sm">No team members assigned</p>
+              ) : (
+                <ul className="space-y-2">
+                  {rushOrder.assignments.map((assignment) => (
+                    <li key={assignment.id} className="flex items-center bg-gray-50 p-3 rounded-md">
+                      <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-medium mr-3 flex-shrink-0">
+                        {getEmployeeName(assignment.employee_id).charAt(0)}
+                      </div>
+                      <span className="text-sm">{getEmployeeName(assignment.employee_id)}</span>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           </div>
         </CardContent>
+        
+        <CardFooter className="flex justify-between flex-wrap gap-3">
+          <Badge variant="outline" className={`
+            ${rushOrder.priority === 'critical' ? 'bg-red-100 text-red-800 border-red-300' : 'bg-orange-100 text-orange-800 border-orange-300'}
+            px-3 py-1
+          `}>
+            {rushOrder.priority.toUpperCase()} PRIORITY
+          </Badge>
+          
+          <div className="flex gap-3">
+            {rushOrder.status === 'pending' && (
+              <Button 
+                variant="secondary"
+                onClick={() => handleStatusUpdate('in_progress')}
+                disabled={isUpdating}
+              >
+                Mark as In Progress
+              </Button>
+            )}
+            
+            {(rushOrder.status === 'pending' || rushOrder.status === 'in_progress') && (
+              <Button 
+                className="bg-green-600 hover:bg-green-700 text-white"
+                onClick={() => handleStatusUpdate('completed')}
+                disabled={isUpdating}
+              >
+                Mark as Completed
+              </Button>
+            )}
+            
+            {rushOrder.status === 'completed' && (
+              <Button 
+                variant="outline"
+                onClick={() => handleStatusUpdate('in_progress')}
+                disabled={isUpdating}
+              >
+                Reopen
+              </Button>
+            )}
+          </div>
+        </CardFooter>
       </Card>
     </div>
   );
