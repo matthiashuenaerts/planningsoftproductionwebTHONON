@@ -273,19 +273,20 @@ export const rushOrderService = {
       
       const standardTaskIds = workstationTasks.map(wt => wt.standard_task_id);
       
-      // Now get rush orders that have tasks associated with this workstation
-      const { data: rushOrderTasks, error: rushOrderError } = await supabase
-        .from('rush_order_tasks')
+      // Now get tasks associated with this workstation that are rush tasks
+      const { data: rushTasks, error: rushTasksError } = await supabase
+        .from('tasks')
         .select('rush_order_id')
-        .in('standard_task_id', standardTaskIds);
+        .eq('is_rush', true)
+        .not('rush_order_id', 'is', null);
       
-      if (rushOrderError) throw rushOrderError;
+      if (rushTasksError) throw rushTasksError;
       
-      if (!rushOrderTasks || rushOrderTasks.length === 0) {
+      if (!rushTasks || rushTasks.length === 0) {
         return [];
       }
       
-      const rushOrderIds = [...new Set(rushOrderTasks.map(rot => rot.rush_order_id))];
+      const rushOrderIds = [...new Set(rushTasks.map(task => task.rush_order_id))];
       
       // Finally get the rush orders
       const { data: rushOrders, error: ordersError } = await supabase
@@ -298,6 +299,22 @@ export const rushOrderService = {
       return rushOrders as RushOrder[] || [];
     } catch (error: any) {
       console.error('Error fetching rush orders for workstation:', error);
+      return [];
+    }
+  },
+  
+  async getRushOrderTasks(rushOrderId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('rush_order_id', rushOrderId)
+        .eq('is_rush', true);
+        
+      if (error) throw error;
+      return data || [];
+    } catch (error: any) {
+      console.error('Error fetching rush order tasks:', error);
       return [];
     }
   }
