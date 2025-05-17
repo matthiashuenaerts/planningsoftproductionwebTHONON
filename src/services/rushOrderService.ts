@@ -1,5 +1,6 @@
+
 import { supabase } from "@/integrations/supabase/client";
-import { RushOrder, RushOrderTask, RushOrderAssignment, RushOrderMessage } from "@/types/rushOrder";
+import { RushOrder, RushOrderTask, RushOrderAssignment, RushOrderMessage, RushOrderMessageRead } from "@/types/rushOrder";
 import { toast } from "@/hooks/use-toast";
 import { ensureStorageBucket } from "@/integrations/supabase/createBucket";
 
@@ -73,16 +74,78 @@ export const rushOrderService = {
   
   async assignTasksToRushOrder(rushOrderId: string, taskIds: string[]): Promise<boolean> {
     try {
+      // First, get the information about the standard tasks to create actual tasks
+      const { data: standardTasks, error: tasksError } = await supabase
+        .from('standard_tasks')
+        .select('id, task_name, task_number, time_coefficient')
+        .in('id', taskIds);
+        
+      if (tasksError) throw tasksError;
+      
+      // Get the rush order information
+      const { data: rushOrder, error: rushOrderError } = await supabase
+        .from('rush_orders')
+        .select('deadline')
+        .eq('id', rushOrderId)
+        .single();
+        
+      if (rushOrderError) throw rushOrderError;
+      
+      // Map standard tasks to task records
       const taskAssignments = taskIds.map(taskId => ({
         rush_order_id: rushOrderId,
         standard_task_id: taskId
       }));
       
+      // Create entries in rush_order_tasks as before
       const { error } = await supabase
         .from('rush_order_tasks')
         .insert(taskAssignments);
         
       if (error) throw error;
+      
+      // Create actual tasks in the tasks table as we do for projects
+      if (standardTasks && standardTasks.length > 0) {
+        // Find a phase for these tasks, or create a dummy phase if needed
+        // For rush orders, we'll create tasks directly without a phase
+        const tasksToCreate = standardTasks.map(standardTask => {
+          const taskName = standardTask.task_name;
+          const taskNumber = standardTask.task_number;
+          
+          return {
+            title: `Rush: ${taskName} #${taskNumber}`,
+            description: `Rush order task: ${taskName}`,
+            status: 'pending',
+            priority: 'high',
+            due_date: rushOrder.deadline.split('T')[0], // Use just the date part
+            workstation: 'Any', // Default workstation, can be updated later
+            phase_id: null, // Rush order tasks don't have a phase
+          };
+        });
+        
+        // Insert tasks into the tasks table
+        const { data: createdTasks, error: createTasksError } = await supabase
+          .from('tasks')
+          .insert(tasksToCreate)
+          .select('id');
+          
+        if (createTasksError) throw createTasksError;
+        
+        // Link the created tasks to the rush order
+        if (createdTasks && createdTasks.length > 0) {
+          const taskLinks = createdTasks.map(task => ({
+            rush_order_id: rushOrderId,
+            task_id: task.id
+          }));
+          
+          const { error: linkError } = await supabase
+            .from('rush_order_task_links')
+            .insert(taskLinks);
+            
+          if (linkError) throw linkError;
+        }
+      }
+      
       return true;
     } catch (error: any) {
       console.error('Error assigning tasks to rush order:', error);
