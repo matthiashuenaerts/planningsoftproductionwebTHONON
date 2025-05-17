@@ -39,6 +39,14 @@ const RushOrderChat: React.FC<RushOrderChatProps> = ({ rushOrderId }) => {
     }
   }, [messages]);
   
+  // Mark messages as read when viewing them
+  useEffect(() => {
+    if (messages?.length && currentEmployee?.id) {
+      rushOrderService.markMessagesAsRead(rushOrderId);
+      queryClient.invalidateQueries({ queryKey: ['rushOrders'] });
+    }
+  }, [messages, currentEmployee, rushOrderId, queryClient]);
+  
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -57,6 +65,8 @@ const RushOrderChat: React.FC<RushOrderChatProps> = ({ rushOrderId }) => {
         setMessage('');
         // Refetch messages
         queryClient.invalidateQueries({ queryKey: ['rushOrderMessages', rushOrderId] });
+        // Also update the rush orders list to update unread count
+        queryClient.invalidateQueries({ queryKey: ['rushOrders'] });
       }
     } catch (error: any) {
       toast({

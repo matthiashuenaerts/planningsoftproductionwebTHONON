@@ -10,6 +10,7 @@ import { format, parseISO } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import { MessageCircle } from 'lucide-react';
 
 interface RushOrderListProps {
   statusFilter?: "pending" | "in_progress" | "completed" | "all";
@@ -99,7 +100,15 @@ const RushOrderList: React.FC<RushOrderListProps> = ({ statusFilter = "all" }) =
         <Card key={order.id} className="shadow-sm transition-shadow hover:shadow-md">
           <CardHeader className="pb-4">
             <div className="flex justify-between items-start">
-              <CardTitle>{order.title}</CardTitle>
+              <div className="flex items-center">
+                <CardTitle>{order.title}</CardTitle>
+                {(order.unread_messages_count && order.unread_messages_count > 0) && (
+                  <Badge className="ml-2 bg-red-500 text-white border-0">
+                    <MessageCircle className="h-3 w-3 mr-1" />
+                    {order.unread_messages_count}
+                  </Badge>
+                )}
+              </div>
               {getStatusBadge(order.status)}
             </div>
             <CardDescription className="flex justify-between">

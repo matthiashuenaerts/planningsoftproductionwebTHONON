@@ -1,8 +1,11 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Home, ListChecks, LayoutDashboard, Settings, Users, PackagePlus, Truck, LogOut, User, AlertTriangle } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { rushOrderService } from '@/services/rushOrderService';
+import { Badge } from '@/components/ui/badge';
 
 const Navbar = () => {
   const { currentEmployee, logout } = useAuth();
@@ -14,6 +17,22 @@ const Navbar = () => {
   // Only admin, manager, and installation_team can add new rush orders
   const canCreateRushOrder = currentEmployee && 
     ['admin', 'manager', 'installation_team'].includes(currentEmployee.role);
+  
+  // Query rush orders to get counts for pending orders and unread messages
+  const { data: rushOrders, isLoading } = useQuery({
+    queryKey: ['rushOrders', 'navbar'],
+    queryFn: rushOrderService.getAllRushOrders,
+    enabled: !!canSeeRushOrders,
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
+  
+  // Calculate counts
+  const pendingOrdersCount = rushOrders?.filter(order => order.status === 'pending').length || 0;
+  
+  // Calculate total unread messages across all rush orders
+  const totalUnreadMessages = rushOrders?.reduce((total, order) => {
+    return total + (order.unread_messages_count || 0);
+  }, 0) || 0;
   
   return (
     <div className="h-full px-3 py-4 overflow-y-auto bg-sky-800 text-white">
@@ -75,9 +94,23 @@ const Navbar = () => {
             )}
             {canSeeRushOrders && (
               <li>
-                <NavLink to="/rush-orders" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group">
-                  <PackagePlus className="w-5 h-5 text-white group-hover:text-white" />
-                  <span className="ml-3">Rush Orders</span>
+                <NavLink to="/rush-orders" className="flex items-center justify-between p-2 rounded-lg hover:bg-sky-700 group">
+                  <div className="flex items-center">
+                    <PackagePlus className="w-5 h-5 text-white group-hover:text-white" />
+                    <span className="ml-3">Rush Orders</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {pendingOrdersCount > 0 && (
+                      <Badge variant="outline" className="bg-yellow-500 text-white border-0 font-medium">
+                        {pendingOrdersCount}
+                      </Badge>
+                    )}
+                    {totalUnreadMessages > 0 && (
+                      <Badge variant="outline" className="bg-red-500 text-white border-0 font-medium">
+                        {totalUnreadMessages}
+                      </Badge>
+                    )}
+                  </div>
                 </NavLink>
               </li>
             )}

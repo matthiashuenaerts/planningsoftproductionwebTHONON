@@ -25,6 +25,7 @@ export interface RushOrderMessage {
   updated_at: string;
   employee_name?: string;
   employee_role?: string;
+  is_read?: boolean;
 }
 
 export interface RushOrder {
@@ -41,6 +42,7 @@ export interface RushOrder {
   tasks?: RushOrderTask[];
   assignments?: RushOrderAssignment[];
   messages?: RushOrderMessage[];
+  unread_messages_count?: number;
 }
 
 export interface RushOrderFormData {

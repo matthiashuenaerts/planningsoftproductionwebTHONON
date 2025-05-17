@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -31,10 +32,11 @@ const RushOrders = () => {
     queryClient.invalidateQueries({ queryKey: ['rushOrders'] });
   };
 
-  // Fetch all rush orders to get counts
+  // Fetch all rush orders to get counts - with more frequent refetching
   const { data: allRushOrders } = useQuery({
     queryKey: ['rushOrders', 'all'],
     queryFn: rushOrderService.getAllRushOrders,
+    refetchInterval: 15000, // Refetch every 15 seconds
   });
 
   // Count orders by status
