@@ -523,42 +523,6 @@ export type Database = {
           },
         ]
       }
-      rush_order_task_links: {
-        Row: {
-          created_at: string
-          id: string
-          rush_order_id: string
-          task_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          rush_order_id: string
-          task_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          rush_order_id?: string
-          task_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "rush_order_task_links_rush_order_id_fkey"
-            columns: ["rush_order_id"]
-            isOneToOne: false
-            referencedRelation: "rush_orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "rush_order_task_links_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       rush_order_tasks: {
         Row: {
           created_at: string
