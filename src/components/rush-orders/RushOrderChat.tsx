@@ -12,6 +12,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { useToast } from '@/hooks/use-toast';
 import { Send, MessageCircle } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { supabase } from "@/integrations/supabase/client";
 
 interface RushOrderChatProps {
   rushOrderId: string;
@@ -39,11 +40,22 @@ const RushOrderChat: React.FC<RushOrderChatProps> = ({ rushOrderId }) => {
     }
   }, [messages]);
   
-  // Mark messages as read when viewing them
+  // Mark messages as read when viewing them - with try/catch to handle errors gracefully
   useEffect(() => {
     if (messages?.length && currentEmployee?.id) {
-      rushOrderService.markMessagesAsRead(rushOrderId);
-      queryClient.invalidateQueries({ queryKey: ['rushOrders'] });
+      try {
+        // Mark messages as read without waiting for the response
+        rushOrderService.markMessagesAsRead(rushOrderId)
+          .then(() => {
+            // Invalidate queries to update unread counts
+            queryClient.invalidateQueries({ queryKey: ['rushOrders'] });
+          })
+          .catch(error => {
+            console.error("Error marking messages as read:", error);
+          });
+      } catch (error) {
+        console.error("Error in markMessagesAsRead effect:", error);
+      }
     }
   }, [messages, currentEmployee, rushOrderId, queryClient]);
   

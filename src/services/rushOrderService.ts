@@ -367,5 +367,34 @@ export const rushOrderService = {
       console.error('Error fetching rush order messages:', error);
       return [];
     }
+  },
+  
+  async markMessagesAsRead(rushOrderId: string): Promise<boolean> {
+    try {
+      // Get the current user ID from the session
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData?.session?.user?.id;
+      
+      if (!userId) return false;
+      
+      // Update the read status of the user's messages for this rush order
+      // Here we just track that the user has read the messages up to this point
+      // by adding an entry to track when the user last read the rush order's messages
+      const { error } = await supabase
+        .from('rush_order_message_reads')
+        .upsert({
+          rush_order_id: rushOrderId,
+          employee_id: userId,
+          last_read_at: new Date().toISOString()
+        }, {
+          onConflict: 'rush_order_id,employee_id'
+        });
+        
+      if (error) throw error;
+      return true;
+    } catch (error: any) {
+      console.error('Error marking rush order messages as read:', error);
+      return false;
+    }
   }
 };

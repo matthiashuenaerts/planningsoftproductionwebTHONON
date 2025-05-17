@@ -28,6 +28,13 @@ export interface RushOrderMessage {
   is_read?: boolean;
 }
 
+// Add interface for message read tracking
+export interface RushOrderMessageRead {
+  rush_order_id: string;
+  employee_id: string;
+  last_read_at: string;
+}
+
 export interface RushOrder {
   id: string;
   title: string;
