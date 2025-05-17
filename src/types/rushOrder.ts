@@ -16,6 +16,17 @@ export interface RushOrderAssignment {
   created_at: string;
 }
 
+export interface RushOrderMessage {
+  id: string;
+  rush_order_id: string;
+  employee_id: string;
+  message: string;
+  created_at: string;
+  updated_at: string;
+  employee_name?: string;
+  employee_role?: string;
+}
+
 export interface RushOrder {
   id: string;
   title: string;
@@ -29,6 +40,7 @@ export interface RushOrder {
   updated_at: string;
   tasks?: RushOrderTask[];
   assignments?: RushOrderAssignment[];
+  messages?: RushOrderMessage[];
 }
 
 export interface RushOrderFormData {

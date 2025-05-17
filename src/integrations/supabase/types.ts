@@ -481,6 +481,48 @@ export type Database = {
           },
         ]
       }
+      rush_order_messages: {
+        Row: {
+          created_at: string
+          employee_id: string
+          id: string
+          message: string
+          rush_order_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          id?: string
+          message: string
+          rush_order_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          id?: string
+          message?: string
+          rush_order_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rush_order_messages_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rush_order_messages_rush_order_id_fkey"
+            columns: ["rush_order_id"]
+            isOneToOne: false
+            referencedRelation: "rush_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rush_order_tasks: {
         Row: {
           created_at: string

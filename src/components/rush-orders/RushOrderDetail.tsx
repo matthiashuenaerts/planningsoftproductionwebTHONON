@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { rushOrderService } from '@/services/rushOrderService';
@@ -11,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { format, parseISO } from 'date-fns';
 import { Check, Clock, UserCheck, ListChecks } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import RushOrderChat from './RushOrderChat';
 
 interface RushOrderDetailProps {
   rushOrderId: string;
@@ -246,6 +246,9 @@ const RushOrderDetail: React.FC<RushOrderDetailProps> = ({ rushOrderId, onStatus
           </div>
         </CardFooter>
       </Card>
+      
+      {/* Rush Order Chat */}
+      <RushOrderChat rushOrderId={rushOrderId} />
     </div>
   );
 };
