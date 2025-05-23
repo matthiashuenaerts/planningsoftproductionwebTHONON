@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -35,6 +34,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from './ui/scroll-area';
 import { Checkbox } from './ui/checkbox';
 import { Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 const formSchema = z.object({
   name: z.string().min(1, { message: 'Project name is required' }),
@@ -104,7 +104,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
         // For each standard task, get its linked workstations
         for (const task of standardTasks) {
           try {
-            const links = await workstationService.getWorkstationsForStandardTask(task.id);
+            const links = await getWorkstationsForStandardTask(task.id);
             const workstationName = links && links.length > 0 ? links[0].name : '';
             
             const projectValue = form.getValues('project_value') || 50;
@@ -295,7 +295,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
         const workstationId = findWorkstationIdByName(task.workstation);
         if (workstationId && newTask.id) {
           try {
-            await workstationService.linkTaskToWorkstation(newTask.id, workstationId);
+            await linkTaskToWorkstation(newTask.id, workstationId);
             console.log(`Linked task ${newTask.id} to workstation ${workstationId}`);
           } catch (error) {
             console.error(`Failed to link task ${newTask.id} to workstation ${workstationId}:`, error);
@@ -561,3 +561,33 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
 };
 
 export default NewProjectModal;
+
+// Modify the problematic functions by using direct Supabase queries
+// Instead of:
+// const workstationsForTask = await workstationService.getWorkstationsForStandardTask(task.id);
+
+// Use:
+const getWorkstationsForStandardTask = async (taskId: string) => {
+  const { data, error } = await supabase
+    .from('standard_task_workstation_links')
+    .select('workstation_id')
+    .eq('standard_task_id', taskId);
+  
+  if (error) throw error;
+  return data?.map(link => link.workstation_id) || [];
+};
+
+// And instead of:
+// await workstationService.linkTaskToWorkstation(taskId, workstation);
+
+// Use:
+const linkTaskToWorkstation = async (taskId: string, workstationId: string) => {
+  const { error } = await supabase
+    .from('task_workstation_links')
+    .insert({
+      task_id: taskId,
+      workstation_id: workstationId
+    });
+  
+  if (error) throw error;
+};

@@ -73,7 +73,7 @@ export const standardTasksService = {
     return Math.round(timeCoefficient * projectValue);
   },
 
-  // New methods for handling limit phases
+  // Methods for handling limit phases
   async getLimitPhases(standardTaskId: string): Promise<StandardTaskLimitPhase[]> {
     const { data, error } = await supabase
       .from('standard_task_limit_phases')

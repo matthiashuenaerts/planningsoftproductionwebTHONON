@@ -188,7 +188,7 @@ export const workstationService = {
   
   async updateTaskStatus(taskId: string, status: string): Promise<void> {
     // If status is COMPLETED, set completed_at to now and completed_by if available
-    let updateData = { status };
+    let updateData: Record<string, any> = { status };
     
     if (status === 'COMPLETED') {
       updateData = {

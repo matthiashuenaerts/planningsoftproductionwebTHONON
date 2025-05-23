@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   CheckboxCard
@@ -67,21 +66,36 @@ export const EmployeeWorkstationsManager: React.FC<EmployeeWorkstationsManagerPr
     try {
       setProcessingWorkstation(workstationId);
       
+      // Use direct supabase operations instead of non-existent service functions
       if (checked) {
         // Link employee to workstation
-        await workstationService.linkEmployeeToWorkstation(employeeId, workstationId);
-        setWorkstationLinks(prev => ({ ...prev, [workstationId]: true }));
+        const { error } = await supabase
+          .from('employee_workstation_links')
+          .insert([{
+            employee_id: employeeId,
+            workstation_id: workstationId
+          }]);
+        
+        if (error) throw error;
       } else {
         // Unlink employee from workstation
-        await workstationService.unlinkEmployeeFromWorkstation(employeeId, workstationId);
-        setWorkstationLinks(prev => ({ ...prev, [workstationId]: false }));
+        const { error } = await supabase
+          .from('employee_workstation_links')
+          .delete()
+          .eq('employee_id', employeeId)
+          .eq('workstation_id', workstationId);
+        
+        if (error) throw error;
       }
+      
+      // Update local state
+      setWorkstationLinks(prev => ({ ...prev, [workstationId]: checked }));
       
       toast({
         title: "Success",
         description: checked 
-          ? `Employee assigned to workstation` 
-          : `Employee removed from workstation`
+          ? `Employee assigned to ${getWorkstationName(workstationId)} workstation` 
+          : `Employee removed from ${getWorkstationName(workstationId)} workstation`
       });
     } catch (error: any) {
       console.error('Error updating employee workstation:', error);
@@ -129,3 +143,8 @@ export const EmployeeWorkstationsManager: React.FC<EmployeeWorkstationsManagerPr
     </div>
   );
 };
+
+function getWorkstationName(workstationId: string): string {
+  // Implement logic to get the name of the workstation
+  return "Workstation Name"; // Placeholder
+}

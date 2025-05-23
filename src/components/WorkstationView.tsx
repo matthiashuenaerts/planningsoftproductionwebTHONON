@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -83,6 +82,15 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
         // Get rush order tasks for this workstation
         const rushOrderTasksData = await workstationService.getRushOrderTasksForWorkstation(workstationId);
         
+        // Convert rush order tasks to Task type with empty phase and project properties
+        const formattedRushOrderTasks = rushOrderTasksData.map(rot => ({
+          ...rot,
+          phase: { id: '', name: '', project_id: '' },
+          project: { id: '', name: 'Rush Order', client: 'Internal' }
+        }));
+        
+        setRushOrderTasks(formattedRushOrderTasks); 
+        
         // Get all standard tasks to check limit phases
         const standardTasks = await standardTasksService.getAll();
         
@@ -128,7 +136,6 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
         }));
         
         setTasks(tasksWithLimitPhaseInfo);
-        setRushOrderTasks(rushOrderTasksData);
       } catch (error) {
         console.error('Error loading workstation data:', error);
         toast({
