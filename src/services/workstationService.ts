@@ -1,37 +1,53 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
-// Workstation Types
 export interface Workstation {
   id: string;
   name: string;
   description: string | null;
-  created_at: string;
-  updated_at: string;
 }
 
-// Workstation Links Types
-export interface StandardTaskWorkstationLink {
+export interface Task {
   id: string;
-  standard_task_id: string;
-  workstation_id: string;
-  created_at: string;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: string;
+  due_date: string;
+  workstation: string;
+  phase: {
+    id: string;
+    name: string;
+    project_id: string;
+  };
+  project: {
+    id: string;
+    name: string;
+    client: string;
+  };
 }
 
-export interface EmployeeWorkstationLink {
+export interface RushOrderTask {
   id: string;
-  employee_id: string;
-  workstation_id: string;
-  created_at: string;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: string;
+  due_date: string;
+  workstation: string;
+  rushOrderId: string;
+  isRushOrderTask: true;
 }
 
-export interface TaskWorkstationLink {
+export interface Phase {
   id: string;
-  task_id: string;
-  workstation_id: string;
-  created_at: string;
+  name: string;
+  project_id: string;
+  progress: number;
+  start_date: string;
+  end_date: string;
 }
 
-// Workstation service functions
 export const workstationService = {
   async getAll(): Promise<Workstation[]> {
     const { data, error } = await supabase
@@ -42,51 +58,43 @@ export const workstationService = {
     if (error) throw error;
     return data as Workstation[] || [];
   },
-  
+
   async getById(id: string): Promise<Workstation | null> {
     const { data, error } = await supabase
       .from('workstations')
       .select('*')
       .eq('id', id)
-      .single();
-    
-    if (error && error.code !== 'PGRST116') throw error;
-    return data as Workstation;
-  },
-  
-  async getByName(name: string): Promise<{ data: Workstation | null, error: any }> {
-    const { data, error } = await supabase
-      .from('workstations')
-      .select('*')
-      .eq('name', name)
       .maybeSingle();
     
-    return { data, error };
+    if (error) throw error;
+    return data;
   },
-  
-  async create(workstation: { name: string; description?: string | null }): Promise<Workstation> {
+
+  async create(name: string, description?: string): Promise<Workstation> {
     const { data, error } = await supabase
       .from('workstations')
-      .insert([workstation])
+      .insert([
+        { name, description }
+      ])
       .select()
       .single();
     
     if (error) throw error;
-    return data as Workstation;
+    return data;
   },
-  
-  async update(id: string, workstation: { name?: string; description?: string | null }): Promise<Workstation> {
+
+  async update(id: string, name: string, description?: string): Promise<Workstation> {
     const { data, error } = await supabase
       .from('workstations')
-      .update(workstation)
+      .update({ name, description })
       .eq('id', id)
       .select()
       .single();
     
     if (error) throw error;
-    return data as Workstation;
+    return data;
   },
-  
+
   async delete(id: string): Promise<void> {
     const { error } = await supabase
       .from('workstations')
@@ -95,147 +103,131 @@ export const workstationService = {
     
     if (error) throw error;
   },
-
-  // Standard Task-Workstation Links
-  async getStandardTaskWorkstationLinks(): Promise<StandardTaskWorkstationLink[]> {
+  
+  async getTasksForWorkstation(workstationId: string): Promise<Task[]> {
     const { data, error } = await supabase
-      .from('standard_task_workstation_links')
-      .select('*');
+      .from('tasks')
+      .select(`
+        id,
+        title,
+        description,
+        status,
+        priority,
+        due_date,
+        workstation,
+        phase:phase_id(id, name, project_id),
+        project:phase!inner(id:project_id, name:projects!inner(name), client:projects!inner(client))
+      `)
+      .eq('workstation', workstationId)
+      .order('due_date');
     
     if (error) throw error;
-    return data as StandardTaskWorkstationLink[] || [];
-  },
-
-  async getWorkstationsForStandardTask(standardTaskId: string): Promise<Workstation[]> {
-    const { data, error } = await supabase
-      .from('standard_task_workstation_links')
-      .select('workstation_id, workstations(*)')
-      .eq('standard_task_id', standardTaskId);
     
-    if (error) throw error;
-    return data.map(item => item.workstations) || [];
+    // Format the data to match our interface
+    return (data || []).map((task: any) => ({
+      ...task,
+      project: {
+        id: task.project?.id || '',
+        name: task.project?.name || 'Unknown Project',
+        client: task.project?.client || 'Unknown Client'
+      }
+    }));
   },
-
-  async getStandardTasksForWorkstation(workstationId: string): Promise<any[]> {
-    const { data, error } = await supabase
-      .from('standard_task_workstation_links')
-      .select('standard_tasks(*)')
-      .eq('workstation_id', workstationId);
+  
+  async getRushOrderTasksForWorkstation(workstationId: string): Promise<RushOrderTask[]> {
+    try {
+      // First get all standard tasks linked to this workstation
+      const { data: linkedTasks, error: linkError } = await supabase
+        .from('standard_task_workstation_links')
+        .select('standard_task_id')
+        .eq('workstation_id', workstationId);
+      
+      if (linkError) throw linkError;
+      
+      if (!linkedTasks || linkedTasks.length === 0) {
+        return [];
+      }
+      
+      const standardTaskIds = linkedTasks.map(link => link.standard_task_id);
+      
+      // Then get all rush order tasks that use these standard tasks
+      const { data: rushOrderTasks, error: taskError } = await supabase
+        .from('rush_order_tasks')
+        .select(`
+          id,
+          rush_order_id,
+          standard_task_id,
+          standard_tasks:standard_task_id(task_name, task_number),
+          rush_orders:rush_order_id(status, deadline, title, description, priority)
+        `)
+        .in('standard_task_id', standardTaskIds);
+      
+      if (taskError) throw taskError;
+      
+      if (!rushOrderTasks || rushOrderTasks.length === 0) {
+        return [];
+      }
+      
+      // Format the data to match our Task interface
+      return rushOrderTasks.map(rot => ({
+        id: rot.id,
+        title: rot.standard_tasks?.task_name || 'Unknown Task',
+        description: rot.rush_orders?.description || null,
+        status: 'TODO', // Default status for now
+        priority: rot.rush_orders?.priority === 'critical' ? 'HIGH' : 'MEDIUM',
+        due_date: rot.rush_orders?.deadline || new Date().toISOString(),
+        workstation: workstationId,
+        rushOrderId: rot.rush_order_id,
+        isRushOrderTask: true
+      }));
+    } catch (error) {
+      console.error('Error fetching rush order tasks for workstation:', error);
+      return [];
+    }
+  },
+  
+  async updateTaskStatus(taskId: string, status: string): Promise<void> {
+    // If status is COMPLETED, set completed_at to now and completed_by if available
+    let updateData = { status };
     
-    if (error) throw error;
-    return data.map(item => item.standard_tasks) || [];
-  },
-
-  async linkStandardTaskToWorkstation(standardTaskId: string, workstationId: string): Promise<StandardTaskWorkstationLink> {
-    const { data, error } = await supabase
-      .from('standard_task_workstation_links')
-      .insert([{ standard_task_id: standardTaskId, workstation_id: workstationId }])
-      .select()
-      .single();
+    if (status === 'COMPLETED') {
+      updateData = {
+        ...updateData,
+        completed_at: new Date().toISOString(),
+      };
+    }
     
-    if (error) throw error;
-    return data as StandardTaskWorkstationLink;
-  },
-
-  async unlinkStandardTaskFromWorkstation(standardTaskId: string, workstationId: string): Promise<void> {
     const { error } = await supabase
-      .from('standard_task_workstation_links')
-      .delete()
-      .eq('standard_task_id', standardTaskId)
-      .eq('workstation_id', workstationId);
+      .from('tasks')
+      .update(updateData)
+      .eq('id', taskId);
     
     if (error) throw error;
   },
+  
+  async updateRushOrderTaskStatus(rushOrderId: string, taskId: string, status: string): Promise<void> {
+    // For now, we're just tracking status changes for rush order tasks
+    // We'll need to create a proper table for this later
+    
+    // Update the rush order status if all tasks are completed
+    if (status === 'COMPLETED') {
+      // For now, we'll just mark this specific task as completed somewhere
+      console.log(`Rush order task ${taskId} for rush order ${rushOrderId} marked as ${status}`);
+      
+      // In a real implementation, we would:
+      // 1. Update a rush_order_task_status table
+      // 2. Check if all tasks are completed
+      // 3. Update the rush order status if needed
+    }
+  },
 
-  // Task-Workstation Links (Keep for backward compatibility)
-  async getTaskWorkstationLinks(): Promise<TaskWorkstationLink[]> {
+  async getPhasesForProject(projectId: string): Promise<Phase[]> {
     const { data, error } = await supabase
-      .from('task_workstation_links')
-      .select('*');
+      .from('phases')
+      .select('*')
+      .eq('project_id', projectId);
     
     if (error) throw error;
-    return data as TaskWorkstationLink[] || [];
-  },
-
-  async getWorkstationsForTask(taskId: string): Promise<Workstation[]> {
-    const { data, error } = await supabase
-      .from('task_workstation_links')
-      .select('workstation_id, workstations(*)')
-      .eq('task_id', taskId);
-    
-    if (error) throw error;
-    return data.map(item => item.workstations) || [];
-  },
-
-  async linkTaskToWorkstation(taskId: string, workstationId: string): Promise<TaskWorkstationLink> {
-    const { data, error } = await supabase
-      .from('task_workstation_links')
-      .insert([{ task_id: taskId, workstation_id: workstationId }])
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data as TaskWorkstationLink;
-  },
-
-  async unlinkTaskFromWorkstation(taskId: string, workstationId: string): Promise<void> {
-    const { error } = await supabase
-      .from('task_workstation_links')
-      .delete()
-      .eq('task_id', taskId)
-      .eq('workstation_id', workstationId);
-    
-    if (error) throw error;
-  },
-
-  // Employee-Workstation Links
-  async getEmployeeWorkstationLinks(): Promise<EmployeeWorkstationLink[]> {
-    const { data, error } = await supabase
-      .from('employee_workstation_links')
-      .select('*');
-    
-    if (error) throw error;
-    return data as EmployeeWorkstationLink[] || [];
-  },
-
-  async getWorkstationsForEmployee(employeeId: string): Promise<Workstation[]> {
-    const { data, error } = await supabase
-      .from('employee_workstation_links')
-      .select('workstations(*)')
-      .eq('employee_id', employeeId);
-    
-    if (error) throw error;
-    return data.map(item => item.workstations) || [];
-  },
-
-  async getEmployeesForWorkstation(workstationId: string): Promise<any[]> {
-    const { data, error } = await supabase
-      .from('employee_workstation_links')
-      .select('employees(*)')
-      .eq('workstation_id', workstationId);
-    
-    if (error) throw error;
-    return data.map(item => item.employees) || [];
-  },
-
-  async linkEmployeeToWorkstation(employeeId: string, workstationId: string): Promise<EmployeeWorkstationLink> {
-    const { data, error } = await supabase
-      .from('employee_workstation_links')
-      .insert([{ employee_id: employeeId, workstation_id: workstationId }])
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data as EmployeeWorkstationLink;
-  },
-
-  async unlinkEmployeeFromWorkstation(employeeId: string, workstationId: string): Promise<void> {
-    const { error } = await supabase
-      .from('employee_workstation_links')
-      .delete()
-      .eq('employee_id', employeeId)
-      .eq('workstation_id', workstationId);
-    
-    if (error) throw error;
+    return data as Phase[] || [];
   }
 };
