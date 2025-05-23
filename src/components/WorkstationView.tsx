@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import TaskList from './TaskList';
@@ -303,10 +302,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
               // Filter tasks for this workstation
               const workstationRushOrderTasks = rushOrderTasks.filter(task => {
                 // Check if workstation name matches
-                if (task.workstation && task.workstation.toLowerCase() === workstationData?.name?.toLowerCase()) {
-                  return true;
-                }
-                return false;
+                return task.workstation && task.workstation.toLowerCase() === workstationData?.name?.toLowerCase();
               });
               
               if (workstationRushOrderTasks.length > 0) {

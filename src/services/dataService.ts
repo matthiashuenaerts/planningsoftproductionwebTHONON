@@ -34,15 +34,17 @@ export interface Task {
   title: string;
   description: string | null;
   workstation: string;
-  status: 'TODO' | 'IN_PROGRESS' | 'COMPLETED';
-  priority: 'Low' | 'Medium' | 'High' | 'Urgent';
+  status: "TODO" | "IN_PROGRESS" | "COMPLETED";
+  priority: "Low" | "Medium" | "High" | "Urgent";
   due_date: string;
   created_at: string;
   updated_at: string;
-  project_name?: string; // Added for WorkstationView
-  completed_at?: string | null; // Time when the task was completed
-  completed_by?: string | null; // ID of the employee who completed the task
-  status_changed_at?: string | null; // Time when the task status was last changed
+  project_name?: string;
+  completed_at?: string | null;
+  completed_by?: string | null;
+  status_changed_at?: string | null;
+  is_rush_order?: boolean;
+  rush_order_id?: string;
 }
 
 // Employee Types

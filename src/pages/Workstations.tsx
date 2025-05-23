@@ -26,6 +26,7 @@ interface WorkstationWithIcon {
   name: string;
   description: string | null;
   icon: React.ReactNode;
+  rushOrderCount?: number;
 }
 
 const Workstations: React.FC = () => {
@@ -39,15 +40,53 @@ const Workstations: React.FC = () => {
       try {
         const data = await workstationService.getAll();
         
-        // Map workstations to include icons
-        const workstationsWithIcons = data.map(ws => {
-          return {
-            ...ws,
-            icon: getWorkstationIcon(ws.name)
-          };
-        });
+        // Get rush order counts for each workstation
+        const workstationsWithRushOrderCounts = await Promise.all(
+          data.map(async ws => {
+            // Query to get rush orders for this workstation
+            const { data: rushOrders, error } = await supabase
+              .from('rush_orders')
+              .select('id')
+              .eq('status', 'in_progress');
+            
+            let rushOrderCount = 0;
+            
+            if (rushOrders && rushOrders.length > 0) {
+              // For each rush order, check if it has tasks for this workstation
+              for (const order of rushOrders) {
+                const { data: taskLinks, error: taskError } = await supabase
+                  .from('rush_order_task_links')
+                  .select('task_id')
+                  .eq('rush_order_id', order.id);
+                
+                if (taskLinks && taskLinks.length > 0) {
+                  // Check if any tasks are for this workstation
+                  const taskIds = taskLinks.map(link => link.task_id);
+                  
+                  const { data: tasks, error: tasksError } = await supabase
+                    .from('tasks')
+                    .select('id')
+                    .in('id', taskIds)
+                    .eq('workstation', ws.name)
+                    .neq('status', 'COMPLETED');
+                  
+                  if (tasks && tasks.length > 0) {
+                    rushOrderCount++;
+                    break; // Count the rush order once for this workstation
+                  }
+                }
+              }
+            }
+            
+            return {
+              ...ws,
+              icon: getWorkstationIcon(ws.name),
+              rushOrderCount
+            };
+          })
+        );
         
-        setWorkstations(workstationsWithIcons);
+        setWorkstations(workstationsWithRushOrderCounts);
       } catch (error: any) {
         toast({
           title: "Error",
@@ -123,13 +162,20 @@ const Workstations: React.FC = () => {
                     className="hover:shadow-md transition-shadow cursor-pointer"
                     onClick={() => setSelectedWorkstation(workstation.id)}
                   >
-                    <CardContent className="p-6 flex flex-col items-center text-center">
+                    <CardContent className="p-6 flex flex-col items-center text-center relative">
                       <div className="bg-primary/10 p-4 rounded-full mb-4">
                         {workstation.icon}
                       </div>
                       <h3 className="text-lg font-medium mb-1">{workstation.name}</h3>
                       {workstation.description && (
                         <p className="text-sm text-muted-foreground">{workstation.description}</p>
+                      )}
+                      
+                      {/* Display rush order badge if there are rush orders */}
+                      {workstation.rushOrderCount && workstation.rushOrderCount > 0 && (
+                        <div className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
+                          {workstation.rushOrderCount}
+                        </div>
                       )}
                     </CardContent>
                   </Card>
