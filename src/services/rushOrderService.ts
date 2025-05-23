@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { RushOrder, RushOrderTask, RushOrderAssignment, RushOrderMessage } from "@/types/rushOrder";
 import { toast } from "@/hooks/use-toast";
@@ -378,20 +377,20 @@ export const rushOrderService = {
       
       if (!userId) return false;
       
-      // Create a tracking entry directly using an insert with upsert
-      // This avoids using the rush_order_message_reads table if it doesn't exist in schema
+      // Update the read status of the user's messages for this rush order
+      // Here we just track that the user has read the messages up to this point
+      // by adding an entry to track when the user last read the rush order's messages
       const { error } = await supabase
-        .from('rush_order_messages')
-        .update({ 
-          updated_at: new Date().toISOString()
-        })
-        .eq('rush_order_id', rushOrderId);
-      
-      if (error) {
-        console.error('Error marking rush order messages as read:', error);
-        return false;
-      }
-      
+        .from('rush_order_message_reads')
+        .upsert({
+          rush_order_id: rushOrderId,
+          employee_id: userId,
+          last_read_at: new Date().toISOString()
+        }, {
+          onConflict: 'rush_order_id,employee_id'
+        });
+        
+      if (error) throw error;
       return true;
     } catch (error: any) {
       console.error('Error marking rush order messages as read:', error);
