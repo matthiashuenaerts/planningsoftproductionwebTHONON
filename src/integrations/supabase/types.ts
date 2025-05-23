@@ -698,38 +698,6 @@ export type Database = {
           },
         ]
       }
-      standard_task_limit_phases: {
-        Row: {
-          created_at: string
-          id: string
-          phase_name: string
-          standard_task_id: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          phase_name: string
-          standard_task_id: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          phase_name?: string
-          standard_task_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "standard_task_limit_phases_standard_task_id_fkey"
-            columns: ["standard_task_id"]
-            isOneToOne: false
-            referencedRelation: "standard_tasks"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       standard_task_workstation_links: {
         Row: {
           created_at: string
