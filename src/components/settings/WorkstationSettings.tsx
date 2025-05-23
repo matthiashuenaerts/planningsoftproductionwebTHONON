@@ -1,319 +1,331 @@
+
 import React, { useState, useEffect } from 'react';
-import { workstationService, Workstation } from '@/services/workstationService';
-import { useToast } from '@/hooks/use-toast';
-import { Card, CardContent } from '@/components/ui/card';
-import { 
-  Table, 
-  TableBody, 
-  TableCaption, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogHeader, 
-  DialogTitle, 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
   DialogTrigger,
-  DialogFooter
+  DialogClose
 } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel
+} from '@/components/ui/form';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Edit, Trash2, Plus } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { PlusCircle, Edit, Trash, Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { workstationService, Workstation } from '@/services/workstationService';
 import { useForm } from 'react-hook-form';
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { TaskWorkstationsManager } from './TaskWorkstationsManager';
-
-const formSchema = z.object({
-  name: z.string().min(2, {
-    message: "Workstation name must be at least 2 characters.",
-  }),
-  description: z.string().optional(),
-})
-
-interface WorkstationFormValues extends z.infer<typeof formSchema> {}
 
 const WorkstationSettings: React.FC = () => {
   const [workstations, setWorkstations] = useState<Workstation[]>([]);
-  const [open, setOpen] = useState(false);
-  const [editingWorkstation, setEditingWorkstation] = useState<Workstation | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [selectedWorkstation, setSelectedWorkstation] = useState<Workstation | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showTaskMapping, setShowTaskMapping] = useState(false);
   const { toast } = useToast();
-  
-  const form = useForm<WorkstationFormValues>({
-    resolver: zodResolver(formSchema),
+
+  const form = useForm({
     defaultValues: {
       name: '',
-      description: '',
-    },
-    mode: "onChange",
+      description: ''
+    }
   });
 
-  useEffect(() => {
-    const loadWorkstations = async () => {
-      try {
-        const data = await workstationService.getAll();
-        setWorkstations(data);
-      } catch (error: any) {
-        toast({
-          title: "Error",
-          description: `Failed to load workstations: ${error.message}`,
-          variant: "destructive"
-        });
-      }
-    };
-
-    loadWorkstations();
-  }, [toast]);
-
-  const handleCreateWorkstation = async (values: WorkstationFormValues) => {
+  const loadWorkstations = async () => {
     try {
-      setIsSubmitting(true);
-      
-      // Extract name and description from values
-      const { name, description } = values;
-      
-      const workstation = await workstationService.create(name, description || undefined);
-      
-      setWorkstations([...workstations, workstation]);
-      form.reset({ name: '', description: '' });
-      setOpen(false);
+      setLoading(true);
+      const data = await workstationService.getAll();
+      setWorkstations(data);
+    } catch (error: any) {
+      console.error('Error loading workstations:', error);
+      toast({
+        title: "Error",
+        description: `Failed to load workstations: ${error.message}`,
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadWorkstations();
+  }, []);
+
+  const handleOpenEdit = (workstation: Workstation) => {
+    setSelectedWorkstation(workstation);
+    setIsEditing(true);
+    form.reset({
+      name: workstation.name,
+      description: workstation.description || ''
+    });
+  };
+
+  const handleCreate = async (data: { name: string; description: string }) => {
+    try {
+      await workstationService.create({
+        name: data.name,
+        description: data.description || null
+      });
       
       toast({
         title: "Success",
-        description: `Workstation "${name}" created successfully`,
+        description: "Workstation created successfully"
       });
+      
+      form.reset();
+      loadWorkstations();
     } catch (error: any) {
       console.error('Error creating workstation:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to create workstation",
+        description: `Failed to create workstation: ${error.message}`,
         variant: "destructive"
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
-  const handleUpdateWorkstation = async (values: WorkstationFormValues) => {
-    if (!editingWorkstation) return;
+  const handleUpdate = async (data: { name: string; description: string }) => {
+    if (!selectedWorkstation) return;
     
     try {
-      setIsSubmitting(true);
-      
-      // Extract name and description from values
-      const { name, description } = values;
-      
-      const updated = await workstationService.update(
-        editingWorkstation.id,
-        name,
-        description || undefined
-      );
-      
-      // Update the workstations list
-      setWorkstations(workstations.map(w => 
-        w.id === editingWorkstation.id ? updated : w
-      ));
-      
-      setEditingWorkstation(null);
+      await workstationService.update(selectedWorkstation.id, {
+        name: data.name,
+        description: data.description || null
+      });
       
       toast({
         title: "Success",
-        description: `Workstation "${name}" updated successfully`,
+        description: "Workstation updated successfully"
       });
+      
+      setIsEditing(false);
+      setSelectedWorkstation(null);
+      form.reset();
+      loadWorkstations();
     } catch (error: any) {
       console.error('Error updating workstation:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to update workstation",
+        description: `Failed to update workstation: ${error.message}`,
         variant: "destructive"
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
-  const handleDeleteWorkstation = async (id: string, name: string) => {
+  const handleDelete = async (workstation: Workstation) => {
     try {
-      await workstationService.delete(id);
-      setWorkstations(workstations.filter(w => w.id !== id));
+      setIsDeleting(true);
+      await workstationService.delete(workstation.id);
+      
       toast({
         title: "Success",
-        description: `Workstation "${name}" deleted successfully`,
+        description: "Workstation deleted successfully"
       });
+      
+      loadWorkstations();
     } catch (error: any) {
       console.error('Error deleting workstation:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to delete workstation",
+        description: `Failed to delete workstation: ${error.message}`,
         variant: "destructive"
       });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-medium">Workstations</h2>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Workstation
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Add Workstation</DialogTitle>
-              <DialogDescription>
-                Create a new workstation to manage tasks.
-              </DialogDescription>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(handleCreateWorkstation)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Workstation Name" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Workstation Description" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <DialogFooter>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? "Creating..." : "Create"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
-      </div>
+    <div className="space-y-6">
       <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Workstations</CardTitle>
+            <CardDescription>Manage workstations for your factory</CardDescription>
+          </div>
+          
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button onClick={() => {
+                form.reset({ name: '', description: '' });
+                setIsEditing(false);
+              }}>
+                <PlusCircle className="mr-2 h-4 w-4" /> 
+                Add Workstation
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{isEditing ? 'Edit Workstation' : 'Add New Workstation'}</DialogTitle>
+                <DialogDescription>
+                  {isEditing ? 'Update workstation details' : 'Add a new workstation to the system'}
+                </DialogDescription>
+              </DialogHeader>
+              
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(isEditing ? handleUpdate : handleCreate)} className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Enter workstation name" {...field} required />
+                        </FormControl>
+                        <FormDescription>
+                          The name of the workstation (e.g., CUTTING, WELDING)
+                        </FormDescription>
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Description</FormLabel>
+                        <FormControl>
+                          <Textarea placeholder="Enter workstation description" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Detailed description of this workstation's function
+                        </FormDescription>
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <div className="flex justify-end gap-3">
+                    <DialogClose asChild>
+                      <Button type="button" variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button type="submit">{isEditing ? 'Update' : 'Create'}</Button>
+                  </div>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+        </CardHeader>
+        
         <CardContent>
-          <Table>
-            <TableCaption>A list of your workstations.</TableCaption>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {workstations.map((workstation) => (
-                <TableRow key={workstation.id}>
-                  <TableCell className="font-medium">{workstation.name}</TableCell>
-                  <TableCell>{workstation.description}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="ghost" size="sm" onClick={() => setEditingWorkstation(workstation)}>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-[425px]">
-                          <DialogHeader>
-                            <DialogTitle>Edit Workstation</DialogTitle>
-                            <DialogDescription>
-                              Edit the details of the workstation.
-                            </DialogDescription>
-                          </DialogHeader>
-                          <Form {...form}>
-                            <form onSubmit={form.handleSubmit(handleUpdateWorkstation)} className="space-y-4">
-                              <FormField
-                                control={form.control}
-                                name="name"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Name</FormLabel>
-                                    <FormControl>
-                                      <Input placeholder="Workstation Name" defaultValue={workstation.name} {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                              <FormField
-                                control={form.control}
-                                name="description"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Description</FormLabel>
-                                    <FormControl>
-                                      <Input placeholder="Workstation Description" defaultValue={workstation.description || ""} {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                              <DialogFooter>
-                                <Button type="submit" disabled={isSubmitting}>
-                                  {isSubmitting ? "Updating..." : "Update"}
-                                </Button>
-                              </DialogFooter>
-                            </form>
-                          </Form>
-                        </DialogContent>
-                      </Dialog>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteWorkstation(workstation.id, workstation.name)}>
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {workstations.length === 0 && (
+          {loading ? (
+            <div className="flex justify-center p-4">
+              <Loader2 className="animate-spin h-6 w-6" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center">
-                    No workstations found.
-                  </TableCell>
+                  <TableHead>Name</TableHead>
+                  <TableHead className="hidden md:table-cell">Description</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {workstations.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                      No workstations found. Create your first one!
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  workstations.map((workstation) => (
+                    <TableRow key={workstation.id}>
+                      <TableCell>{workstation.name}</TableCell>
+                      <TableCell className="hidden md:table-cell">{workstation.description}</TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Button
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              setSelectedWorkstation(workstation);
+                              setShowTaskMapping(true);
+                            }}
+                          >
+                            Tasks
+                          </Button>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="ghost" 
+                                size="icon"
+                                onClick={() => handleOpenEdit(workstation)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                          </Dialog>
+                          <Button
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => handleDelete(workstation)}
+                            disabled={isDeleting}
+                          >
+                            <Trash className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
-      {workstations.map((workstation) => (
-        <Card key={workstation.id}>
-          <CardHeader>
-            <CardTitle>Manage Tasks for {workstation.name}</CardTitle>
-            <CardDescription>
-              Assign standard tasks to this workstation.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <TaskWorkstationsManager workstationId={workstation.id} workstationName={workstation.name} />
-          </CardContent>
-        </Card>
-      ))}
+      {selectedWorkstation && (
+        <Dialog open={showTaskMapping} onOpenChange={setShowTaskMapping}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Manage Tasks for {selectedWorkstation.name}</DialogTitle>
+              <DialogDescription>
+                Select which tasks are assigned to this workstation
+              </DialogDescription>
+            </DialogHeader>
+            
+            <TaskWorkstationsManager 
+              workstationId={selectedWorkstation.id} 
+              workstationName={selectedWorkstation.name} 
+            />
+            
+            <div className="flex justify-end">
+              <DialogClose asChild>
+                <Button type="button" variant="outline">Close</Button>
+              </DialogClose>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };
