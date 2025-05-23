@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from '@/context/AuthContext';
 import { Progress } from '@/components/ui/progress';
+import WorkstationRushOrdersDisplay from '@/components/WorkstationRushOrdersDisplay';
 
 // Helper function to validate and convert task status
 const validateTaskStatus = (status: string): "TODO" | "IN_PROGRESS" | "COMPLETED" => {
@@ -276,6 +277,87 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
           
           matchedTasks = [...matchedTasks, ...tasksWithProjectInfo];
         }
+
+        // NEW SECTION: Fetch rush order-related tasks for this workstation
+        try {
+          // First, get task IDs that are linked to rush orders
+          const { data: rushOrderTaskLinks, error: rushOrderTaskLinksError } = await supabase
+            .from('rush_order_task_links')
+            .select('task_id, rush_order_id');
+            
+          if (rushOrderTaskLinksError) throw rushOrderTaskLinksError;
+          
+          if (rushOrderTaskLinks && rushOrderTaskLinks.length > 0) {
+            const taskIds = rushOrderTaskLinks.map(link => link.task_id);
+            
+            // Get the actual tasks
+            const { data: rushOrderTasks, error: rushOrderTasksError } = await supabase
+              .from('tasks')
+              .select('*')
+              .in('id', taskIds)
+              .neq('status', 'COMPLETED');
+              
+            if (rushOrderTasksError) throw rushOrderTasksError;
+            
+            if (rushOrderTasks && rushOrderTasks.length > 0) {
+              // Filter tasks for this workstation
+              const workstationRushOrderTasks = rushOrderTasks.filter(task => {
+                // Check if workstation name matches
+                if (task.workstation && task.workstation.toLowerCase() === workstationData?.name?.toLowerCase()) {
+                  return true;
+                }
+                return false;
+              });
+              
+              if (workstationRushOrderTasks.length > 0) {
+                // Get rush order info for each task
+                const tasksWithRushOrderInfo = await Promise.all(
+                  workstationRushOrderTasks.map(async (task) => {
+                    try {
+                      // Find the rush order ID for this task
+                      const link = rushOrderTaskLinks.find(link => link.task_id === task.id);
+                      
+                      if (!link) return null;
+                      
+                      // Get the rush order details
+                      const { data: rushOrder, error: rushOrderError } = await supabase
+                        .from('rush_orders')
+                        .select('title')
+                        .eq('id', link.rush_order_id)
+                        .single();
+                      
+                      if (rushOrderError) throw rushOrderError;
+                      
+                      // Ensure the task status conforms to the expected type
+                      const status = validateTaskStatus(task.status);
+                      const priority = validatePriority(task.priority || "High");
+                      
+                      // Return the task with rush order info
+                      return {
+                        ...task,
+                        status: status,
+                        priority: priority,
+                        project_name: `RUSH ORDER: ${rushOrder.title}`,
+                        is_rush_order: true,
+                        rush_order_id: link.rush_order_id
+                      } as Task;
+                    } catch (error) {
+                      console.error('Error fetching rush order info for task:', error);
+                      return null;
+                    }
+                  })
+                );
+                
+                // Filter out any null tasks (from errors)
+                const validRushOrderTasks = tasksWithRushOrderInfo.filter(task => task !== null) as Task[];
+                matchedTasks = [...matchedTasks, ...validRushOrderTasks];
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching rush order tasks:', error);
+          // Continue execution even if there's an error with rush order tasks
+        }
         
         // Remove any duplicate tasks
         const uniqueTasks = Array.from(
@@ -489,6 +571,10 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
       if (a.status === 'IN_PROGRESS' && b.status !== 'IN_PROGRESS') return -1;
       if (a.status !== 'IN_PROGRESS' && b.status === 'IN_PROGRESS') return 1;
       
+      // Then prioritize rush orders
+      if (a.is_rush_order && !b.is_rush_order) return -1;
+      if (!a.is_rush_order && b.is_rush_order) return 1;
+      
       // Then sort by priority
       const priorityOrder = { 'Urgent': 0, 'High': 1, 'Medium': 2, 'Low': 3 };
       return (priorityOrder[a.priority] || 999) - (priorityOrder[b.priority] || 999);
@@ -560,6 +646,9 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
           </div>
         ) : (
           <>
+            {/* Display related rush orders at the top */}
+            <WorkstationRushOrdersDisplay workstationId={workstationId} />
+            
             {tasks.length === 0 ? (
               <div className="text-center p-8">
                 <Check className="mx-auto h-12 w-12 text-green-500 mb-4" />
@@ -569,12 +658,12 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
             ) : (
               <div className="space-y-4 mt-2">
                 {sortTasks(tasks).map((task) => (
-                  <Card key={task.id} className="overflow-hidden relative">
-                    <div className="border-l-4 border-l-blue-500 p-4 relative z-10">
+                  <Card key={task.id} className={`overflow-hidden relative ${task.is_rush_order ? 'border-red-400' : ''}`}>
+                    <div className={`border-l-4 ${task.is_rush_order ? 'border-l-red-500' : 'border-l-blue-500'} p-4 relative z-10`}>
                       {task.status === 'IN_PROGRESS' && (
                         <div className="absolute inset-0 left-0 top-0 bottom-0 z-0">
                           <div 
-                            className="h-full bg-green-50 dark:bg-green-900/20" 
+                            className={`h-full ${task.is_rush_order ? 'bg-red-50 dark:bg-red-900/20' : 'bg-green-50 dark:bg-green-900/20'}`}
                             style={{ width: `${getTaskProgress(task)}%` }}
                           />
                         </div>
@@ -586,11 +675,13 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
                           </h4>
                           <div className="flex items-center gap-2">
                             <div className={`px-2 py-1 rounded text-xs font-medium ${
-                              task.priority === 'High' || task.priority === 'Urgent' 
+                              task.is_rush_order 
                                 ? 'bg-red-100 text-red-800' 
-                                : 'bg-gray-100 text-gray-800'
+                                : task.priority === 'High' || task.priority === 'Urgent'
+                                  ? 'bg-amber-100 text-amber-800' 
+                                  : 'bg-gray-100 text-gray-800'
                             }`}>
-                              {task.priority}
+                              {task.is_rush_order ? 'RUSH' : task.priority}
                             </div>
                           </div>
                         </div>
