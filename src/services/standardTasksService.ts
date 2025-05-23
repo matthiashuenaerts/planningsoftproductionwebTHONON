@@ -10,6 +10,14 @@ export interface StandardTask {
   updated_at: string;
 }
 
+export interface StandardTaskLimitPhase {
+  id: string;
+  standard_task_id: string;
+  phase_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export const standardTasksService = {
   async getAll(): Promise<StandardTask[]> {
     const { data, error } = await supabase
@@ -63,5 +71,39 @@ export const standardTasksService = {
   // Calculate task duration based on time coefficient and project value
   calculateTaskDuration(timeCoefficient: number, projectValue: number): number {
     return Math.round(timeCoefficient * projectValue);
+  },
+
+  // Methods for handling limit phases
+  async getLimitPhases(standardTaskId: string): Promise<StandardTaskLimitPhase[]> {
+    const { data, error } = await supabase
+      .from('standard_task_limit_phases')
+      .select('*')
+      .eq('standard_task_id', standardTaskId);
+    
+    if (error) throw error;
+    return data as StandardTaskLimitPhase[] || [];
+  },
+
+  async addLimitPhase(standardTaskId: string, phaseName: string): Promise<StandardTaskLimitPhase> {
+    const { data, error } = await supabase
+      .from('standard_task_limit_phases')
+      .insert({
+        standard_task_id: standardTaskId,
+        phase_name: phaseName
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data as StandardTaskLimitPhase;
+  },
+
+  async removeLimitPhase(limitPhaseId: string): Promise<void> {
+    const { error } = await supabase
+      .from('standard_task_limit_phases')
+      .delete()
+      .eq('id', limitPhaseId);
+    
+    if (error) throw error;
   }
 };

@@ -1,301 +1,227 @@
-
 import { supabase } from "@/integrations/supabase/client";
-import { RushOrder, RushOrderTask, RushOrderAssignment, RushOrderMessage } from "@/types/rushOrder";
-import { toast } from "@/hooks/use-toast";
-import { ensureStorageBucket } from "@/integrations/supabase/createBucket";
+import { RushOrder, RushOrderTask, RushOrderAssignment, RushOrderMessage, RushOrderMessageRead } from "@/types/rushOrder";
 
 export const rushOrderService = {
-  async createRushOrder(
-    title: string,
-    description: string,
-    deadline: string,
-    createdBy: string,
-    imageFile?: File
-  ): Promise<RushOrder | null> {
-    try {
-      // Create rush order record
-      const { data, error } = await supabase
-        .from('rush_orders')
-        .insert({
-          title,
-          description,
-          deadline,
-          status: 'pending',
-          priority: 'critical',
-          created_by: createdBy
-        })
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      // Upload image if provided
-      if (imageFile && data) {
-        // Ensure storage bucket exists
-        await ensureStorageBucket('attachments');
-        
-        const fileExt = imageFile.name.split('.').pop();
-        const fileName = `${data.id}-${Date.now()}.${fileExt}`;
-        const filePath = `rush-orders/${fileName}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('attachments')
-          .upload(filePath, imageFile);
-          
-        if (uploadError) throw uploadError;
-        
-        // Get public URL
-        const { data: publicUrlData } = supabase.storage
-          .from('attachments')
-          .getPublicUrl(filePath);
-          
-        // Update rush order with image URL
-        const { error: updateError } = await supabase
-          .from('rush_orders')
-          .update({ image_url: publicUrlData.publicUrl })
-          .eq('id', data.id);
-          
-        if (updateError) throw updateError;
-        
-        data.image_url = publicUrlData.publicUrl;
-      }
-      
-      return data as RushOrder;
-    } catch (error: any) {
-      console.error('Error creating rush order:', error);
-      toast({
-        title: "Error",
-        description: `Failed to create rush order: ${error.message}`,
-        variant: "destructive"
-      });
-      return null;
-    }
-  },
-  
-  async assignTasksToRushOrder(rushOrderId: string, taskIds: string[]): Promise<boolean> {
-    try {
-      const taskAssignments = taskIds.map(taskId => ({
-        rush_order_id: rushOrderId,
-        standard_task_id: taskId
-      }));
-      
-      const { error } = await supabase
-        .from('rush_order_tasks')
-        .insert(taskAssignments);
-        
-      if (error) throw error;
-      return true;
-    } catch (error: any) {
-      console.error('Error assigning tasks to rush order:', error);
-      toast({
-        title: "Error",
-        description: `Failed to assign tasks: ${error.message}`,
-        variant: "destructive"
-      });
-      return false;
-    }
-  },
-  
-  async assignUsersToRushOrder(rushOrderId: string, userIds: string[]): Promise<boolean> {
-    try {
-      const userAssignments = userIds.map(userId => ({
-        rush_order_id: rushOrderId,
-        employee_id: userId
-      }));
-      
-      const { error } = await supabase
-        .from('rush_order_assignments')
-        .insert(userAssignments);
-        
-      if (error) throw error;
-      return true;
-    } catch (error: any) {
-      console.error('Error assigning users to rush order:', error);
-      toast({
-        title: "Error",
-        description: `Failed to assign users: ${error.message}`,
-        variant: "destructive"
-      });
-      return false;
-    }
-  },
-  
   async getAllRushOrders(): Promise<RushOrder[]> {
-    try {
-      const { data, error } = await supabase
-        .from('rush_orders')
-        .select(`
-          *,
-          tasks:rush_order_tasks(
-            id,
-            rush_order_id,
-            standard_task_id
-          ),
-          assignments:rush_order_assignments(
-            id,
-            rush_order_id,
-            employee_id
-          )
-        `)
-        .order('created_at', { ascending: false });
-        
-      if (error) throw error;
-      return data as RushOrder[] || [];
-    } catch (error: any) {
-      console.error('Error fetching rush orders:', error);
-      toast({
-        title: "Error",
-        description: `Failed to fetch rush orders: ${error.message}`,
-        variant: "destructive"
-      });
-      return [];
-    }
-  },
-  
-  async getRushOrderById(id: string): Promise<RushOrder | null> {
-    try {
-      const { data, error } = await supabase
-        .from('rush_orders')
-        .select(`
-          *,
-          tasks:rush_order_tasks(
-            id,
-            rush_order_id,
-            standard_task_id
-          ),
-          assignments:rush_order_assignments(
-            id,
-            rush_order_id,
-            employee_id
-          )
-        `)
-        .eq('id', id)
-        .single();
-        
-      if (error) throw error;
+    const { data, error } = await supabase
+      .from('rush_orders')
+      .select(`
+        *,
+        tasks:rush_order_tasks(id, rush_order_id, standard_task_id, created_at),
+        assignments:rush_order_assignments(id, rush_order_id, employee_id, created_at),
+        messages:rush_order_messages(id, rush_order_id, employee_id, message, created_at, updated_at)
+      `)
+      .order('created_at', { ascending: false });
 
-      // Fetch messages for this rush order
-      const { data: messagesData, error: messagesError } = await supabase
-        .from('rush_order_messages')
-        .select('*')
-        .eq('rush_order_id', id)
-        .order('created_at', { ascending: true });
-        
-      if (messagesError) throw messagesError;
-      
-      // Add messages to the rush order object
-      const rushOrderWithMessages = {
-        ...data,
-        messages: messagesData || []
-      } as RushOrder;
-      
-      return rushOrderWithMessages;
-    } catch (error: any) {
-      console.error(`Error fetching rush order ${id}:`, error);
-      toast({
-        title: "Error",
-        description: `Failed to fetch rush order: ${error.message}`,
-        variant: "destructive"
-      });
-      return null;
+    if (error) {
+      console.error("Error fetching rush orders:", error);
+      throw error;
+    }
+
+    return data as RushOrder[];
+  },
+
+  async getRushOrderById(id: string): Promise<RushOrder | null> {
+    const { data, error } = await supabase
+      .from('rush_orders')
+      .select(`
+        *,
+        tasks:rush_order_tasks(id, rush_order_id, standard_task_id, created_at),
+        assignments:rush_order_assignments(id, rush_order_id, employee_id, created_at),
+        messages:rush_order_messages(id, rush_order_id, employee_id, message, created_at, updated_at, employee_name:employee_id(name), employee_role:employee_id(role))
+      `)
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      console.error("Error fetching rush order by ID:", error);
+      throw error;
+    }
+
+    return data as RushOrder;
+  },
+
+  async createRushOrder(rushOrder: Omit<RushOrder, 'id' | 'created_at' | 'updated_at'>): Promise<RushOrder> {
+    const { data, error } = await supabase
+      .from('rush_orders')
+      .insert([rushOrder])
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error("Error creating rush order:", error);
+      throw error;
+    }
+
+    return data as RushOrder;
+  },
+
+  async updateRushOrder(id: string, updates: Partial<RushOrder>): Promise<RushOrder | null> {
+    const { data, error } = await supabase
+      .from('rush_orders')
+      .update(updates)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error("Error updating rush order:", error);
+      throw error;
+    }
+
+    return data as RushOrder;
+  },
+
+  async deleteRushOrder(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('rush_orders')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error("Error deleting rush order:", error);
+      throw error;
     }
   },
-  
-  async updateRushOrderStatus(id: string, status: "pending" | "in_progress" | "completed"): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('rush_orders')
-        .update({ status, updated_at: new Date().toISOString() })
-        .eq('id', id);
-        
-      if (error) throw error;
-      return true;
-    } catch (error: any) {
-      console.error('Error updating rush order status:', error);
-      toast({
-        title: "Error",
-        description: `Failed to update status: ${error.message}`,
-        variant: "destructive"
-      });
-      return false;
+
+  // Rush Order Tasks
+  async getRushOrderTasks(rushOrderId: string): Promise<RushOrderTask[]> {
+    const { data, error } = await supabase
+      .from('rush_order_tasks')
+      .select('*')
+      .eq('rush_order_id', rushOrderId);
+
+    if (error) {
+      console.error("Error fetching rush order tasks:", error);
+      throw error;
+    }
+
+    return data as RushOrderTask[];
+  },
+
+  async addRushOrderTask(rushOrderId: string, standardTaskId: string): Promise<RushOrderTask> {
+    const { data, error } = await supabase
+      .from('rush_order_tasks')
+      .insert([{ rush_order_id: rushOrderId, standard_task_id: standardTaskId }])
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error("Error adding rush order task:", error);
+      throw error;
+    }
+
+    return data as RushOrderTask;
+  },
+
+  async deleteRushOrderTask(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('rush_order_tasks')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error("Error deleting rush order task:", error);
+      throw error;
     }
   },
-  
-  async createNotification(userId: string, rushOrderId: string, message: string): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('notifications')
-        .insert({
-          user_id: userId,
-          message,
-          rush_order_id: rushOrderId,
-          read: false
-        });
-        
-      if (error) throw error;
-      return true;
-    } catch (error: any) {
-      console.error('Error creating notification:', error);
-      return false;
+
+  // Rush Order Assignments
+  async getRushOrderAssignments(rushOrderId: string): Promise<RushOrderAssignment[]> {
+    const { data, error } = await supabase
+      .from('rush_order_assignments')
+      .select('*, employee_name:employee_id(name)')
+      .eq('rush_order_id', rushOrderId);
+
+    if (error) {
+      console.error("Error fetching rush order assignments:", error);
+      throw error;
+    }
+
+    return data as RushOrderAssignment[];
+  },
+
+  async assignEmployeeToRushOrder(rushOrderId: string, employeeId: string): Promise<RushOrderAssignment> {
+    const { data, error } = await supabase
+      .from('rush_order_assignments')
+      .insert([{ rush_order_id: rushOrderId, employee_id: employeeId }])
+      .select('*, employee_name:employee_id(name)')
+      .single();
+
+    if (error) {
+      console.error("Error assigning employee to rush order:", error);
+      throw error;
+    }
+
+    return data as RushOrderAssignment;
+  },
+
+  async removeEmployeeFromRushOrder(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('rush_order_assignments')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error("Error removing employee from rush order:", error);
+      throw error;
     }
   },
-  
-  async notifyAllUsers(rushOrderId: string, message: string): Promise<boolean> {
-    try {
-      // Get all users with specified roles
-      const { data: users, error } = await supabase
-        .from('employees')
-        .select('id')
-        .in('role', ['admin', 'manager', 'worker', 'installation_team']);
-        
-      if (error) throw error;
-      
-      // Create notifications for each user
-      if (users && users.length > 0) {
-        const notifications = users.map(user => ({
-          user_id: user.id,
-          message,
-          rush_order_id: rushOrderId,
-          read: false
-        }));
-        
-        const { error: notifyError } = await supabase
-          .from('notifications')
-          .insert(notifications);
-          
-        if (notifyError) throw notifyError;
-      }
-      
-      return true;
-    } catch (error: any) {
-      console.error('Error notifying users:', error);
-      return false;
+
+  // Rush Order Messages
+  async getRushOrderMessages(rushOrderId: string): Promise<RushOrderMessage[]> {
+    const { data, error } = await supabase
+      .from('rush_order_messages')
+      .select('*, employee_name:employee_id(name), employee_role:employee_id(role)')
+      .eq('rush_order_id', rushOrderId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error("Error fetching rush order messages:", error);
+      throw error;
     }
+
+    return data as RushOrderMessage[];
   },
-  
-  async getRushOrdersForWorkstation(workstationId: string): Promise<RushOrder[]> {
+
+  async addRushOrderMessage(rushOrderId: string, employeeId: string, message: string): Promise<RushOrderMessage> {
+    const { data, error } = await supabase
+      .from('rush_order_messages')
+      .insert([{ rush_order_id: rushOrderId, employee_id: employeeId, message }])
+      .select('*, employee_name:employee_id(name), employee_role:employee_id(role)')
+      .single();
+
+    if (error) {
+      console.error("Error adding rush order message:", error);
+      throw error;
+    }
+
+    return data as RushOrderMessage;
+  },
+
+   async getRushOrdersForWorkstation(workstationId: string): Promise<RushOrder[]> {
     try {
-      // First get the standard task IDs associated with this workstation
-      const { data: workstationTasks, error: taskError } = await supabase
+      // First get all standard tasks linked to this workstation
+      const { data: linkedTasks, error: linkError } = await supabase
         .from('standard_task_workstation_links')
         .select('standard_task_id')
         .eq('workstation_id', workstationId);
       
-      if (taskError) throw taskError;
+      if (linkError) throw linkError;
       
-      if (!workstationTasks || workstationTasks.length === 0) {
+      if (!linkedTasks || linkedTasks.length === 0) {
         return [];
       }
       
-      const standardTaskIds = workstationTasks.map(wt => wt.standard_task_id);
+      const standardTaskIds = linkedTasks.map(link => link.standard_task_id);
       
-      // Now get rush orders that have tasks associated with this workstation
-      const { data: rushOrderTasks, error: rushOrderError } = await supabase
+      // Then get all rush order tasks that use these standard tasks
+      const { data: rushOrderTasks, error: taskError } = await supabase
         .from('rush_order_tasks')
-        .select('rush_order_id')
+        .select('rush_order_id, standard_task_id')
         .in('standard_task_id', standardTaskIds);
       
-      if (rushOrderError) throw rushOrderError;
+      if (taskError) throw taskError;
       
       if (!rushOrderTasks || rushOrderTasks.length === 0) {
         return [];
@@ -303,99 +229,92 @@ export const rushOrderService = {
       
       const rushOrderIds = [...new Set(rushOrderTasks.map(rot => rot.rush_order_id))];
       
-      // Finally get the rush orders
-      const { data: rushOrders, error: ordersError } = await supabase
+      // Fetch the rush orders by their IDs
+      const { data: rushOrders, error: rushOrderError } = await supabase
         .from('rush_orders')
         .select('*')
         .in('id', rushOrderIds);
       
-      if (ordersError) throw ordersError;
+      if (rushOrderError) throw rushOrderError;
       
-      return rushOrders as RushOrder[] || [];
-    } catch (error: any) {
+      return rushOrders as RushOrder[];
+    } catch (error) {
       console.error('Error fetching rush orders for workstation:', error);
       return [];
     }
   },
   
-  async sendRushOrderMessage(rushOrderId: string, employeeId: string, message: string): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('rush_order_messages')
+  async markMessagesAsRead(rushOrderId: string, employeeId: string): Promise<void> {
+    const now = new Date().toISOString();
+    
+    // Check if there's already a read receipt
+    const { data: existingRead } = await supabase
+      .from('rush_order_message_reads')
+      .select('*')
+      .eq('rush_order_id', rushOrderId)
+      .eq('employee_id', employeeId)
+      .maybeSingle();
+    
+    if (existingRead) {
+      // Update existing read receipt
+      await supabase
+        .from('rush_order_message_reads')
+        .update({ last_read_at: now })
+        .eq('rush_order_id', rushOrderId)
+        .eq('employee_id', employeeId);
+    } else {
+      // Create new read receipt
+      await supabase
+        .from('rush_order_message_reads')
         .insert({
           rush_order_id: rushOrderId,
           employee_id: employeeId,
-          message
+          last_read_at: now
         });
-        
-      if (error) throw error;
-      return true;
-    } catch (error: any) {
-      console.error('Error sending rush order message:', error);
-      toast({
-        title: "Error",
-        description: `Failed to send message: ${error.message}`,
-        variant: "destructive"
-      });
-      return false;
     }
   },
-  
-  async getRushOrderMessages(rushOrderId: string): Promise<RushOrderMessage[]> {
+
+  async getUnreadMessagesCount(rushOrderId: string, employeeId: string): Promise<number> {
     try {
-      const { data, error } = await supabase
-        .from('rush_order_messages')
-        .select('*, employees(name, role)')
+      // Get the last read timestamp for the employee
+      const { data: readData, error: readError } = await supabase
+        .from('rush_order_message_reads')
+        .select('last_read_at')
         .eq('rush_order_id', rushOrderId)
-        .order('created_at', { ascending: true });
-        
-      if (error) throw error;
-      
-      // Format the data to match our type
-      const messages = data.map(msg => ({
-        id: msg.id,
-        rush_order_id: msg.rush_order_id,
-        employee_id: msg.employee_id,
-        message: msg.message,
-        created_at: msg.created_at,
-        updated_at: msg.updated_at,
-        employee_name: msg.employees?.name,
-        employee_role: msg.employees?.role
-      }));
-      
-      return messages;
-    } catch (error: any) {
-      console.error('Error fetching rush order messages:', error);
-      return [];
+        .eq('employee_id', employeeId)
+        .maybeSingle();
+
+      if (readError) {
+        console.error("Error fetching last read timestamp:", readError);
+        throw readError;
+      }
+
+      const lastReadAt = readData ? new Date(readData.last_read_at) : null;
+
+      // Fetch all messages for the rush order
+      const { data: messages, error: messagesError } = await supabase
+        .from('rush_order_messages')
+        .select('created_at')
+        .eq('rush_order_id', rushOrderId);
+
+      if (messagesError) {
+        console.error("Error fetching messages:", messagesError);
+        throw messagesError;
+      }
+
+      // Count the unread messages
+      let unreadCount = 0;
+      if (lastReadAt) {
+        unreadCount = messages.filter(message => new Date(message.created_at) > lastReadAt).length;
+      } else {
+        // If no read timestamp exists, all messages are unread
+        unreadCount = messages.length;
+      }
+
+      return unreadCount;
+    } catch (error) {
+      console.error("Error getting unread messages count:", error);
+      return 0;
     }
   },
-  
-  async markMessagesAsRead(rushOrderId: string): Promise<boolean> {
-    try {
-      // Get the current user ID from the session
-      const { data: sessionData } = await supabase.auth.getSession();
-      const userId = sessionData?.session?.user?.id;
-      
-      if (!userId) return false;
-      
-      // Create a tracking entry directly using an insert with upsert
-      // This avoids using the rush_order_message_reads table if it doesn't exist in schema
-      const { error } = await supabase
-        .from('rush_order_messages')
-        .update({ 
-          updated_at: new Date().toISOString()
-        })
-        .eq('rush_order_id', rushOrderId);
-      
-      if (error) {
-        console.error('Error marking rush order messages as read:', error);
-        return false;
-      }
-      
-      return true;
-    } catch (error: any) {
-      console.error('Error marking rush order messages as read:', error);
-      return false;
-    }
-  }
 };

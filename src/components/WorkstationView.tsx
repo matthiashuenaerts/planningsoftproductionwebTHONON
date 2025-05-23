@@ -1,411 +1,148 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import TaskList from './TaskList';
-import { taskService, Task, projectService } from '@/services/dataService';
-import { standardTasksService } from '@/services/standardTasksService';
 import { useToast } from '@/hooks/use-toast';
-import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monitor, Truck, Flag, Clock } from 'lucide-react';
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardFooter, 
+  CardHeader, 
+  CardTitle 
+} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { supabase } from "@/integrations/supabase/client";
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { 
+  CheckCircle2, 
+  Clock, 
+  PlayCircle, 
+  AlertCircle,
+  Clock3,
+  ArrowLeft
+} from 'lucide-react';
+import { standardTasksService } from '@/services/standardTasksService';
+import { workstationService } from '@/services/workstationService';
+import { rushOrderService } from '@/services/rushOrderService';
 import { useAuth } from '@/context/AuthContext';
-import { Progress } from '@/components/ui/progress';
-import WorkstationRushOrdersDisplay from '@/components/WorkstationRushOrdersDisplay';
+import WorkstationRushOrdersDisplay from './WorkstationRushOrdersDisplay';
 
-// Helper function to validate and convert task status
-const validateTaskStatus = (status: string): "TODO" | "IN_PROGRESS" | "COMPLETED" => {
-  if (status === "TODO" || status === "IN_PROGRESS" || status === "COMPLETED") {
-    return status;
-  }
-  // Default to TODO if invalid status
-  console.warn(`Invalid task status: ${status}, defaulting to TODO`);
-  return "TODO";
-};
+// Define interfaces for the data
+interface Task {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: string;
+  due_date: string;
+  workstation: string;
+  phase: {
+    id: string;
+    name: string;
+    project_id: string;
+  };
+  project: {
+    id: string;
+    name: string;
+    client: string;
+  };
+  isRushOrderTask?: boolean;
+  rushOrderId?: string;
+  limitPhasesComplete?: boolean;
+  incompletePhases?: string[];
+}
 
-// Helper function to validate priority
-const validatePriority = (priority: string): "Low" | "Medium" | "High" | "Urgent" => {
-  if (priority === "Low" || priority === "Medium" || priority === "High" || priority === "Urgent") {
-    return priority;
-  }
-  console.warn(`Invalid task priority: ${priority}, defaulting to Medium`);
-  return "Medium";
-};
+interface WorkstationInfo {
+  id: string;
+  name: string;
+  description: string | null;
+}
 
 interface WorkstationViewProps {
   workstationId: string;
-  onBack?: () => void; // Make onBack optional
+  onBack?: () => void;
 }
 
 const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack }) => {
-  const [workstation, setWorkstation] = useState<string>("");
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [assigneeNames, setAssigneeNames] = useState<Record<string, string>>({});
-  const { toast } = useToast();
+  const [rushOrderTasks, setRushOrderTasks] = useState<Task[]>([]);
+  const [workstation, setWorkstation] = useState<WorkstationInfo | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
   const { currentEmployee } = useAuth();
+  const { toast } = useToast();
 
-  // Add a clock that updates every second
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    
-    return () => clearInterval(timer);
-  }, []);
-
+  // Fetch tasks and workstation info
   useEffect(() => {
     const fetchWorkstationData = async () => {
       try {
-        setLoading(true);
-        
-        // First fetch the workstation name
-        const { data: workstationData, error: workstationError } = await supabase
-          .from('workstations')
-          .select('name')
-          .eq('id', workstationId)
-          .single();
-        
-        if (workstationError) throw workstationError;
-        setWorkstation(workstationData?.name || "");
-        
-        // Step 1: Get all standard tasks linked to this workstation
-        const { data: standardTaskLinks, error: linksError } = await supabase
-          .from('standard_task_workstation_links')
-          .select('standard_task_id')
-          .eq('workstation_id', workstationId);
-          
-        if (linksError) throw linksError;
-        
-        let matchedTasks: Task[] = [];
-        
-        // If we have standard task links
-        if (standardTaskLinks && standardTaskLinks.length > 0) {
-          // Get the standard task details for these linked task IDs
-          const standardTaskIds = standardTaskLinks.map(link => link.standard_task_id);
-          
-          // For each standard task ID, fetch the standard task details
-          for (const standardTaskId of standardTaskIds) {
-            const { data: standardTask, error: standardTaskError } = await supabase
-              .from('standard_tasks')
-              .select('task_number, task_name')
-              .eq('id', standardTaskId)
-              .single();
-            
-            if (standardTaskError) {
-              console.error("Error fetching standard task:", standardTaskError);
-              continue;
-            }
-            
-            if (!standardTask) continue;
-            
-            // Search for active tasks containing this standard task number or name
-            const { data: activeTasks, error: tasksError } = await supabase
-              .from('tasks')
-              .select('*')
-              .not('status', 'eq', 'COMPLETED')
-              .or(`title.ilike.%${standardTask.task_number}%,title.ilike.%${standardTask.task_name}%`);
-            
-            if (tasksError) {
-              console.error("Error fetching matching tasks:", tasksError);
-              continue;
-            }
-            
-            if (activeTasks && activeTasks.length > 0) {
-              // Get project info for these tasks
-              const tasksWithProjectInfo = await Promise.all(
-                activeTasks.map(async (task) => {
-                  try {
-                    const { data: phaseData, error: phaseError } = await supabase
-                      .from('phases')
-                      .select('project_id, name')
-                      .eq('id', task.phase_id)
-                      .single();
-                    
-                    if (phaseError) throw phaseError;
-                    
-                    const { data: projectData, error: projectError } = await supabase
-                      .from('projects')
-                      .select('name')
-                      .eq('id', phaseData.project_id)
-                      .single();
-                    
-                    if (projectError) throw projectError;
-                    
-                    // Ensure the task status conforms to the expected type
-                    const status = validateTaskStatus(task.status);
-                    const priority = validatePriority(task.priority);
-                    
-                    // Return the task with the expected shape
-                    return {
-                      id: task.id,
-                      phase_id: task.phase_id,
-                      assignee_id: task.assignee_id,
-                      title: task.title,
-                      description: task.description || null,
-                      workstation: task.workstation,
-                      status: status,
-                      priority: priority,
-                      due_date: task.due_date,
-                      created_at: task.created_at,
-                      updated_at: task.updated_at,
-                      project_name: projectData.name,
-                      completed_at: task.completed_at,
-                      completed_by: task.completed_by,
-                      status_changed_at: task.status_changed_at
-                    } as Task;
-                  } catch (error) {
-                    console.error('Error fetching project info for task:', error);
-                    return null;
-                  }
-                })
-              );
-              
-              // Filter out any null tasks (from errors)
-              const validTasks = tasksWithProjectInfo.filter(task => task !== null) as Task[];
-              matchedTasks = [...matchedTasks, ...validTasks];
-            }
-          }
-        }
-        
-        // If no tasks found via standard tasks, try direct task links
-        if (matchedTasks.length === 0) {
-          // Get task IDs linked to this workstation
-          const { data: taskLinks, error: taskLinksError } = await supabase
-            .from('task_workstation_links')
-            .select('task_id')
-            .eq('workstation_id', workstationId);
-            
-          if (taskLinksError) throw taskLinksError;
-          
-          if (taskLinks && taskLinks.length > 0) {
-            const taskIds = taskLinks.map(link => link.task_id);
-            
-            // Get the actual tasks
-            const { data: linkedTasks, error: linkedTasksError } = await supabase
-              .from('tasks')
-              .select('*')
-              .in('id', taskIds)
-              .neq('status', 'COMPLETED');
-              
-            if (linkedTasksError) throw linkedTasksError;
-            
-            if (linkedTasks && linkedTasks.length > 0) {
-              // Process with project details
-              const tasksWithDetails = await Promise.all(
-                linkedTasks.map(async (task) => {
-                  try {
-                    // Get the phase to get the project_id
-                    const { data: phaseData, error: phaseError } = await supabase
-                      .from('phases')
-                      .select('project_id, name')
-                      .eq('id', task.phase_id)
-                      .single();
-                    
-                    if (phaseError) throw phaseError;
-                    
-                    // Get the project name
-                    const { data: projectData, error: projectError } = await supabase
-                      .from('projects')
-                      .select('name')
-                      .eq('id', phaseData.project_id)
-                      .single();
-                    
-                    if (projectError) throw projectError;
-                    
-                    return {
-                      ...task,
-                      project_name: projectData.name
-                    } as Task;
-                  } catch (error) {
-                    console.error('Error fetching project info:', error);
-                    return {
-                      ...task,
-                      project_name: 'Unknown Project'
-                    } as Task;
-                  }
-                })
-              );
-              
-              matchedTasks = [...matchedTasks, ...tasksWithDetails];
-            }
-          }
-        }
-        
-        // Final fallback: If still no tasks, check direct workstation name in tasks
-        if (matchedTasks.length === 0) {
-          const workstationTasks = await taskService.getByWorkstation(workstationData?.name || "");
-          
-          // Filter out completed tasks
-          const incompleteTasks = workstationTasks.filter(
-            task => task.status !== 'COMPLETED'
-          );
-          
-          // Fetch project information for each task's phase
-          const tasksWithProjectInfo = await Promise.all(
-            incompleteTasks.map(async (task) => {
-              try {
-                // Get the phase to get the project_id
-                const { data: phaseData, error: phaseError } = await supabase
-                  .from('phases')
-                  .select('project_id, name')
-                  .eq('id', task.phase_id)
-                  .single();
-                
-                if (phaseError) throw phaseError;
-                
-                // Get the project name
-                const { data: projectData, error: projectError } = await supabase
-                  .from('projects')
-                  .select('name')
-                  .eq('id', phaseData.project_id)
-                  .single();
-                
-                if (projectError) throw projectError;
-                
-                // Append project name to task
-                return {
-                  ...task,
-                  project_name: projectData.name
-                };
-              } catch (error) {
-                console.error('Error fetching project info for task:', error);
-                return task;
-              }
-            })
-          );
-          
-          matchedTasks = [...matchedTasks, ...tasksWithProjectInfo];
-        }
+        const workstationInfo = await workstationService.getById(workstationId);
+        setWorkstation(workstationInfo);
 
-        // NEW SECTION: Fetch rush order-related tasks for this workstation
-        try {
-          // First, get task IDs that are linked to rush orders
-          const { data: rushOrderTaskLinks, error: rushOrderTaskLinksError } = await supabase
-            .from('rush_order_task_links')
-            .select('task_id, rush_order_id');
-            
-          if (rushOrderTaskLinksError) throw rushOrderTaskLinksError;
+        // Get regular tasks for this workstation
+        const workstationTasks = await workstationService.getTasksForWorkstation(workstationId);
+        
+        // Get rush order tasks for this workstation
+        const rushOrderTasksData = await workstationService.getRushOrderTasksForWorkstation(workstationId);
+        
+        // Convert rush order tasks to Task type with empty phase and project properties
+        const formattedRushOrderTasks = rushOrderTasksData.map(rot => ({
+          ...rot,
+          phase: { id: '', name: '', project_id: '' },
+          project: { id: '', name: 'Rush Order', client: 'Internal' }
+        }));
+        
+        setRushOrderTasks(formattedRushOrderTasks); 
+        
+        // Get all standard tasks to check limit phases
+        const standardTasks = await standardTasksService.getAll();
+        
+        // Check limit phases for each task
+        const tasksWithLimitPhaseInfo = await Promise.all(workstationTasks.map(async (task) => {
+          if (!task.phase) return task; // Skip if no phase info
           
-          if (rushOrderTaskLinks && rushOrderTaskLinks.length > 0) {
-            const taskIds = rushOrderTaskLinks.map(link => link.task_id);
+          // For each task, find its corresponding standard task by name or identifier
+          const standardTask = standardTasks.find(st => 
+            st.task_name.toLowerCase().includes(task.title.toLowerCase()) || 
+            st.task_number.includes(task.title)
+          );
+          
+          if (standardTask) {
+            // Check if this task has limit phases
+            const limitPhases = await standardTasksService.getLimitPhases(standardTask.id);
             
-            // Get the actual tasks
-            const { data: rushOrderTasks, error: rushOrderTasksError } = await supabase
-              .from('tasks')
-              .select('*')
-              .in('id', taskIds)
-              .neq('status', 'COMPLETED');
+            // If it has limit phases, check if all required phases are completed
+            if (limitPhases.length > 0) {
+              // Get project phases 
+              const projectPhases = await workstationService.getPhasesForProject(task.phase.project_id);
               
-            if (rushOrderTasksError) throw rushOrderTasksError;
-            
-            if (rushOrderTasks && rushOrderTasks.length > 0) {
-              // Filter tasks for this workstation
-              const workstationRushOrderTasks = rushOrderTasks.filter(task => {
-                // Check if workstation name matches
-                return task.workstation && task.workstation.toLowerCase() === workstationData?.name?.toLowerCase();
+              // Find phases that are not completed
+              const incompletePhases = limitPhases.filter(limitPhase => {
+                const projectPhase = projectPhases.find(pp => pp.name === limitPhase.phase_name);
+                return !projectPhase || projectPhase.progress < 100;
               });
               
-              if (workstationRushOrderTasks.length > 0) {
-                // Get rush order info for each task
-                const tasksWithRushOrderInfo = await Promise.all(
-                  workstationRushOrderTasks.map(async (task) => {
-                    try {
-                      // Find the rush order ID for this task
-                      const link = rushOrderTaskLinks.find(link => link.task_id === task.id);
-                      
-                      if (!link) return null;
-                      
-                      // Get the rush order details
-                      const { data: rushOrder, error: rushOrderError } = await supabase
-                        .from('rush_orders')
-                        .select('title')
-                        .eq('id', link.rush_order_id)
-                        .single();
-                      
-                      if (rushOrderError) throw rushOrderError;
-                      
-                      // Ensure the task status conforms to the expected type
-                      const status = validateTaskStatus(task.status);
-                      const priority = validatePriority(task.priority || "High");
-                      
-                      // Return the task with rush order info
-                      return {
-                        ...task,
-                        status: status,
-                        priority: priority,
-                        project_name: `RUSH ORDER: ${rushOrder.title}`,
-                        is_rush_order: true,
-                        rush_order_id: link.rush_order_id
-                      } as Task;
-                    } catch (error) {
-                      console.error('Error fetching rush order info for task:', error);
-                      return null;
-                    }
-                  })
-                );
-                
-                // Filter out any null tasks (from errors)
-                const validRushOrderTasks = tasksWithRushOrderInfo.filter(task => task !== null) as Task[];
-                matchedTasks = [...matchedTasks, ...validRushOrderTasks];
-              }
-            }
-          }
-        } catch (error) {
-          console.error('Error fetching rush order tasks:', error);
-          // Continue execution even if there's an error with rush order tasks
-        }
-        
-        // Remove any duplicate tasks
-        const uniqueTasks = Array.from(
-          new Map(matchedTasks.map(task => [task.id, task])).values()
-        );
-        
-        // Add code to fetch assignee names
-        const assigneeIds = matchedTasks
-          .filter(task => task.assignee_id)
-          .map(task => task.assignee_id);
-          
-        // Remove duplicates
-        const uniqueAssigneeIds = [...new Set(assigneeIds)];
-        
-        if (uniqueAssigneeIds.length > 0) {
-          const namesMap: Record<string, string> = {};
-          
-          // Fetch employee names for assignees
-          for (const assigneeId of uniqueAssigneeIds) {
-            if (!assigneeId) continue;
-            
-            try {
-              const { data, error } = await supabase
-                .from('employees')
-                .select('name')
-                .eq('id', assigneeId)
-                .single();
-                
-              if (error) throw error;
-              
-              if (data) {
-                namesMap[assigneeId] = data.name;
-              }
-            } catch (error) {
-              console.error(`Error fetching employee name for ID ${assigneeId}:`, error);
-              namesMap[assigneeId] = 'Unknown';
+              return {
+                ...task,
+                limitPhasesComplete: incompletePhases.length === 0,
+                incompletePhases: incompletePhases.map(p => p.phase_name)
+              };
             }
           }
           
-          setAssigneeNames(namesMap);
-        }
+          // If no standard task match or no limit phases, consider it ready
+          return {
+            ...task,
+            limitPhasesComplete: true,
+            incompletePhases: []
+          };
+        }));
         
-        setTasks(uniqueTasks);
-      } catch (error: any) {
-        console.error('Error fetching workstation data:', error);
+        setTasks(tasksWithLimitPhaseInfo);
+      } catch (error) {
+        console.error('Error loading workstation data:', error);
         toast({
           title: "Error",
-          description: `Failed to load workstation tasks: ${error.message}`,
+          description: "Failed to load workstation data",
           variant: "destructive"
         });
-        // Setting empty tasks to prevent UI errors
-        setTasks([]);
       } finally {
         setLoading(false);
       }
@@ -414,319 +151,260 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
     fetchWorkstationData();
   }, [workstationId, toast]);
 
-  // Function to handle completing a task
-  const handleCompleteTask = async (taskId: string) => {
-    if (!currentEmployee) {
-      toast({
-        title: "Authentication Error",
-        description: "You must be logged in to complete tasks.",
-        variant: "destructive"
-      });
-      return;
-    }
-
+  const handleUpdateTaskStatus = async (taskId: string, newStatus: string, isRushOrderTask: boolean, rushOrderId?: string) => {
     try {
-      // Update task with completion information
-      await taskService.update(taskId, { 
-        status: 'COMPLETED',
-        completed_by: currentEmployee.id,
-        completed_at: new Date().toISOString(),
-        status_changed_at: new Date().toISOString()
-      });
-      
-      // Update local state to remove the completed task
-      setTasks(tasks.filter(task => task.id !== taskId));
+      if (isRushOrderTask && rushOrderId) {
+        // Update rush order task status
+        await workstationService.updateRushOrderTaskStatus(rushOrderId, taskId, newStatus);
+        
+        // Update local state
+        setRushOrderTasks(prevTasks => 
+          prevTasks.map(task => 
+            task.id === taskId ? { ...task, status: newStatus } : task
+          )
+        );
+      } else {
+        // Update regular task status
+        await workstationService.updateTaskStatus(taskId, newStatus);
+        
+        // Update local state
+        setTasks(prevTasks => 
+          prevTasks.map(task => 
+            task.id === taskId ? { ...task, status: newStatus } : task
+          )
+        );
+      }
       
       toast({
-        title: "Task completed",
-        description: "Task has been marked as completed."
+        title: "Success",
+        description: `Task marked as ${newStatus.toLowerCase()}`,
       });
-    } catch (error: any) {
+    } catch (error) {
+      console.error('Error updating task status:', error);
       toast({
         title: "Error",
-        description: `Failed to complete task: ${error.message}`,
+        description: "Failed to update task status",
         variant: "destructive"
       });
     }
   };
 
-  // Function to handle updating a task status to IN_PROGRESS
-  const handleStartTask = async (taskId: string) => {
-    if (!currentEmployee) {
-      toast({
-        title: "Authentication Error",
-        description: "You must be logged in to start tasks.",
-        variant: "destructive"
-      });
-      return;
-    }
+  // Filter tasks by status
+  const pendingTasks = [...tasks.filter(t => t.status === 'TODO' && t.limitPhasesComplete), 
+                        ...rushOrderTasks.filter(t => t.status === 'TODO')];
+  const inProgressTasks = [...tasks.filter(t => t.status === 'IN_PROGRESS'), 
+                          ...rushOrderTasks.filter(t => t.status === 'IN_PROGRESS')];
+  const completedTasks = [...tasks.filter(t => t.status === 'COMPLETED'), 
+                         ...rushOrderTasks.filter(t => t.status === 'COMPLETED')];
+  const onHoldTasks = tasks.filter(t => t.status === 'TODO' && !t.limitPhasesComplete);
 
-    try {
-      // Update task with in-progress information
-      await taskService.update(taskId, { 
-        status: 'IN_PROGRESS',
-        assignee_id: currentEmployee.id,
-        status_changed_at: new Date().toISOString()
-      });
-      
-      // Update local state
-      setTasks(tasks.map(task => 
-        task.id === taskId ? {
-          ...task,
-          status: 'IN_PROGRESS',
-          assignee_id: currentEmployee.id,
-          status_changed_at: new Date().toISOString()
-        } : task
-      ));
-      
-      // Update assignee names
-      setAssigneeNames(prev => ({
-        ...prev,
-        [currentEmployee.id]: currentEmployee.name
-      }));
-      
-      toast({
-        title: "Task started",
-        description: "Task has been marked as in progress."
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: `Failed to start task: ${error.message}`,
-        variant: "destructive"
-      });
-    }
-  };
-
-  // Helper to get progress value for in-progress tasks
-  const getTaskProgress = (task: Task): number => {
-    // Only return progress for tasks explicitly marked as IN_PROGRESS
-    if (task.status === 'IN_PROGRESS') {
-      const now = new Date();
-      
-      // Use status_changed_at if available, otherwise fall back to updated_at
-      const statusChangedAt = task.status_changed_at ? new Date(task.status_changed_at) : 
-                              task.updated_at ? new Date(task.updated_at) : null;
-      
-      // If we don't know when the task was started, use a default progress (10%)
-      if (!statusChangedAt) {
-        return 10;
-      }
-      
-      // If status_changed_at is somehow in the future, default to 10%
-      if (statusChangedAt > now) {
-        return 10;
-      }
-      
-      // Extract task number from title to find the corresponding standard task
-      const extractTaskNumber = (title: string): string | null => {
-        const match = title.match(/^(\d{2})(?:\s*[-:]\s*|\s+)/);
-        return match ? match[1] : null;
-      };
-      
-      const taskNumber = extractTaskNumber(task.title);
-      let taskDurationMs;
-      
-      // Attempt to get the standard task duration
-      if (taskNumber) {
-        // Use an immediately invoked async function to get the standard task
-        (async () => {
-          try {
-            const standardTask = await standardTasksService.getByTaskNumber(taskNumber);
-            if (standardTask && standardTask.time_coefficient > 0) {
-              // We found a standard task with a valid time coefficient
-              // This will be used in the next render cycle
-              console.log(`Found standard task for ${taskNumber} with duration: ${standardTask.time_coefficient} minutes`);
-            }
-          } catch (error) {
-            console.error("Error fetching standard task:", error);
-          }
-        })();
-      }
-      
-      // For now, use a fixed duration until we implement a state to store the fetched durations
-      // In a production app, we'd store these in state or context
-      taskDurationMs = 48 * 60 * 60 * 1000; // 48 hours default
-      
-      // Calculate elapsed time since the task was marked as IN_PROGRESS
-      const elapsedTime = now.getTime() - statusChangedAt.getTime();
-      
-      // Calculate progress percentage based on elapsed time and task duration
-      const progressPercentage = Math.min(100, Math.floor((elapsedTime / taskDurationMs) * 100));
-      
-      // Ensure we show at least 10% progress for visibility
-      return Math.max(10, progressPercentage);
-    }
-    return 0;
-  };
-
-  // Function to sort tasks with IN_PROGRESS first
-  const sortTasks = (taskList: Task[]) => {
-    return [...taskList].sort((a, b) => {
-      // First prioritize IN_PROGRESS tasks
-      if (a.status === 'IN_PROGRESS' && b.status !== 'IN_PROGRESS') return -1;
-      if (a.status !== 'IN_PROGRESS' && b.status === 'IN_PROGRESS') return 1;
-      
-      // Then prioritize rush orders
-      if (a.is_rush_order && !b.is_rush_order) return -1;
-      if (!a.is_rush_order && b.is_rush_order) return 1;
-      
-      // Then sort by priority
-      const priorityOrder = { 'Urgent': 0, 'High': 1, 'Medium': 2, 'Low': 3 };
-      return (priorityOrder[a.priority] || 999) - (priorityOrder[b.priority] || 999);
-    });
-  };
-
-  const getWorkstationIcon = (name: string) => {
-    // Return appropriate icon based on workstation name
-    const lowerCaseName = name.toLowerCase();
-    if (lowerCaseName.includes('productievoor')) return <Package size={24} />;
-    if (lowerCaseName.includes('productiestur')) return <LayoutGrid size={24} />;
-    if (lowerCaseName.includes('stock') || lowerCaseName.includes('logistiek')) return <Warehouse size={24} />;
-    if (lowerCaseName.includes('opdeelzaag 1')) return <Wrench size={24} />;
-    if (lowerCaseName.includes('opdeelzaag 2')) return <Scissors size={24} />;
-    if (lowerCaseName.includes('afplakken')) return <Layers size={24} />;
-    if (lowerCaseName.includes('cnc')) return <Wrench size={24} />;
-    if (lowerCaseName.includes('controle/opkuis')) return <Check size={24} />;
-    if (lowerCaseName.includes('montage')) return <Layers size={24} />;
-    if (lowerCaseName.includes('afwerking')) return <Wrench size={24} />;
-    if (lowerCaseName.includes('controle e+s')) return <Monitor size={24} />;
-    if (lowerCaseName.includes('eindcontrole')) return <Check size={24} />;
-    if (lowerCaseName.includes('bufferzone')) return <Warehouse size={24} />;
-    if (lowerCaseName.includes('laden') || lowerCaseName.includes('vrachtwagen')) return <Truck size={24} />;
-    if (lowerCaseName.includes('plaatsen')) return <Package size={24} />;
-    if (lowerCaseName.includes('afsluiten')) return <Flag size={24} />;
+  // Sort tasks by priority and due date
+  const sortedPendingTasks = pendingTasks.sort((a, b) => {
+    // Rush order tasks first
+    if (a.isRushOrderTask && !b.isRushOrderTask) return -1;
+    if (!a.isRushOrderTask && b.isRushOrderTask) return 1;
     
-    // Default icon
-    return <Wrench size={24} />;
-  };
-
-  const getWorkstationColor = (name: string): string => {
-    // Create a consistent color mapping based on the workstation name
-    const colorClasses = [
-      'bg-blue-500',
-      'bg-green-500',
-      'bg-amber-500',
-      'bg-red-500',
-      'bg-purple-500',
-      'bg-pink-500',
-      'bg-indigo-500',
-      'bg-teal-500',
-    ];
+    // Then by priority
+    if (a.priority === 'HIGH' && b.priority !== 'HIGH') return -1;
+    if (a.priority !== 'HIGH' && b.priority === 'HIGH') return 1;
     
-    // Simple hash function to pick a consistent color for each workstation name
-    const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    return colorClasses[hash % colorClasses.length];
+    // Then by due date
+    return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+  });
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
+  if (!workstation) {
+    return (
+      <div className="text-center p-8">
+        <AlertCircle className="h-12 w-12 mx-auto text-destructive" />
+        <h2 className="text-xl font-semibold mt-4">Workstation not found</h2>
+      </div>
+    );
+  }
+
+  const renderTaskCard = (task: Task, index: number) => {
+    const isRushOrder = task.isRushOrderTask;
+    
+    // Determine if the employee is assigned to this workstation
+    const canUpdateStatus = currentEmployee?.role === 'admin' || true; // TODO: Check if employee is assigned to this workstation
+    
+    return (
+      <Card 
+        key={task.id} 
+        className={`mb-4 ${isRushOrder ? 'border-red-300 border-2' : ''}`}
+      >
+        <CardHeader className="pb-2">
+          <div className="flex justify-between items-start">
+            <div>
+              <CardTitle className="text-base">
+                {task.title}
+                {isRushOrder && (
+                  <Badge variant="destructive" className="ml-2">Rush</Badge>
+                )}
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Project: {task.project?.name} • Client: {task.project?.client}
+              </CardDescription>
+            </div>
+            <Badge variant={
+              task.priority === 'HIGH' ? 'destructive' : 
+              task.priority === 'MEDIUM' ? 'default' : 'secondary'
+            }>
+              {task.priority}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="py-2">
+          {task.description && <p className="text-sm">{task.description}</p>}
+          <div className="flex items-center gap-2 mt-2">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">
+              Due: {new Date(task.due_date).toLocaleDateString()}
+            </span>
+          </div>
+          {!task.limitPhasesComplete && task.incompletePhases && task.incompletePhases.length > 0 && (
+            <div className="mt-2 p-2 bg-amber-50 rounded border border-amber-200">
+              <div className="flex items-start gap-2">
+                <Clock3 className="h-4 w-4 text-amber-500 mt-0.5" />
+                <div>
+                  <p className="text-xs font-medium text-amber-800">Waiting for phases to complete:</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {task.incompletePhases.map((phase, i) => (
+                      <Badge key={i} variant="outline" className="text-xs bg-amber-100 border-amber-300">
+                        {phase}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+        <CardFooter className="pt-2">
+          {canUpdateStatus && (
+            <div className="flex gap-2 w-full">
+              {task.status === 'TODO' && task.limitPhasesComplete && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex items-center"
+                  onClick={() => handleUpdateTaskStatus(task.id, 'IN_PROGRESS', isRushOrder || false, task.rushOrderId)}
+                >
+                  <PlayCircle className="h-4 w-4 mr-1" /> Start
+                </Button>
+              )}
+              {task.status === 'IN_PROGRESS' && (
+                <Button 
+                  variant="default" 
+                  size="sm" 
+                  className="flex items-center"
+                  onClick={() => handleUpdateTaskStatus(task.id, 'COMPLETED', isRushOrder || false, task.rushOrderId)}
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-1" /> Complete
+                </Button>
+              )}
+            </div>
+          )}
+        </CardFooter>
+      </Card>
+    );
   };
 
   return (
-    <Card className="h-full">
-      <CardHeader className="pb-2">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-full ${getWorkstationColor(workstation)}`}>
-              {getWorkstationIcon(workstation)}
-            </div>
-            <CardTitle>{workstation}</CardTitle>
-          </div>
-          <div className="text-lg font-mono font-medium">
-            <Clock className="inline-block mr-2 h-5 w-5 text-primary" />
-            {currentTime.toLocaleTimeString()}
-          </div>
+    <div className="space-y-4">
+      {onBack && (
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={onBack}
+          className="mb-4"
+        >
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back
+        </Button>
+      )}
+      
+      <div className="flex flex-col md:flex-row justify-between md:items-center gap-2">
+        <div>
+          <h1 className="text-2xl font-bold">{workstation.name}</h1>
+          {workstation.description && (
+            <p className="text-muted-foreground">{workstation.description}</p>
+          )}
         </div>
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <div className="flex justify-center p-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-          </div>
-        ) : (
-          <>
-            {/* Display related rush orders at the top */}
-            <WorkstationRushOrdersDisplay workstationId={workstationId} />
-            
-            {tasks.length === 0 ? (
-              <div className="text-center p-8">
-                <Check className="mx-auto h-12 w-12 text-green-500 mb-4" />
-                <h3 className="text-lg font-medium mb-2">All caught up!</h3>
-                <p className="text-muted-foreground">No pending tasks for this workstation.</p>
-              </div>
-            ) : (
-              <div className="space-y-4 mt-2">
-                {sortTasks(tasks).map((task) => (
-                  <Card key={task.id} className={`overflow-hidden relative ${task.is_rush_order ? 'border-red-400' : ''}`}>
-                    <div className={`border-l-4 ${task.is_rush_order ? 'border-l-red-500' : 'border-l-blue-500'} p-4 relative z-10`}>
-                      {task.status === 'IN_PROGRESS' && (
-                        <div className="absolute inset-0 left-0 top-0 bottom-0 z-0">
-                          <div 
-                            className={`h-full ${task.is_rush_order ? 'bg-red-50 dark:bg-red-900/20' : 'bg-green-50 dark:bg-green-900/20'}`}
-                            style={{ width: `${getTaskProgress(task)}%` }}
-                          />
-                        </div>
-                      )}
-                      <div className="relative z-10">
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className="font-medium text-lg">
-                            {task.project_name ? `${task.project_name} - ${task.title}` : task.title}
-                          </h4>
-                          <div className="flex items-center gap-2">
-                            <div className={`px-2 py-1 rounded text-xs font-medium ${
-                              task.is_rush_order 
-                                ? 'bg-red-100 text-red-800' 
-                                : task.priority === 'High' || task.priority === 'Urgent'
-                                  ? 'bg-amber-100 text-amber-800' 
-                                  : 'bg-gray-100 text-gray-800'
-                            }`}>
-                              {task.is_rush_order ? 'RUSH' : task.priority}
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Show assignee for IN_PROGRESS tasks */}
-                        {task.status === 'IN_PROGRESS' && task.assignee_id && (
-                          <div className="mb-2 text-sm bg-blue-50 text-blue-700 px-2 py-1 rounded inline-flex items-center">
-                            <span className="font-medium mr-1">Assigned to:</span> 
-                            {task.assignee_id && assigneeNames[task.assignee_id] ? 
-                              assigneeNames[task.assignee_id] : 'Unknown user'}
-                          </div>
-                        )}
-                        
-                        {task.description && (
-                          <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
-                        )}
-                        
-                        <div className="flex justify-between items-center mt-4">
-                          <div className="text-sm text-muted-foreground">
-                            Due: {new Date(task.due_date).toLocaleDateString()}
-                          </div>
-                          {task.status === 'TODO' ? (
-                            <Button 
-                              onClick={() => handleStartTask(task.id)}
-                              className="bg-blue-500 hover:bg-blue-600"
-                              size="sm"
-                            >
-                              Start Task
-                            </Button>
-                          ) : (
-                            <Button 
-                              onClick={() => handleCompleteTask(task.id)}
-                              className="bg-green-500 hover:bg-green-600"
-                              size="sm"
-                            >
-                              <Check className="mr-1 h-4 w-4" /> Complete Task
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
+      </div>
+
+      <WorkstationRushOrdersDisplay workstationId={workstationId} />
+
+      <Tabs defaultValue="todo">
+        <TabsList>
+          <TabsTrigger value="todo" className="relative">
+            To Do
+            {sortedPendingTasks.length > 0 && (
+              <Badge variant="secondary" className="ml-2">{sortedPendingTasks.length}</Badge>
             )}
-          </>
-        )}
-      </CardContent>
-    </Card>
+          </TabsTrigger>
+          <TabsTrigger value="in-progress" className="relative">
+            In Progress
+            {inProgressTasks.length > 0 && (
+              <Badge variant="secondary" className="ml-2">{inProgressTasks.length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="completed">Completed</TabsTrigger>
+          <TabsTrigger value="on-hold" className="relative">
+            On Hold
+            {onHoldTasks.length > 0 && (
+              <Badge variant="secondary" className="ml-2">{onHoldTasks.length}</Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="todo" className="mt-4">
+          {sortedPendingTasks.length > 0 ? (
+            sortedPendingTasks.map((task, index) => renderTaskCard(task, index))
+          ) : (
+            <div className="text-center p-8 text-muted-foreground">
+              No tasks to do
+            </div>
+          )}
+        </TabsContent>
+        
+        <TabsContent value="in-progress" className="mt-4">
+          {inProgressTasks.length > 0 ? (
+            inProgressTasks.map((task, index) => renderTaskCard(task, index))
+          ) : (
+            <div className="text-center p-8 text-muted-foreground">
+              No tasks in progress
+            </div>
+          )}
+        </TabsContent>
+        
+        <TabsContent value="completed" className="mt-4">
+          {completedTasks.length > 0 ? (
+            completedTasks.map((task, index) => renderTaskCard(task, index))
+          ) : (
+            <div className="text-center p-8 text-muted-foreground">
+              No completed tasks
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="on-hold" className="mt-4">
+          {onHoldTasks.length > 0 ? (
+            onHoldTasks.map((task, index) => renderTaskCard(task, index))
+          ) : (
+            <div className="text-center p-8 text-muted-foreground">
+              No tasks on hold
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 };
 
