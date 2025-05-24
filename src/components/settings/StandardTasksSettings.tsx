@@ -6,19 +6,40 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Save } from 'lucide-react';
+import { Save, Plus, X } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+
+interface LimitPhase {
+  id: string;
+  phase_name: string;
+}
 
 const StandardTasksSettings: React.FC = () => {
   const [standardTasks, setStandardTasks] = useState<StandardTask[]>([]);
+  const [limitPhases, setLimitPhases] = useState<Record<string, LimitPhase[]>>({});
+  const [allPhases, setAllPhases] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
 
   useEffect(() => {
-    const fetchStandardTasks = async () => {
+    const fetchData = async () => {
       try {
         const tasks = await standardTasksService.getAll();
         setStandardTasks(tasks);
+        
+        // Fetch all unique phase names from existing projects
+        const phases = await standardTasksService.getAllPhaseNames();
+        setAllPhases(phases);
+        
+        // Fetch limit phases for each standard task
+        const limitPhasesData: Record<string, LimitPhase[]> = {};
+        for (const task of tasks) {
+          const taskLimitPhases = await standardTasksService.getLimitPhases(task.id);
+          limitPhasesData[task.id] = taskLimitPhases;
+        }
+        setLimitPhases(limitPhasesData);
       } catch (error) {
         console.error('Error loading standard tasks:', error);
         toast({
@@ -31,7 +52,7 @@ const StandardTasksSettings: React.FC = () => {
       }
     };
 
-    fetchStandardTasks();
+    fetchData();
   }, [toast]);
 
   const getTaskNameParts = (taskName: string): string[] => {
@@ -68,6 +89,48 @@ const StandardTasksSettings: React.FC = () => {
     }
   };
 
+  const addLimitPhase = async (taskId: string, phaseName: string) => {
+    try {
+      const newLimitPhase = await standardTasksService.addLimitPhase(taskId, phaseName);
+      setLimitPhases(prev => ({
+        ...prev,
+        [taskId]: [...(prev[taskId] || []), newLimitPhase]
+      }));
+      toast({
+        title: 'Success',
+        description: 'Limit phase added successfully',
+      });
+    } catch (error) {
+      console.error('Error adding limit phase:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to add limit phase. Please try again.',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const removeLimitPhase = async (taskId: string, limitPhaseId: string) => {
+    try {
+      await standardTasksService.removeLimitPhase(limitPhaseId);
+      setLimitPhases(prev => ({
+        ...prev,
+        [taskId]: prev[taskId]?.filter(phase => phase.id !== limitPhaseId) || []
+      }));
+      toast({
+        title: 'Success',
+        description: 'Limit phase removed successfully',
+      });
+    } catch (error) {
+      console.error('Error removing limit phase:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to remove limit phase. Please try again.',
+        variant: 'destructive'
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center p-8">
@@ -90,11 +153,13 @@ const StandardTasksSettings: React.FC = () => {
                 <TableHead>Details</TableHead>
                 <TableHead className="w-32">Time Coefficient</TableHead>
                 <TableHead className="w-20">Actions</TableHead>
+                <TableHead className="w-64">Limit Phases</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {standardTasks.map((task) => {
                 const taskParts = getTaskNameParts(task.task_name);
+                const taskLimitPhases = limitPhases[task.id] || [];
                 
                 return (
                   <TableRow key={task.id}>
@@ -136,6 +201,37 @@ const StandardTasksSettings: React.FC = () => {
                           <Save className="h-4 w-4" />
                         )}
                       </Button>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-1">
+                          {taskLimitPhases.map((limitPhase) => (
+                            <Badge key={limitPhase.id} variant="secondary" className="flex items-center gap-1">
+                              {limitPhase.phase_name}
+                              <button
+                                onClick={() => removeLimitPhase(task.id, limitPhase.id)}
+                                className="ml-1 hover:text-red-500"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                        <Select onValueChange={(phaseName) => addLimitPhase(task.id, phaseName)}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Add limit phase" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {allPhases
+                              .filter(phaseName => !taskLimitPhases.some(lp => lp.phase_name === phaseName))
+                              .map((phaseName) => (
+                                <SelectItem key={phaseName} value={phaseName}>
+                                  {phaseName}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

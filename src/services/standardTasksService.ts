@@ -10,6 +10,11 @@ export interface StandardTask {
   updated_at: string;
 }
 
+export interface LimitPhase {
+  id: string;
+  phase_name: string;
+}
+
 export const standardTasksService = {
   async getAll(): Promise<StandardTask[]> {
     const { data, error } = await supabase
@@ -53,6 +58,81 @@ export const standardTasksService = {
     
     if (error) throw error;
     return data as StandardTask;
+  },
+
+  async getAllPhaseNames(): Promise<string[]> {
+    const { data, error } = await supabase
+      .from('phases')
+      .select('name')
+      .order('name');
+    
+    if (error) throw error;
+    
+    // Get unique phase names
+    const uniquePhases = [...new Set(data.map(phase => phase.name))];
+    return uniquePhases;
+  },
+
+  async getLimitPhases(standardTaskId: string): Promise<LimitPhase[]> {
+    const { data, error } = await supabase
+      .from('standard_task_limit_phases')
+      .select('id, phase_name')
+      .eq('standard_task_id', standardTaskId)
+      .order('phase_name');
+    
+    if (error) throw error;
+    return data as LimitPhase[] || [];
+  },
+
+  async addLimitPhase(standardTaskId: string, phaseName: string): Promise<LimitPhase> {
+    const { data, error } = await supabase
+      .from('standard_task_limit_phases')
+      .insert({
+        standard_task_id: standardTaskId,
+        phase_name: phaseName
+      })
+      .select('id, phase_name')
+      .single();
+    
+    if (error) throw error;
+    return data as LimitPhase;
+  },
+
+  async removeLimitPhase(limitPhaseId: string): Promise<void> {
+    const { error } = await supabase
+      .from('standard_task_limit_phases')
+      .delete()
+      .eq('id', limitPhaseId);
+    
+    if (error) throw error;
+  },
+
+  async checkLimitPhasesCompleted(standardTaskId: string, projectId: string): Promise<boolean> {
+    // Get all limit phases for this standard task
+    const limitPhases = await this.getLimitPhases(standardTaskId);
+    
+    if (limitPhases.length === 0) {
+      return true; // No limit phases means task can proceed
+    }
+    
+    // Check if all limit phases are completed in the project
+    for (const limitPhase of limitPhases) {
+      const { data, error } = await supabase
+        .from('phases')
+        .select('progress')
+        .eq('project_id', projectId)
+        .eq('name', limitPhase.phase_name)
+        .maybeSingle();
+      
+      if (error) throw error;
+      
+      // If phase doesn't exist or is not 100% complete, limit phases are not satisfied
+      if (!data || data.progress < 100) {
+        return false;
+      }
+    }
+    
+    return true; // All limit phases are completed
   },
 
   // Get task name parts by splitting the task name at underscores

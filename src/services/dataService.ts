@@ -1,4 +1,6 @@
+
 import { supabase } from "@/integrations/supabase/client";
+import { standardTasksService } from "./standardTasksService";
 
 // Project Types
 export interface Project {
@@ -34,7 +36,7 @@ export interface Task {
   title: string;
   description?: string;
   workstation: string;
-  status: "TODO" | "IN_PROGRESS" | "COMPLETED";
+  status: "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD";
   priority: "Low" | "Medium" | "High" | "Urgent";
   due_date: string;
   created_at: string;
@@ -45,6 +47,7 @@ export interface Task {
   status_changed_at?: string;
   is_rush_order?: boolean;
   rush_order_id?: string;
+  standard_task_id?: string;
 }
 
 // Employee Types
@@ -300,14 +303,41 @@ export const taskService = {
   },
 
   async getByPhase(phaseId: string): Promise<Task[]> {
-    const { data, error } = await supabase
+    const { data: tasks, error } = await supabase
       .from('tasks')
-      .select('*')
+      .select(`
+        *,
+        phases!inner(project_id)
+      `)
       .eq('phase_id', phaseId)
       .order('due_date', { ascending: true });
     
     if (error) throw error;
-    return data as Task[] || [];
+    
+    // Process tasks to check limit phases and update status if needed
+    const processedTasks = await Promise.all(
+      (tasks || []).map(async (task) => {
+        if (task.standard_task_id && task.status === 'TODO') {
+          const projectId = task.phases.project_id;
+          const limitPhasesCompleted = await standardTasksService.checkLimitPhasesCompleted(
+            task.standard_task_id, 
+            projectId
+          );
+          
+          if (!limitPhasesCompleted) {
+            // Update task status to HOLD
+            await this.update(task.id, { status: 'HOLD' });
+            task.status = 'HOLD';
+          }
+        }
+        
+        // Remove the phases object from the returned task
+        const { phases, ...cleanTask } = task;
+        return cleanTask as Task;
+      })
+    );
+    
+    return processedTasks;
   },
   
   async getByWorkstation(workstation: string): Promise<Task[]> {
@@ -340,7 +370,10 @@ export const taskService = {
         .from('task_workstation_links')
         .select(`
           task_id,
-          tasks (*)
+          tasks (
+            *,
+            phases!inner(project_id)
+          )
         `)
         .eq('workstation_id', workstationId);
       
@@ -351,12 +384,34 @@ export const taskService = {
         return [];
       }
       
-      // Extract tasks from the joined data and ensure they match the Task type
-      const tasks = data
-        .filter(item => item.tasks !== null) // Filter out any null tasks
-        .map(item => item.tasks as Task);
+      // Process tasks to check limit phases and update status if needed
+      const processedTasks = await Promise.all(
+        data
+          .filter(item => item.tasks !== null) // Filter out any null tasks
+          .map(async (item) => {
+            const task = item.tasks as any;
+            
+            if (task.standard_task_id && task.status === 'TODO') {
+              const projectId = task.phases.project_id;
+              const limitPhasesCompleted = await standardTasksService.checkLimitPhasesCompleted(
+                task.standard_task_id, 
+                projectId
+              );
+              
+              if (!limitPhasesCompleted) {
+                // Update task status to HOLD
+                await this.update(task.id, { status: 'HOLD' });
+                task.status = 'HOLD';
+              }
+            }
+            
+            // Remove the phases object from the returned task
+            const { phases, ...cleanTask } = task;
+            return cleanTask as Task;
+          })
+      );
       
-      return tasks;
+      return processedTasks;
     } catch (error) {
       console.error('Error in getByWorkstationId:', error);
       throw error;
@@ -445,6 +500,31 @@ export const taskService = {
     // Update status_changed_at when status is being changed
     if (task.status) {
       task.status_changed_at = new Date().toISOString();
+      
+      // If status is being changed from HOLD to TODO, check limit phases first
+      if (task.status === 'TODO') {
+        const { data: currentTask, error: fetchError } = await supabase
+          .from('tasks')
+          .select(`
+            *,
+            phases!inner(project_id)
+          `)
+          .eq('id', id)
+          .single();
+        
+        if (fetchError) throw fetchError;
+        
+        if (currentTask.standard_task_id) {
+          const limitPhasesCompleted = await standardTasksService.checkLimitPhasesCompleted(
+            currentTask.standard_task_id,
+            currentTask.phases.project_id
+          );
+          
+          if (!limitPhasesCompleted) {
+            task.status = 'HOLD';
+          }
+        }
+      }
       
       // If the status is changed to IN_PROGRESS, make sure assignee_id is set
       if (task.status === 'IN_PROGRESS' && !task.assignee_id) {
