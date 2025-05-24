@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import TaskList from './TaskList';
@@ -324,9 +323,13 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
                         .from('rush_orders')
                         .select('title')
                         .eq('id', link.rush_order_id)
+                        .neq('status', 'completed') // Only get non-completed rush orders
                         .single();
                       
-                      if (rushOrderError) throw rushOrderError;
+                      if (rushOrderError) {
+                        // If rush order is completed or not found, skip this task
+                        return null;
+                      }
                       
                       // Ensure the task status conforms to the expected type
                       const status = validateTaskStatus(task.status);
@@ -348,7 +351,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
                   })
                 );
                 
-                // Filter out any null tasks (from errors)
+                // Filter out any null tasks (from errors or completed rush orders)
                 const validRushOrderTasks = tasksWithRushOrderInfo.filter(task => task !== null) as Task[];
                 matchedTasks = [...matchedTasks, ...validRushOrderTasks];
               }
