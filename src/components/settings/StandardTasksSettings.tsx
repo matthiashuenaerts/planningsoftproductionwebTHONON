@@ -6,9 +6,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Save, Plus, X } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Save, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface LimitPhase {
   id: string;
@@ -89,22 +89,40 @@ const StandardTasksSettings: React.FC = () => {
     }
   };
 
-  const addLimitPhase = async (taskId: string, phaseName: string) => {
+  const handleLimitPhaseToggle = async (taskId: string, phaseName: string, isChecked: boolean) => {
     try {
-      const newLimitPhase = await standardTasksService.addLimitPhase(taskId, phaseName);
-      setLimitPhases(prev => ({
-        ...prev,
-        [taskId]: [...(prev[taskId] || []), newLimitPhase]
-      }));
-      toast({
-        title: 'Success',
-        description: 'Limit phase added successfully',
-      });
+      if (isChecked) {
+        // Add the limit phase
+        const newLimitPhase = await standardTasksService.addLimitPhase(taskId, phaseName);
+        setLimitPhases(prev => ({
+          ...prev,
+          [taskId]: [...(prev[taskId] || []), newLimitPhase]
+        }));
+        toast({
+          title: 'Success',
+          description: 'Limit phase added successfully',
+        });
+      } else {
+        // Remove the limit phase
+        const currentLimitPhases = limitPhases[taskId] || [];
+        const phaseToRemove = currentLimitPhases.find(phase => phase.phase_name === phaseName);
+        if (phaseToRemove) {
+          await standardTasksService.removeLimitPhase(phaseToRemove.id);
+          setLimitPhases(prev => ({
+            ...prev,
+            [taskId]: prev[taskId]?.filter(phase => phase.id !== phaseToRemove.id) || []
+          }));
+          toast({
+            title: 'Success',
+            description: 'Limit phase removed successfully',
+          });
+        }
+      }
     } catch (error) {
-      console.error('Error adding limit phase:', error);
+      console.error('Error updating limit phase:', error);
       toast({
         title: 'Error',
-        description: 'Failed to add limit phase. Please try again.',
+        description: 'Failed to update limit phase. Please try again.',
         variant: 'destructive'
       });
     }
@@ -153,7 +171,7 @@ const StandardTasksSettings: React.FC = () => {
                 <TableHead>Details</TableHead>
                 <TableHead className="w-32">Time Coefficient</TableHead>
                 <TableHead className="w-20">Actions</TableHead>
-                <TableHead className="w-64">Limit Phases</TableHead>
+                <TableHead className="w-96">Limit Phases</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -203,7 +221,8 @@ const StandardTasksSettings: React.FC = () => {
                       </Button>
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-2">
+                      <div className="space-y-3">
+                        {/* Current limit phases */}
                         <div className="flex flex-wrap gap-1">
                           {taskLimitPhases.map((limitPhase) => (
                             <Badge key={limitPhase.id} variant="secondary" className="flex items-center gap-1">
@@ -217,20 +236,34 @@ const StandardTasksSettings: React.FC = () => {
                             </Badge>
                           ))}
                         </div>
-                        <Select onValueChange={(phaseName) => addLimitPhase(task.id, phaseName)}>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Add limit phase" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {allPhases
-                              .filter(phaseName => !taskLimitPhases.some(lp => lp.phase_name === phaseName))
-                              .map((phaseName) => (
-                                <SelectItem key={phaseName} value={phaseName}>
+                        
+                        {/* Available phases to select */}
+                        <div className="space-y-2 max-h-32 overflow-y-auto border rounded p-2">
+                          <div className="text-xs font-medium text-gray-600">Available Phases:</div>
+                          {allPhases.map((phaseName) => {
+                            const isSelected = taskLimitPhases.some(lp => lp.phase_name === phaseName);
+                            return (
+                              <div key={phaseName} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`${task.id}-${phaseName}`}
+                                  checked={isSelected}
+                                  onCheckedChange={(checked) => 
+                                    handleLimitPhaseToggle(task.id, phaseName, checked as boolean)
+                                  }
+                                />
+                                <label 
+                                  htmlFor={`${task.id}-${phaseName}`}
+                                  className="text-xs cursor-pointer flex-1"
+                                >
                                   {phaseName}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
+                                </label>
+                              </div>
+                            );
+                          })}
+                          {allPhases.length === 0 && (
+                            <div className="text-xs text-gray-500">No phases available</div>
+                          )}
+                        </div>
                       </div>
                     </TableCell>
                   </TableRow>

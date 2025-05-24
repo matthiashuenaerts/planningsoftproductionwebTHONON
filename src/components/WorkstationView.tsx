@@ -12,88 +12,99 @@ import { useToast } from '@/hooks/use-toast';
 import { AlertTriangle, Clock, CheckCircle } from 'lucide-react';
 
 interface WorkstationViewProps {
-  workstationName: string;
+  workstationName?: string;
+  workstationId?: string;
+  onBack?: () => void;
 }
 
-const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName }) => {
+const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, workstationId, onBack }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+
+  // Use workstationName if provided, otherwise get it from workstationId
+  const displayName = workstationName || 'Workstation';
 
   const loadTasks = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // Load regular tasks
-      const regularTasks = await taskService.getByWorkstation(workstationName);
+      // Load regular tasks using the name
+      const regularTasks = await taskService.getByWorkstation(displayName);
       
       // Load rush order tasks
-      const { data: workstationData, error: workstationError } = await supabase
-        .from('workstations')
-        .select('id')
-        .eq('name', workstationName)
-        .single();
-      
-      if (workstationError) throw workstationError;
-      
-      const rushOrders = await rushOrderService.getRushOrdersForWorkstation(workstationData.id);
+      let workstationDbId = workstationId;
+      if (!workstationDbId && workstationName) {
+        const { data: workstationData, error: workstationError } = await supabase
+          .from('workstations')
+          .select('id')
+          .eq('name', workstationName)
+          .single();
+        
+        if (workstationError) throw workstationError;
+        workstationDbId = workstationData.id;
+      }
       
       let matchedTasks = [...regularTasks];
       
-      // Process rush order tasks
-      if (rushOrders.length > 0) {
-        for (const rushOrder of rushOrders) {
-          if (rushOrder.tasks && rushOrder.tasks.length > 0) {
-            const tasksWithRushOrderInfo = await Promise.all(
-              rushOrder.tasks.map(async (taskLink: any) => {
-                try {
-                  const { data: task, error: taskError } = await supabase
-                    .from('tasks')
-                    .select('*')
-                    .eq('id', taskLink.standard_task_id)
-                    .single();
-                  
-                  if (taskError) throw taskError;
-                  
-                  const { data: rushOrderInfo, error: rushOrderError } = await supabase
-                    .from('rush_orders')
-                    .select('title')
-                    .eq('id', taskLink.rush_order_id)
-                    .neq('status', 'completed')
-                    .single();
-                  
-                  if (rushOrderError) {
+      if (workstationDbId) {
+        const rushOrders = await rushOrderService.getRushOrdersForWorkstation(workstationDbId);
+        
+        // Process rush order tasks
+        if (rushOrders.length > 0) {
+          for (const rushOrder of rushOrders) {
+            if (rushOrder.tasks && rushOrder.tasks.length > 0) {
+              const tasksWithRushOrderInfo = await Promise.all(
+                rushOrder.tasks.map(async (taskLink: any) => {
+                  try {
+                    const { data: task, error: taskError } = await supabase
+                      .from('tasks')
+                      .select('*')
+                      .eq('id', taskLink.standard_task_id)
+                      .single();
+                    
+                    if (taskError) throw taskError;
+                    
+                    const { data: rushOrderInfo, error: rushOrderError } = await supabase
+                      .from('rush_orders')
+                      .select('title')
+                      .eq('id', taskLink.rush_order_id)
+                      .neq('status', 'completed')
+                      .single();
+                    
+                    if (rushOrderError) {
+                      return null;
+                    }
+                    
+                    const validateTaskStatus = (status: string): "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD" => {
+                      if (['TODO', 'IN_PROGRESS', 'COMPLETED', 'HOLD'].includes(status)) {
+                        return status as "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD";
+                      }
+                      return 'TODO';
+                    };
+                    
+                    const status = validateTaskStatus(task.status);
+                    
+                    return {
+                      ...task,
+                      status,
+                      is_rush_order: true,
+                      rush_order_id: taskLink.rush_order_id,
+                      title: `${rushOrderInfo.title} - ${task.title}`,
+                      project_name: rushOrderInfo.title
+                    } as Task;
+                  } catch (error) {
+                    console.error('Error processing rush order task:', error);
                     return null;
                   }
-                  
-                  const validateTaskStatus = (status: string): "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD" => {
-                    if (['TODO', 'IN_PROGRESS', 'COMPLETED', 'HOLD'].includes(status)) {
-                      return status as "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD";
-                    }
-                    return 'TODO';
-                  };
-                  
-                  const status = validateTaskStatus(task.status);
-                  
-                  return {
-                    ...task,
-                    status,
-                    is_rush_order: true,
-                    rush_order_id: taskLink.rush_order_id,
-                    title: `${rushOrderInfo.title} - ${task.title}`,
-                    project_name: rushOrderInfo.title
-                  } as Task;
-                } catch (error) {
-                  console.error('Error processing rush order task:', error);
-                  return null;
-                }
-              })
-            );
-            
-            const validRushOrderTasks = tasksWithRushOrderInfo.filter(task => task !== null) as Task[];
-            matchedTasks = [...matchedTasks, ...validRushOrderTasks];
+                })
+              );
+              
+              const validRushOrderTasks = tasksWithRushOrderInfo.filter(task => task !== null) as Task[];
+              matchedTasks = [...matchedTasks, ...validRushOrderTasks];
+            }
           }
         }
       }
@@ -114,7 +125,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName }) =>
 
   useEffect(() => {
     loadTasks();
-  }, [workstationName]);
+  }, [workstationName, workstationId]);
 
   const handleTaskUpdate = async (updatedTask: Task) => {
     try {
@@ -163,10 +174,17 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName }) =>
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">{workstationName} Workstation</h1>
-        <Badge variant="outline" className="text-lg px-3 py-1">
-          {tasks.length} Total Tasks
-        </Badge>
+        <h1 className="text-2xl font-bold">{displayName} Workstation</h1>
+        <div className="flex gap-2">
+          {onBack && (
+            <button onClick={onBack} className="text-blue-600 hover:underline">
+              ← Back
+            </button>
+          )}
+          <Badge variant="outline" className="text-lg px-3 py-1">
+            {tasks.length} Total Tasks
+          </Badge>
+        </div>
       </div>
 
       <Tabs defaultValue="todo" className="space-y-4">

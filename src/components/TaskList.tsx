@@ -10,9 +10,19 @@ interface TaskListProps {
   tasks: Task[];
   onTaskUpdate?: (task: Task) => void;
   showRushOrderBadge?: boolean;
+  title?: string;
+  compact?: boolean;
+  onTaskStatusChange?: (taskId: string, status: "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD") => Promise<void>;
 }
 
-const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskUpdate, showRushOrderBadge = false }) => {
+const TaskList: React.FC<TaskListProps> = ({ 
+  tasks, 
+  onTaskUpdate, 
+  showRushOrderBadge = false, 
+  title, 
+  compact = false,
+  onTaskStatusChange 
+}) => {
   const getPriorityColor = (priority: string) => {
     switch (priority.toLowerCase()) {
       case 'urgent': return 'bg-red-500';
@@ -43,8 +53,10 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskUpdate, showRushOrderB
     }
   };
 
-  const handleStatusChange = (task: Task, newStatus: "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD") => {
-    if (onTaskUpdate) {
+  const handleStatusChange = async (task: Task, newStatus: "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD") => {
+    if (onTaskStatusChange) {
+      await onTaskStatusChange(task.id, newStatus);
+    } else if (onTaskUpdate) {
       const updatedTask = { ...task, status: newStatus };
       if (newStatus === 'COMPLETED') {
         updatedTask.completed_at = new Date().toISOString();
@@ -63,14 +75,15 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskUpdate, showRushOrderB
 
   return (
     <div className="space-y-4">
+      {title && <h3 className="text-lg font-semibold">{title}</h3>}
       {tasks.map((task) => (
         <Card 
           key={task.id} 
-          className={`${task.is_rush_order && showRushOrderBadge ? 'border-red-500 border-2' : ''} ${task.status === 'HOLD' ? 'border-orange-300' : ''}`}
+          className={`${task.is_rush_order && showRushOrderBadge ? 'border-red-500 border-2' : ''} ${task.status === 'HOLD' ? 'border-orange-300' : ''} ${compact ? 'p-2' : ''}`}
         >
-          <CardHeader className="pb-3">
+          <CardHeader className={compact ? "pb-2" : "pb-3"}>
             <div className="flex justify-between items-start">
-              <CardTitle className="text-lg">{task.title}</CardTitle>
+              <CardTitle className={compact ? "text-base" : "text-lg"}>{task.title}</CardTitle>
               <div className="flex gap-2">
                 {task.is_rush_order && showRushOrderBadge && (
                   <Badge variant="destructive" className="flex items-center gap-1">
@@ -93,7 +106,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskUpdate, showRushOrderB
             </div>
           </CardHeader>
           <CardContent>
-            {task.description && (
+            {task.description && !compact && (
               <p className="text-gray-600 mb-4">{task.description}</p>
             )}
             
@@ -106,25 +119,27 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskUpdate, showRushOrderB
               </div>
             )}
             
-            <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
-              <div className="flex items-center gap-1">
-                <Calendar className="h-4 w-4" />
-                <span>Due: {new Date(task.due_date).toLocaleDateString()}</span>
+            {!compact && (
+              <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-4 w-4" />
+                  <span>Due: {new Date(task.due_date).toLocaleDateString()}</span>
+                </div>
+                {task.assignee_id && (
+                  <div className="flex items-center gap-1">
+                    <User className="h-4 w-4" />
+                    <span>Assigned</span>
+                  </div>
+                )}
+                {task.project_name && (
+                  <div className="flex items-center gap-1">
+                    <span className="font-medium">Project: {task.project_name}</span>
+                  </div>
+                )}
               </div>
-              {task.assignee_id && (
-                <div className="flex items-center gap-1">
-                  <User className="h-4 w-4" />
-                  <span>Assigned</span>
-                </div>
-              )}
-              {task.project_name && (
-                <div className="flex items-center gap-1">
-                  <span className="font-medium">Project: {task.project_name}</span>
-                </div>
-              )}
-            </div>
+            )}
             
-            {onTaskUpdate && (
+            {(onTaskUpdate || onTaskStatusChange) && (
               <div className="flex gap-2">
                 {task.status === 'TODO' && (
                   <Button 
