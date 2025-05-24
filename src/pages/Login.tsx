@@ -85,13 +85,13 @@ const Login: React.FC = () => {
       <div className="w-full max-w-md p-6">
         <Card>
           <CardHeader className="space-y-1 text-center">
-            <CardTitle className="text-3xl font-bold">PhaseFlow</CardTitle>
-            <CardDescription>Kitchen Production Management System</CardDescription>
+            <CardTitle className="text-3xl font-bold">PlanningSoftProductionWeb</CardTitle>
+            <CardDescription>Planningssoftware voor productieomgeving</CardDescription>
           </CardHeader>
           <form onSubmit={handleLogin}>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Employee Name</Label>
+                <Label htmlFor="name">Gebruikersnaam</Label>
                 <Input 
                   id="name" 
                   type="text" 
@@ -102,7 +102,7 @@ const Login: React.FC = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">Paswoord</Label>
                 <Input 
                   id="password" 
                   type="password"
