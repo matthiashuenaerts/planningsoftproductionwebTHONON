@@ -85,7 +85,7 @@ const Login: React.FC = () => {
       <div className="w-full max-w-md p-6">
         <Card>
           <CardHeader className="space-y-1 text-center">
-            <CardTitle className="text-3xl font-bold">PlanningSoftProductionWeb</CardTitle>
+            <CardTitle className="text-3xl font-bold">PlanningSoftProduction</CardTitle>
             <CardDescription>Planningssoftware voor productieomgeving</CardDescription>
           </CardHeader>
           <form onSubmit={handleLogin}>
