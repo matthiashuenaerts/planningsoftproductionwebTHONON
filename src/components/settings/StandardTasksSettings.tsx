@@ -12,13 +12,15 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 interface LimitPhase {
   id: string;
-  phase_name: string;
+  standard_task_id: string;
+  standard_task_number: string;
+  standard_task_name: string;
 }
 
 const StandardTasksSettings: React.FC = () => {
   const [standardTasks, setStandardTasks] = useState<StandardTask[]>([]);
   const [limitPhases, setLimitPhases] = useState<Record<string, LimitPhase[]>>({});
-  const [allPhases, setAllPhases] = useState<string[]>([]);
+  const [allStandardTasks, setAllStandardTasks] = useState<StandardTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
@@ -29,9 +31,9 @@ const StandardTasksSettings: React.FC = () => {
         const tasks = await standardTasksService.getAll();
         setStandardTasks(tasks);
         
-        // Fetch all unique phase names from existing projects
-        const phases = await standardTasksService.getAllPhaseNames();
-        setAllPhases(phases);
+        // Fetch all standard tasks for limit phase selection
+        const allTasks = await standardTasksService.getAllStandardTasksForLimitPhases();
+        setAllStandardTasks(allTasks);
         
         // Fetch limit phases for each standard task
         const limitPhasesData: Record<string, LimitPhase[]> = {};
@@ -89,11 +91,11 @@ const StandardTasksSettings: React.FC = () => {
     }
   };
 
-  const handleLimitPhaseToggle = async (taskId: string, phaseName: string, isChecked: boolean) => {
+  const handleLimitPhaseToggle = async (taskId: string, limitStandardTaskId: string, isChecked: boolean) => {
     try {
       if (isChecked) {
         // Add the limit phase
-        const newLimitPhase = await standardTasksService.addLimitPhase(taskId, phaseName);
+        const newLimitPhase = await standardTasksService.addLimitPhase(taskId, limitStandardTaskId);
         setLimitPhases(prev => ({
           ...prev,
           [taskId]: [...(prev[taskId] || []), newLimitPhase]
@@ -105,7 +107,7 @@ const StandardTasksSettings: React.FC = () => {
       } else {
         // Remove the limit phase
         const currentLimitPhases = limitPhases[taskId] || [];
-        const phaseToRemove = currentLimitPhases.find(phase => phase.phase_name === phaseName);
+        const phaseToRemove = currentLimitPhases.find(phase => phase.standard_task_id === limitStandardTaskId);
         if (phaseToRemove) {
           await standardTasksService.removeLimitPhase(phaseToRemove.id);
           setLimitPhases(prev => ({
@@ -171,7 +173,7 @@ const StandardTasksSettings: React.FC = () => {
                 <TableHead>Details</TableHead>
                 <TableHead className="w-32">Time Coefficient</TableHead>
                 <TableHead className="w-20">Actions</TableHead>
-                <TableHead className="w-96">Limit Phases</TableHead>
+                <TableHead className="w-96">Limit Phases (Standard Tasks)</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -226,7 +228,7 @@ const StandardTasksSettings: React.FC = () => {
                         <div className="flex flex-wrap gap-1">
                           {taskLimitPhases.map((limitPhase) => (
                             <Badge key={limitPhase.id} variant="secondary" className="flex items-center gap-1">
-                              {limitPhase.phase_name}
+                              {limitPhase.standard_task_number} - {limitPhase.standard_task_name}
                               <button
                                 onClick={() => removeLimitPhase(task.id, limitPhase.id)}
                                 className="ml-1 hover:text-red-500"
@@ -237,31 +239,33 @@ const StandardTasksSettings: React.FC = () => {
                           ))}
                         </div>
                         
-                        {/* Available phases to select */}
+                        {/* Available standard tasks to select as limit phases */}
                         <div className="space-y-2 max-h-32 overflow-y-auto border rounded p-2">
-                          <div className="text-xs font-medium text-gray-600">Available Phases:</div>
-                          {allPhases.map((phaseName) => {
-                            const isSelected = taskLimitPhases.some(lp => lp.phase_name === phaseName);
-                            return (
-                              <div key={phaseName} className="flex items-center space-x-2">
-                                <Checkbox
-                                  id={`${task.id}-${phaseName}`}
-                                  checked={isSelected}
-                                  onCheckedChange={(checked) => 
-                                    handleLimitPhaseToggle(task.id, phaseName, checked as boolean)
-                                  }
-                                />
-                                <label 
-                                  htmlFor={`${task.id}-${phaseName}`}
-                                  className="text-xs cursor-pointer flex-1"
-                                >
-                                  {phaseName}
-                                </label>
-                              </div>
-                            );
-                          })}
-                          {allPhases.length === 0 && (
-                            <div className="text-xs text-gray-500">No phases available</div>
+                          <div className="text-xs font-medium text-gray-600">Available Standard Tasks:</div>
+                          {allStandardTasks
+                            .filter(standardTask => standardTask.id !== task.id) // Don't allow self-reference
+                            .map((standardTask) => {
+                              const isSelected = taskLimitPhases.some(lp => lp.standard_task_id === standardTask.id);
+                              return (
+                                <div key={standardTask.id} className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`${task.id}-${standardTask.id}`}
+                                    checked={isSelected}
+                                    onCheckedChange={(checked) => 
+                                      handleLimitPhaseToggle(task.id, standardTask.id, checked as boolean)
+                                    }
+                                  />
+                                  <label 
+                                    htmlFor={`${task.id}-${standardTask.id}`}
+                                    className="text-xs cursor-pointer flex-1"
+                                  >
+                                    {standardTask.task_number} - {standardTask.task_name}
+                                  </label>
+                                </div>
+                              );
+                            })}
+                          {allStandardTasks.length === 0 && (
+                            <div className="text-xs text-gray-500">No standard tasks available</div>
                           )}
                         </div>
                       </div>

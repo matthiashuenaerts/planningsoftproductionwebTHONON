@@ -12,7 +12,9 @@ export interface StandardTask {
 
 export interface LimitPhase {
   id: string;
-  phase_name: string;
+  standard_task_id: string;
+  standard_task_number: string;
+  standard_task_name: string;
 }
 
 export const standardTasksService = {
@@ -60,42 +62,61 @@ export const standardTasksService = {
     return data as StandardTask;
   },
 
-  async getAllPhaseNames(): Promise<string[]> {
+  async getAllStandardTasksForLimitPhases(): Promise<StandardTask[]> {
+    // Get all standard tasks that can be used as limit phases
     const { data, error } = await supabase
-      .from('phases')
-      .select('name')
-      .order('name');
+      .from('standard_tasks')
+      .select('*')
+      .order('task_number');
     
     if (error) throw error;
-    
-    // Get unique phase names
-    const uniquePhases = [...new Set(data.map(phase => phase.name))];
-    return uniquePhases;
+    return data as StandardTask[] || [];
   },
 
   async getLimitPhases(standardTaskId: string): Promise<LimitPhase[]> {
     const { data, error } = await supabase
       .from('standard_task_limit_phases')
-      .select('id, phase_name')
+      .select(`
+        id,
+        limit_standard_task_id,
+        standard_tasks!standard_task_limit_phases_limit_standard_task_id_fkey(task_number, task_name)
+      `)
       .eq('standard_task_id', standardTaskId)
-      .order('phase_name');
+      .order('standard_tasks.task_number');
     
     if (error) throw error;
-    return data as LimitPhase[] || [];
+    
+    // Transform the data to match our LimitPhase interface
+    return (data || []).map(item => ({
+      id: item.id,
+      standard_task_id: item.limit_standard_task_id,
+      standard_task_number: item.standard_tasks?.task_number || '',
+      standard_task_name: item.standard_tasks?.task_name || ''
+    }));
   },
 
-  async addLimitPhase(standardTaskId: string, phaseName: string): Promise<LimitPhase> {
+  async addLimitPhase(standardTaskId: string, limitStandardTaskId: string): Promise<LimitPhase> {
     const { data, error } = await supabase
       .from('standard_task_limit_phases')
       .insert({
         standard_task_id: standardTaskId,
-        phase_name: phaseName
+        limit_standard_task_id: limitStandardTaskId
       })
-      .select('id, phase_name')
+      .select(`
+        id,
+        limit_standard_task_id,
+        standard_tasks!standard_task_limit_phases_limit_standard_task_id_fkey(task_number, task_name)
+      `)
       .single();
     
     if (error) throw error;
-    return data as LimitPhase;
+    
+    return {
+      id: data.id,
+      standard_task_id: data.limit_standard_task_id,
+      standard_task_number: data.standard_tasks?.task_number || '',
+      standard_task_name: data.standard_tasks?.task_name || ''
+    };
   },
 
   async removeLimitPhase(limitPhaseId: string): Promise<void> {
@@ -115,19 +136,28 @@ export const standardTasksService = {
       return true; // No limit phases means task can proceed
     }
     
-    // Check if all limit phases are completed in the project
+    // Check if all limit standard tasks are completed in the project
     for (const limitPhase of limitPhases) {
-      const { data, error } = await supabase
-        .from('phases')
-        .select('progress')
-        .eq('project_id', projectId)
-        .eq('name', limitPhase.phase_name)
-        .maybeSingle();
+      // Find tasks in the project that match this standard task
+      const { data: projectTasks, error } = await supabase
+        .from('tasks')
+        .select(`
+          status,
+          phases!inner(project_id)
+        `)
+        .eq('phases.project_id', projectId)
+        .eq('standard_task_id', limitPhase.standard_task_id);
       
       if (error) throw error;
       
-      // If phase doesn't exist or is not 100% complete, limit phases are not satisfied
-      if (!data || data.progress < 100) {
+      // If no tasks exist for this standard task, or not all are completed, limit phases are not satisfied
+      if (!projectTasks || projectTasks.length === 0) {
+        return false;
+      }
+      
+      // Check if all instances of this standard task in the project are completed
+      const allCompleted = projectTasks.every(task => task.status === 'COMPLETED');
+      if (!allCompleted) {
         return false;
       }
     }
