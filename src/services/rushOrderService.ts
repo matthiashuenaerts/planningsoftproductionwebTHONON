@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { RushOrder, RushOrderTask, RushOrderAssignment, RushOrderMessage } from "@/types/rushOrder";
 import { toast } from "@/hooks/use-toast";
@@ -302,11 +303,12 @@ export const rushOrderService = {
       
       const rushOrderIds = [...new Set(rushOrderTasks.map(rot => rot.rush_order_id))];
       
-      // Finally get the rush orders
+      // Finally get the rush orders, excluding completed ones
       const { data: rushOrders, error: ordersError } = await supabase
         .from('rush_orders')
         .select('*')
-        .in('id', rushOrderIds);
+        .in('id', rushOrderIds)
+        .neq('status', 'completed'); // Exclude completed rush orders
       
       if (ordersError) throw ordersError;
       
