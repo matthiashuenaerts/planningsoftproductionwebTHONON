@@ -35,6 +35,13 @@ import { ScrollArea } from './ui/scroll-area';
 import { Checkbox } from './ui/checkbox';
 import { Loader2 } from 'lucide-react';
 
+// Add the missing interface
+interface NewProjectModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
+}
+
 const formSchema = z.object({
   name: z.string().min(1, { message: 'Project name is required' }),
   client: z.string().min(1, { message: 'Client name is required' }),
@@ -64,7 +71,7 @@ interface TaskItem {
   task_number?: string;
   standard_task_id?: string;
   time_coefficient?: number;
-  duration?: number; // Explicitly define the duration property
+  duration?: number;
 }
 
 const NewProjectModal: React.FC<NewProjectModalProps> = ({
@@ -144,7 +151,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
       description: '',
       start_date: new Date(),
       installation_date: new Date(),
-      project_value: 50, // Default project value
+      project_value: 50,
     },
   });
 
@@ -163,7 +170,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
 
   // Calculate task duration based on coefficient and project value
   const calculateTaskDuration = (task: TaskItem, projectValue: number): number => {
-    if (!task.time_coefficient) return 60; // Default 1 hour if no coefficient
+    if (!task.time_coefficient) return 60;
     return Math.round(task.time_coefficient * projectValue);
   };
 
@@ -177,8 +184,8 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
         name: newTaskName.trim(), 
         workstation: newTaskWorkstation.trim(),
         selected: true,
-        time_coefficient: 1.0, // Default coefficient for custom tasks
-        duration: projectValue // For custom tasks, duration equals project value (coefficient of 1.0)
+        time_coefficient: 1.0,
+        duration: projectValue
       };
       
       setTasks([...tasks, newTask]);
@@ -274,7 +281,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
         const taskDescription = `Duration: ${task.duration || 60} minutes\n${task.workstation ? `Workstation: ${task.workstation}` : ''}`;
         
         // Determine initial task status based on limit phases
-        let initialStatus: Task['status'] = 'TODO';
+        let initialStatus: 'TODO' | 'IN_PROGRESS' | 'COMPLETED' | 'HOLD' = 'TODO';
         if (task.standard_task_id) {
           // Check if this standard task has limit phases that aren't completed yet
           const limitPhasesCompleted = await standardTasksService.checkLimitPhasesCompleted(
