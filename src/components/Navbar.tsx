@@ -38,7 +38,7 @@ const Navbar = () => {
     <div className="h-full px-3 py-4 overflow-y-auto bg-sky-800 text-white">
       <div className="flex flex-col h-full justify-between">
         <div>
-          <h2 className="px-2 py-3 text-lg font-semibold mb-2">Faseopvolging</h2>
+          <h2 className="px-2 py-3 text-lg font-semibold mb-2">Demo Account</h2>
           <ul className="space-y-2 font-medium">
             <li>
               <NavLink to="/" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group">
