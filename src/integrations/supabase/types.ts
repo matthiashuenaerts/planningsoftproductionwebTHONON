@@ -702,25 +702,32 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          phase_name: string
+          limit_standard_task_id: string
           standard_task_id: string
           updated_at: string
         }
         Insert: {
           created_at?: string
           id?: string
-          phase_name: string
+          limit_standard_task_id: string
           standard_task_id: string
           updated_at?: string
         }
         Update: {
           created_at?: string
           id?: string
-          phase_name?: string
+          limit_standard_task_id?: string
           standard_task_id?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "standard_task_limit_phases_limit_standard_task_id_fkey"
+            columns: ["limit_standard_task_id"]
+            isOneToOne: false
+            referencedRelation: "standard_tasks"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "standard_task_limit_phases_standard_task_id_fkey"
             columns: ["standard_task_id"]
@@ -840,6 +847,7 @@ export type Database = {
           id: string
           phase_id: string
           priority: string
+          standard_task_id: string | null
           status: string
           status_changed_at: string | null
           title: string
@@ -856,6 +864,7 @@ export type Database = {
           id?: string
           phase_id: string
           priority: string
+          standard_task_id?: string | null
           status: string
           status_changed_at?: string | null
           title: string
@@ -872,6 +881,7 @@ export type Database = {
           id?: string
           phase_id?: string
           priority?: string
+          standard_task_id?: string | null
           status?: string
           status_changed_at?: string | null
           title?: string
@@ -898,6 +908,13 @@ export type Database = {
             columns: ["phase_id"]
             isOneToOne: false
             referencedRelation: "phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_standard_task_id_fkey"
+            columns: ["standard_task_id"]
+            isOneToOne: false
+            referencedRelation: "standard_tasks"
             referencedColumns: ["id"]
           },
         ]

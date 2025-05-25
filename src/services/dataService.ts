@@ -117,6 +117,7 @@ export const projectService = {
   },
   
   async delete(id: string): Promise<void> {
+    // ... keep existing code (delete implementation)
     try {
       // Get all phases for this project
       const { data: phases, error: phasesError } = await supabase
@@ -317,7 +318,7 @@ export const taskService = {
     const processedTasks = await Promise.all(
       (tasks || []).map(async (task) => {
         if (task.standard_task_id && task.status === 'TODO') {
-          const projectId = task.phases.project_id;
+          const projectId = (task as any).phases.project_id;
           const limitPhasesCompleted = await standardTasksService.checkLimitPhasesCompleted(
             task.standard_task_id, 
             projectId
@@ -331,7 +332,7 @@ export const taskService = {
         }
         
         // Remove the phases object from the returned task
-        const { phases, ...cleanTask } = task;
+        const { phases, ...cleanTask } = task as any;
         return cleanTask as Task;
       })
     );
@@ -391,7 +392,7 @@ export const taskService = {
             const task = item.tasks as any;
             
             if (task.standard_task_id && task.status === 'TODO') {
-              const projectId = task.phases.project_id;
+              const projectId = (task as any).phases.project_id;
               const limitPhasesCompleted = await standardTasksService.checkLimitPhasesCompleted(
                 task.standard_task_id, 
                 projectId
@@ -516,7 +517,7 @@ export const taskService = {
         if (currentTask.standard_task_id) {
           const limitPhasesCompleted = await standardTasksService.checkLimitPhasesCompleted(
             currentTask.standard_task_id,
-            currentTask.phases.project_id
+            (currentTask as any).phases.project_id
           );
           
           if (!limitPhasesCompleted) {
