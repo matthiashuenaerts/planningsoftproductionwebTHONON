@@ -158,7 +158,22 @@ const Dashboard: React.FC = () => {
 
   // Calculate statistics
   const totalProjects = projects.length;
-  const completedProjects = projects.filter(p => p.status === 'completed').length;
+ const projectTaskMap: Record<string, Task[]> = {};
+
+// Group tasks by project_id
+allTasks.forEach(task => {
+  if (!projectTaskMap[task.project_id]) {
+    projectTaskMap[task.project_id] = [];
+  }
+  projectTaskMap[task.project_id].push(task);
+});
+
+const completedProjects = projects.filter(project => {
+  const tasks = projectTaskMap[project.id] || [];
+  // Consider completed if there are tasks and all are marked COMPLETED
+  return tasks.length > 0 && tasks.every(task => task.status === 'COMPLETED');
+}).length;
+
   const inProgressProjects = projects.filter(p => p.status === 'in_progress').length;
   
   const overdueCount = todaysTasks.filter(task => 
