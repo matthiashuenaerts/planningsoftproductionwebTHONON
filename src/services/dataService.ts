@@ -531,6 +531,37 @@ export const taskService = {
         // Check if user info is available (ideally this would be the current user)
         console.warn('Setting task to IN_PROGRESS without specifying an assignee');
       }
+      
+      // If task is being completed, check if it affects other tasks' limit phases
+      if (task.status === 'COMPLETED') {
+        task.completed_at = new Date().toISOString();
+        
+        // Get the current task to find its project and standard_task_id
+        const { data: currentTask, error: fetchError } = await supabase
+          .from('tasks')
+          .select(`
+            *,
+            phases!inner(project_id)
+          `)
+          .eq('id', id)
+          .single();
+        
+        if (fetchError) throw fetchError;
+        
+        if (currentTask.standard_task_id) {
+          const projectId = (currentTask as any).phases.project_id;
+          
+          // After updating this task, check all HOLD tasks in the same project
+          // to see if any can be moved to TODO status
+          setTimeout(async () => {
+            try {
+              await this.checkAndUpdateHoldTasks(projectId);
+            } catch (error) {
+              console.error('Error checking hold tasks:', error);
+            }
+          }, 1000); // Small delay to ensure the task update is committed
+        }
+      }
     }
     
     const { data, error } = await supabase
@@ -542,6 +573,51 @@ export const taskService = {
     
     if (error) throw error;
     return data as Task;
+  },
+  
+  async checkAndUpdateHoldTasks(projectId: string): Promise<void> {
+    console.log(`Checking HOLD tasks for project ${projectId}`);
+    
+    // Get all HOLD tasks in the project that have standard_task_id
+    const { data: holdTasks, error } = await supabase
+      .from('tasks')
+      .select(`
+        id,
+        standard_task_id,
+        phases!inner(project_id)
+      `)
+      .eq('phases.project_id', projectId)
+      .eq('status', 'HOLD')
+      .not('standard_task_id', 'is', null);
+    
+    if (error) {
+      console.error('Error fetching HOLD tasks:', error);
+      return;
+    }
+    
+    if (!holdTasks || holdTasks.length === 0) {
+      console.log('No HOLD tasks found');
+      return;
+    }
+    
+    console.log(`Found ${holdTasks.length} HOLD tasks to check`);
+    
+    // Check each HOLD task to see if its limit phases are now completed
+    for (const holdTask of holdTasks) {
+      try {
+        const limitPhasesCompleted = await standardTasksService.checkLimitPhasesCompleted(
+          holdTask.standard_task_id!,
+          projectId
+        );
+        
+        if (limitPhasesCompleted) {
+          console.log(`Updating task ${holdTask.id} from HOLD to TODO`);
+          await this.update(holdTask.id, { status: 'TODO' });
+        }
+      } catch (error) {
+        console.error(`Error checking limit phases for task ${holdTask.id}:`, error);
+      }
+    }
   },
   
   async delete(id: string): Promise<void> {

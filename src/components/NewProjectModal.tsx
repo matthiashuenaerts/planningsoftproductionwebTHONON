@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -56,12 +55,6 @@ const formSchema = z.object({
 );
 
 type FormValues = z.infer<typeof formSchema>;
-
-interface NewProjectModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSuccess?: () => void;
-}
 
 interface TaskItem {
   id: string;
@@ -254,6 +247,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
       const daysPerTask = Math.max(1, Math.floor(totalDays / selectedTasks.length));
       
       // Create all tasks with proper timing and link to workstations
+      const createdTasks: Task[] = [];
       for (let index = 0; index < selectedTasks.length; index++) {
         const task = selectedTasks[index];
         const taskStartDate = new Date(data.start_date);
@@ -279,6 +273,20 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
         // Create task description with duration and workstation info
         const taskDescription = `Duration: ${task.duration || 60} minutes\n${task.workstation ? `Workstation: ${task.workstation}` : ''}`;
         
+        // Determine initial task status based on limit phases
+        let initialStatus: Task['status'] = 'TODO';
+        if (task.standard_task_id) {
+          // Check if this standard task has limit phases that aren't completed yet
+          const limitPhasesCompleted = await standardTasksService.checkLimitPhasesCompleted(
+            task.standard_task_id, 
+            newProject.id
+          );
+          
+          if (!limitPhasesCompleted) {
+            initialStatus = 'HOLD';
+          }
+        }
+        
         // Create the task
         const newTask = await taskService.create({
           phase_id: phase.id,
@@ -286,10 +294,13 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
           title: taskName,
           description: taskDescription,
           workstation: workstationType,
-          status: 'TODO',
+          status: initialStatus,
           priority: index < 5 ? 'High' : index < 15 ? 'Medium' : 'Low',
-          due_date: format(taskStartDate, 'yyyy-MM-dd')
+          due_date: format(taskStartDate, 'yyyy-MM-dd'),
+          standard_task_id: task.standard_task_id || null
         });
+        
+        createdTasks.push(newTask);
         
         // Link task to workstation if we can find a matching workstation
         const workstationId = findWorkstationIdByName(task.workstation);
