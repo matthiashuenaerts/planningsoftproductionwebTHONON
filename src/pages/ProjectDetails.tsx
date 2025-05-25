@@ -186,7 +186,7 @@ const ProjectDetails = () => {
   };
 
   // Group tasks by status
-  const todoTasks = tasks.filter(task => task.status === 'TODO');
+  const todoTasks = tasks.filter(task => task.status === 'TODO' || task.status === 'HOLD');
   const inProgressTasks = tasks.filter(task => task.status === 'IN_PROGRESS');
   const completedTasks = tasks.filter(task => task.status === 'COMPLETED');
 
