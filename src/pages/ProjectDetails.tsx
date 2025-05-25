@@ -281,7 +281,7 @@ const ProjectDetails = () => {
                 <CardContent>
                   <Tabs defaultValue="todo">
                     <TabsList className="mb-4">
-                      <TabsTrigger value="todo">To Do ({todoTasks.length})</TabsTrigger>
+                      <TabsTrigger value="todo">Open tasks ({todoTasks.length})</TabsTrigger>
                       <TabsTrigger value="in_progress">In Progress ({inProgressTasks.length})</TabsTrigger>
                       <TabsTrigger value="completed">Completed ({completedTasks.length})</TabsTrigger>
                     </TabsList>
