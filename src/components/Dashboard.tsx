@@ -110,7 +110,7 @@ const Dashboard: React.FC = () => {
         const completedTasks = allTasks
           .filter(task => task.status === 'COMPLETED' && task.completed_at)
           .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
-          .slice(0, 10);
+          .slice(0, 100);
           
         setRecentCompletedTasks(completedTasks);
         
