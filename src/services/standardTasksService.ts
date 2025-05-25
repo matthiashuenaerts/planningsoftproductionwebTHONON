@@ -19,12 +19,17 @@ export interface LimitPhase {
 
 export const standardTasksService = {
   async getAll(): Promise<StandardTask[]> {
+    console.log('Fetching all standard tasks...');
     const { data, error } = await supabase
       .from('standard_tasks')
       .select('*')
       .order('task_number', { ascending: true });
     
-    if (error) throw error;
+    if (error) {
+      console.error('Error fetching standard tasks:', error);
+      throw error;
+    }
+    console.log('Standard tasks fetched successfully:', data);
     return data as StandardTask[] || [];
   },
 
@@ -74,6 +79,7 @@ export const standardTasksService = {
   },
 
   async getLimitPhases(standardTaskId: string): Promise<LimitPhase[]> {
+    console.log(`Fetching limit phases for standard task: ${standardTaskId}`);
     const { data, error } = await supabase
       .from('standard_task_limit_phases')
       .select(`
@@ -81,21 +87,42 @@ export const standardTasksService = {
         limit_standard_task_id,
         standard_tasks!standard_task_limit_phases_limit_standard_task_id_fkey(task_number, task_name)
       `)
-      .eq('standard_task_id', standardTaskId)
-      .order('standard_tasks.task_number');
+      .eq('standard_task_id', standardTaskId);
     
-    if (error) throw error;
+    if (error) {
+      console.error('Error fetching limit phases:', error);
+      throw error;
+    }
+    
+    console.log('Raw limit phases data:', data);
     
     // Transform the data to match our LimitPhase interface
-    return (data || []).map(item => ({
+    const transformedData = (data || []).map(item => ({
       id: item.id,
       standard_task_id: item.limit_standard_task_id,
-      standard_task_number: item.standard_tasks?.task_number || '',
-      standard_task_name: item.standard_tasks?.task_name || ''
+      standard_task_number: (item.standard_tasks as any)?.task_number || '',
+      standard_task_name: (item.standard_tasks as any)?.task_name || ''
     }));
+    
+    console.log('Transformed limit phases:', transformedData);
+    return transformedData;
   },
 
   async addLimitPhase(standardTaskId: string, limitStandardTaskId: string): Promise<LimitPhase> {
+    console.log(`Adding limit phase: ${standardTaskId} -> ${limitStandardTaskId}`);
+    
+    // First check if this limit phase already exists
+    const { data: existing } = await supabase
+      .from('standard_task_limit_phases')
+      .select('id')
+      .eq('standard_task_id', standardTaskId)
+      .eq('limit_standard_task_id', limitStandardTaskId)
+      .maybeSingle();
+    
+    if (existing) {
+      throw new Error('This limit phase already exists');
+    }
+    
     const { data, error } = await supabase
       .from('standard_task_limit_phases')
       .insert({
@@ -109,13 +136,16 @@ export const standardTasksService = {
       `)
       .single();
     
-    if (error) throw error;
+    if (error) {
+      console.error('Error adding limit phase:', error);
+      throw error;
+    }
     
     return {
       id: data.id,
       standard_task_id: data.limit_standard_task_id,
-      standard_task_number: data.standard_tasks?.task_number || '',
-      standard_task_name: data.standard_tasks?.task_name || ''
+      standard_task_number: (data.standard_tasks as any)?.task_number || '',
+      standard_task_name: (data.standard_tasks as any)?.task_name || ''
     };
   },
 

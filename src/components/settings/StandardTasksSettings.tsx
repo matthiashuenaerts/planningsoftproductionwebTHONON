@@ -28,25 +28,34 @@ const StandardTasksSettings: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        console.log('Fetching standard tasks...');
         const tasks = await standardTasksService.getAll();
+        console.log('Standard tasks loaded:', tasks);
         setStandardTasks(tasks);
         
         // Fetch all standard tasks for limit phase selection
         const allTasks = await standardTasksService.getAllStandardTasksForLimitPhases();
+        console.log('All standard tasks for limit phases:', allTasks);
         setAllStandardTasks(allTasks);
         
         // Fetch limit phases for each standard task
         const limitPhasesData: Record<string, LimitPhase[]> = {};
         for (const task of tasks) {
-          const taskLimitPhases = await standardTasksService.getLimitPhases(task.id);
-          limitPhasesData[task.id] = taskLimitPhases;
+          try {
+            const taskLimitPhases = await standardTasksService.getLimitPhases(task.id);
+            console.log(`Limit phases for task ${task.task_number}:`, taskLimitPhases);
+            limitPhasesData[task.id] = taskLimitPhases;
+          } catch (error) {
+            console.error(`Error fetching limit phases for task ${task.id}:`, error);
+            limitPhasesData[task.id] = [];
+          }
         }
         setLimitPhases(limitPhasesData);
       } catch (error) {
         console.error('Error loading standard tasks:', error);
         toast({
           title: 'Error loading standard tasks',
-          description: 'Failed to load standard tasks. Please try again.',
+          description: `Failed to load standard tasks: ${error instanceof Error ? error.message : 'Unknown error'}`,
           variant: 'destructive'
         });
       } finally {
@@ -95,6 +104,7 @@ const StandardTasksSettings: React.FC = () => {
     try {
       if (isChecked) {
         // Add the limit phase
+        console.log(`Adding limit phase: task ${taskId} -> limit task ${limitStandardTaskId}`);
         const newLimitPhase = await standardTasksService.addLimitPhase(taskId, limitStandardTaskId);
         setLimitPhases(prev => ({
           ...prev,
@@ -109,6 +119,7 @@ const StandardTasksSettings: React.FC = () => {
         const currentLimitPhases = limitPhases[taskId] || [];
         const phaseToRemove = currentLimitPhases.find(phase => phase.standard_task_id === limitStandardTaskId);
         if (phaseToRemove) {
+          console.log(`Removing limit phase: ${phaseToRemove.id}`);
           await standardTasksService.removeLimitPhase(phaseToRemove.id);
           setLimitPhases(prev => ({
             ...prev,
@@ -124,7 +135,7 @@ const StandardTasksSettings: React.FC = () => {
       console.error('Error updating limit phase:', error);
       toast({
         title: 'Error',
-        description: 'Failed to update limit phase. Please try again.',
+        description: `Failed to update limit phase: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: 'destructive'
       });
     }
