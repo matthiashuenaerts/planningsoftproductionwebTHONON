@@ -81,8 +81,14 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="w-full max-w-md p-6">
+  <div className="flex items-center justify-center min-h-screen bg-gray-100">
+    <div className="w-full max-w-md p-6 flex flex-col items-center space-y-4">
+      {/* Add the image here */}
+      <img 
+        src="https://static.wixstatic.com/media/99c033_7c36758b8bdb474990f30ed2fec2807f~mv2.png/v1/fill/w_954,h_660,al_c,q_90,usm_0.66_1.00_0.01,enc_avif,quality_auto/99c033_7c36758b8bdb474990f30ed2fec2807f~mv2.png" 
+        alt="Login visual"
+        className="w-full max-w-sm rounded shadow-md"
+      />
         <Card>
           <CardHeader className="space-y-1 text-center">
             <CardTitle className="text-3xl font-bold">PlanningSoftProduction</CardTitle>
