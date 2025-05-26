@@ -59,9 +59,10 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
       
       console.log(`Loading tasks for workstation: ${actualWorkstationName}`);
       
-      // Load regular tasks using the name
+      // Load regular tasks using the name - only TODO tasks
       const regularTasks = await taskService.getByWorkstation(actualWorkstationName);
-      console.log(`Found ${regularTasks.length} regular tasks`);
+      const todoRegularTasks = regularTasks.filter(task => task.status === 'TODO');
+      console.log(`Found ${todoRegularTasks.length} regular TODO tasks`);
       
       // Load rush order tasks
       let workstationDbId = workstationId;
@@ -76,7 +77,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
         workstationDbId = workstationData.id;
       }
       
-      let matchedTasks = [...regularTasks];
+      let allTasks = [...todoRegularTasks];
       
       if (workstationDbId) {
         const rushOrders = await rushOrderService.getRushOrdersForWorkstation(workstationDbId);
@@ -117,6 +118,11 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
                     
                     const status = validateTaskStatus(task.status);
                     
+                    // Only include TODO tasks from rush orders
+                    if (status !== 'TODO') {
+                      return null;
+                    }
+                    
                     return {
                       ...task,
                       status,
@@ -133,16 +139,14 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
               );
               
               const validRushOrderTasks = tasksWithRushOrderInfo.filter(task => task !== null) as Task[];
-              matchedTasks = [...matchedTasks, ...validRushOrderTasks];
+              allTasks = [...allTasks, ...validRushOrderTasks];
             }
           }
         }
       }
       
-      // Filter to show only TODO tasks
-      const todoTasks = matchedTasks.filter(task => task.status === 'TODO');
-      console.log(`Total TODO tasks found: ${todoTasks.length}`);
-      setTasks(todoTasks);
+      console.log(`Total TODO tasks found: ${allTasks.length}`);
+      setTasks(allTasks);
     } catch (error) {
       console.error('Error loading tasks:', error);
       setError('Failed to load tasks');
@@ -165,11 +169,18 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
   const handleTaskUpdate = async (updatedTask: Task) => {
     try {
       await taskService.update(updatedTask.id, updatedTask);
-      setTasks(prevTasks => 
-        prevTasks.map(task => 
-          task.id === updatedTask.id ? updatedTask : task
-        )
-      );
+      
+      // If task status is no longer TODO, remove it from the list
+      if (updatedTask.status !== 'TODO') {
+        setTasks(prevTasks => prevTasks.filter(task => task.id !== updatedTask.id));
+      } else {
+        setTasks(prevTasks => 
+          prevTasks.map(task => 
+            task.id === updatedTask.id ? updatedTask : task
+          )
+        );
+      }
+      
       toast({
         title: 'Success',
         description: 'Task updated successfully',

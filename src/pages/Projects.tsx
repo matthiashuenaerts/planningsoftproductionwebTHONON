@@ -66,7 +66,7 @@ const Projects = () => {
           
           {showNewProjectModal && (
             <NewProjectModal
-              isOpen={showNewProjectModal}
+              open={showNewProjectModal}
               onClose={() => setShowNewProjectModal(false)}
               onProjectCreated={handleProjectCreated}
             />

@@ -145,14 +145,14 @@ const PersonalTasks = () => {
                         ...task,
                         project_name: projectData.name,
                         priority: task.priority as "Low" | "Medium" | "High" | "Urgent",
-                        status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED"
+                        status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD"
                       } as Task;
                     } catch (error) {
                       console.error('Error fetching project info for task:', error);
                       return {
                         ...task,
                         priority: task.priority as "Low" | "Medium" | "High" | "Urgent",
-                        status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED"
+                        status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD"
                       } as Task;
                     }
                   })
@@ -179,7 +179,7 @@ const PersonalTasks = () => {
                 .map(item => ({
                   ...item.tasks,
                   priority: item.tasks.priority as "Low" | "Medium" | "High" | "Urgent",
-                  status: item.tasks.status as "TODO" | "IN_PROGRESS" | "COMPLETED"
+                  status: item.tasks.status as "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD"
                 })) as Task[];
                 
               // Filter for tasks assigned to current user or unassigned
@@ -250,28 +250,8 @@ const PersonalTasks = () => {
         
       if (error) throw error;
       
-      // Remove task from list if it's no longer TODO
-      if (status !== 'TODO') {
-        setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
-      } else {
-        // Update local state
-        setTasks(prevTasks => 
-          prevTasks.map(task => 
-            task.id === taskId ? { 
-              ...task, 
-              status, 
-              status_changed_at: updateData.status_changed_at,
-              ...(status === 'IN_PROGRESS' ? {
-                assignee_id: currentEmployee?.id
-              } : {}),
-              ...(status === 'COMPLETED' ? {
-                completed_at: updateData.completed_at,
-                completed_by: currentEmployee.id
-              } : {})
-            } : task
-          )
-        );
-      }
+      // Remove task from list since we only show TODO tasks
+      setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
       
       toast({
         title: "Task Updated",
