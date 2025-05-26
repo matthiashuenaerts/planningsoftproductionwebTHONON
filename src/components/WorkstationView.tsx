@@ -5,6 +5,7 @@ import TaskList from './TaskList';
 import { Task } from '@/services/dataService';
 import { taskService } from '@/services/dataService';
 import { rushOrderService } from '@/services/rushOrderService';
+import { workstationService } from '@/services/workstationService';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
@@ -20,26 +21,55 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actualWorkstationName, setActualWorkstationName] = useState<string>('');
   const { toast } = useToast();
 
-  // Use workstationName if provided, otherwise get it from workstationId
-  const displayName = workstationName || 'Workstation';
+  // First, resolve the workstation name if we only have the ID
+  useEffect(() => {
+    const resolveWorkstationName = async () => {
+      if (workstationName) {
+        setActualWorkstationName(workstationName);
+        return;
+      }
+      
+      if (workstationId) {
+        try {
+          const workstation = await workstationService.getById(workstationId);
+          if (workstation) {
+            setActualWorkstationName(workstation.name);
+          } else {
+            setError('Workstation not found');
+          }
+        } catch (error) {
+          console.error('Error fetching workstation:', error);
+          setError('Failed to load workstation details');
+        }
+      }
+    };
+    
+    resolveWorkstationName();
+  }, [workstationName, workstationId]);
 
   const loadTasks = async () => {
+    if (!actualWorkstationName) return;
+    
     try {
       setLoading(true);
       setError(null);
       
+      console.log(`Loading tasks for workstation: ${actualWorkstationName}`);
+      
       // Load regular tasks using the name
-      const regularTasks = await taskService.getByWorkstation(displayName);
+      const regularTasks = await taskService.getByWorkstation(actualWorkstationName);
+      console.log(`Found ${regularTasks.length} regular tasks`);
       
       // Load rush order tasks
       let workstationDbId = workstationId;
-      if (!workstationDbId && workstationName) {
+      if (!workstationDbId && actualWorkstationName) {
         const { data: workstationData, error: workstationError } = await supabase
           .from('workstations')
           .select('id')
-          .eq('name', workstationName)
+          .eq('name', actualWorkstationName)
           .single();
         
         if (workstationError) throw workstationError;
@@ -50,6 +80,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
       
       if (workstationDbId) {
         const rushOrders = await rushOrderService.getRushOrdersForWorkstation(workstationDbId);
+        console.log(`Found ${rushOrders.length} rush orders for workstation`);
         
         // Process rush order tasks
         if (rushOrders.length > 0) {
@@ -108,12 +139,9 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
         }
       }
       
-      // Filter to show only TODO tasks and rush order tasks
-      const filteredTasks = matchedTasks.filter(task => 
-        task.status === 'TODO' || task.is_rush_order
-      );
-      
-      setTasks(filteredTasks);
+      // Show all tasks without status filtering - just like before
+      console.log(`Total tasks found: ${matchedTasks.length}`);
+      setTasks(matchedTasks);
     } catch (error) {
       console.error('Error loading tasks:', error);
       setError('Failed to load tasks');
@@ -128,8 +156,10 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
   };
 
   useEffect(() => {
-    loadTasks();
-  }, [workstationName, workstationId]);
+    if (actualWorkstationName) {
+      loadTasks();
+    }
+  }, [actualWorkstationName]);
 
   const handleTaskUpdate = async (updatedTask: Task) => {
     try {
@@ -172,7 +202,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">{displayName} Workstation</h1>
+        <h1 className="text-2xl font-bold">{actualWorkstationName} Workstation</h1>
         <div className="flex gap-2">
           {onBack && (
             <button onClick={onBack} className="text-blue-600 hover:underline">
@@ -189,7 +219,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5" />
-            Tasks & Rush Orders
+            All Tasks & Rush Orders
           </CardTitle>
         </CardHeader>
         <CardContent>
