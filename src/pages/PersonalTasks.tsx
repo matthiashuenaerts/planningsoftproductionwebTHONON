@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import { useAuth } from '@/context/AuthContext';
@@ -9,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { workstationService } from '@/services/workstationService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Workstation } from '@/services/workstationService';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const PersonalTasks = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -16,6 +16,7 @@ const PersonalTasks = () => {
   const [userWorkstations, setUserWorkstations] = useState<Workstation[]>([]);
   const { currentEmployee } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const fetchUserWorkstations = async () => {
@@ -286,10 +287,13 @@ const PersonalTasks = () => {
 
   return (
     <div className="flex min-h-screen">
-      <div className="w-64 bg-sidebar fixed top-0 bottom-0">
-        <Navbar />
-      </div>
-      <div className="ml-64 w-full p-6">
+      {!isMobile && (
+        <div className="w-64 bg-sidebar fixed top-0 bottom-0">
+          <Navbar />
+        </div>
+      )}
+      {isMobile && <Navbar />}
+      <div className={`${isMobile ? 'pt-16' : 'ml-64'} w-full p-6`}>
         <div className="max-w-7xl mx-auto">
           <div className="mb-6">
             <h1 className="text-2xl font-bold">Personal Tasks</h1>

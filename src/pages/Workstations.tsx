@@ -6,6 +6,7 @@ import WorkstationView from '@/components/WorkstationView';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { workstationService } from '@/services/workstationService';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { 
   ArrowLeft, 
   Package, 
@@ -33,6 +34,7 @@ const Workstations: React.FC = () => {
   const [workstations, setWorkstations] = useState<WorkstationWithIcon[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const loadWorkstations = async () => {
@@ -82,10 +84,13 @@ const Workstations: React.FC = () => {
   if (loading) {
     return (
       <div className="flex min-h-screen">
-        <div className="w-64 bg-sidebar fixed top-0 bottom-0">
-          <Navbar />
-        </div>
-        <div className="ml-64 w-full p-6 flex justify-center items-center">
+        {!isMobile && (
+          <div className="w-64 bg-sidebar fixed top-0 bottom-0">
+            <Navbar />
+          </div>
+        )}
+        {isMobile && <Navbar />}
+        <div className={`${isMobile ? '' : 'ml-64'} w-full p-6 flex justify-center items-center`}>
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
         </div>
       </div>
@@ -94,10 +99,13 @@ const Workstations: React.FC = () => {
 
   return (
     <div className="flex min-h-screen">
-      <div className="w-64 bg-sidebar fixed top-0 bottom-0">
-        <Navbar />
-      </div>
-      <div className="ml-64 w-full p-6">
+      {!isMobile && (
+        <div className="w-64 bg-sidebar fixed top-0 bottom-0">
+          <Navbar />
+        </div>
+      )}
+      {isMobile && <Navbar />}
+      <div className={`${isMobile ? 'pt-16' : 'ml-64'} w-full p-6`}>
         <div className="max-w-7xl mx-auto">
           {selectedWorkstation ? (
             <div>

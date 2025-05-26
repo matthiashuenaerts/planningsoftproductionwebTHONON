@@ -1,22 +1,26 @@
 
 import React, { useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Home, ListChecks, LayoutDashboard, Settings, Users, PackagePlus, Truck, LogOut, User, AlertTriangle } from 'lucide-react';
+import { Home, ListChecks, LayoutDashboard, Settings, Users, PackagePlus, Truck, LogOut, User, AlertTriangle, Menu } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { rushOrderService } from '@/services/rushOrderService';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { useIsMobile } from '@/hooks/use-mobile';
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerTrigger,
+} from '@/components/ui/drawer';
 
-const Navbar = () => {
+const NavbarContent = ({ onItemClick }: { onItemClick?: () => void }) => {
   const { currentEmployee, logout } = useAuth();
   
   // Allow admin, manager, installation_team, and worker roles to see the Rush Orders menu
   const canSeeRushOrders = currentEmployee && 
     ['admin', 'manager', 'installation_team', 'worker'].includes(currentEmployee.role);
-  
-  // Only admin, manager, and installation_team can add new rush orders
-  const canCreateRushOrder = currentEmployee && 
-    ['admin', 'manager', 'installation_team'].includes(currentEmployee.role);
   
   // Query rush orders to get counts for pending orders and unread messages
   const { data: rushOrders, isLoading } = useQuery({
@@ -33,52 +37,58 @@ const Navbar = () => {
   const totalUnreadMessages = rushOrders?.reduce((total, order) => {
     return total + (order.unread_messages_count || 0);
   }, 0) || 0;
-  
+
+  const handleItemClick = () => {
+    if (onItemClick) {
+      onItemClick();
+    }
+  };
+
   return (
-    <div className="h-full px-3 py-4 overflow-y-auto bg-sky-800 text-white">
+    <div className="h-full px-3 py-4 overflow-y-auto bg-sky-800 text-white flex flex-col">
       <div className="flex flex-col h-full justify-between">
         <div>
           <h2 className="px-2 py-3 text-lg font-semibold mb-2">Demo Account</h2>
           <ul className="space-y-2 font-medium">
             <li>
-              <NavLink to="/" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group">
+              <NavLink to="/" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group" onClick={handleItemClick}>
                 <Home className="w-5 h-5 text-white group-hover:text-white" />
                 <span className="ml-3">Dashboard</span>
               </NavLink>
             </li>
             <li>
-              <NavLink to="/projects" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group">
+              <NavLink to="/projects" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group" onClick={handleItemClick}>
                 <LayoutDashboard className="w-5 h-5 text-white group-hover:text-white" />
                 <span className="ml-3">Projects</span>
               </NavLink>
             </li>
             <li>
-              <NavLink to="/workstations" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group">
+              <NavLink to="/workstations" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group" onClick={handleItemClick}>
                 <Truck className="w-5 h-5 text-white group-hover:text-white" />
                 <span className="ml-3">Workstations</span>
               </NavLink>
             </li>
             <li>
-              <NavLink to="/broken-parts" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group">
+              <NavLink to="/broken-parts" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group" onClick={handleItemClick}>
                 <AlertTriangle className="w-5 h-5 text-white group-hover:text-white" />
                 <span className="ml-3">Broken Parts</span>
               </NavLink>
             </li>
             <li>
-              <NavLink to="/personal-tasks" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group">
+              <NavLink to="/personal-tasks" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group" onClick={handleItemClick}>
                 <ListChecks className="w-5 h-5 text-white group-hover:text-white" />
                 <span className="ml-3">Personal Tasks</span>
               </NavLink>
             </li>
             <li>
-              <NavLink to="/daily-tasks" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group">
+              <NavLink to="/daily-tasks" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group" onClick={handleItemClick}>
                 <ListChecks className="w-5 h-5 text-white group-hover:text-white" />
                 <span className="ml-3">Daily Tasks</span>
               </NavLink>
             </li>
             {currentEmployee && ['admin', 'manager', 'installation_team'].includes(currentEmployee.role) && (
               <li>
-                <NavLink to="/planning" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group">
+                <NavLink to="/planning" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group" onClick={handleItemClick}>
                   <Users className="w-5 h-5 text-white group-hover:text-white" />
                   <span className="ml-3">Planning</span>
                 </NavLink>
@@ -86,7 +96,7 @@ const Navbar = () => {
             )}
             {currentEmployee && ['admin', 'manager', 'installation_team'].includes(currentEmployee.role) && (
               <li>
-                <NavLink to="/orders" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group">
+                <NavLink to="/orders" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group" onClick={handleItemClick}>
                   <PackagePlus className="w-5 h-5 text-white group-hover:text-white" />
                   <span className="ml-3">Orders</span>
                 </NavLink>
@@ -94,7 +104,7 @@ const Navbar = () => {
             )}
             {canSeeRushOrders && (
               <li>
-                <NavLink to="/rush-orders" className="flex items-center justify-between p-2 rounded-lg hover:bg-sky-700 group">
+                <NavLink to="/rush-orders" className="flex items-center justify-between p-2 rounded-lg hover:bg-sky-700 group" onClick={handleItemClick}>
                   <div className="flex items-center">
                     <PackagePlus className="w-5 h-5 text-white group-hover:text-white" />
                     <span className="ml-3">Rush Orders</span>
@@ -115,7 +125,7 @@ const Navbar = () => {
               </li>
             )}
             <li>
-              <NavLink to="/settings" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group">
+              <NavLink to="/settings" className="flex items-center p-2 rounded-lg hover:bg-sky-700 group" onClick={handleItemClick}>
                 <Settings className="w-5 h-5 text-white group-hover:text-white" />
                 <span className="ml-3">Settings</span>
               </NavLink>
@@ -132,7 +142,10 @@ const Navbar = () => {
             </div>
           )}
           <button 
-            onClick={logout} 
+            onClick={() => {
+              logout();
+              handleItemClick();
+            }}
             className="flex w-full items-center p-2 rounded-lg hover:bg-sky-700 group text-white"
           >
             <LogOut className="w-5 h-5 text-white" />
@@ -140,6 +153,39 @@ const Navbar = () => {
           </button>
         </div>
       </div>
+    </div>
+  );
+};
+
+const Navbar = () => {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <Drawer direction="left">
+        <DrawerTrigger asChild>
+          <Button 
+            variant="outline" 
+            size="icon"
+            className="fixed top-4 left-4 z-50 bg-sky-800 border-sky-600 text-white hover:bg-sky-700"
+          >
+            <Menu className="h-4 w-4" />
+          </Button>
+        </DrawerTrigger>
+        <DrawerContent className="h-full w-64 mt-0 rounded-none">
+          <DrawerClose asChild>
+            <div className="h-full">
+              <NavbarContent onItemClick={() => {}} />
+            </div>
+          </DrawerClose>
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  return (
+    <div className="w-64 bg-sidebar fixed top-0 bottom-0">
+      <NavbarContent />
     </div>
   );
 };
