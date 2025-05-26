@@ -139,9 +139,10 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
         }
       }
       
-      // Show all tasks without status filtering - just like before
-      console.log(`Total tasks found: ${matchedTasks.length}`);
-      setTasks(matchedTasks);
+      // Filter to show only TODO tasks
+      const todoTasks = matchedTasks.filter(task => task.status === 'TODO');
+      console.log(`Total TODO tasks found: ${todoTasks.length}`);
+      setTasks(todoTasks);
     } catch (error) {
       console.error('Error loading tasks:', error);
       setError('Failed to load tasks');
@@ -210,7 +211,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
             </button>
           )}
           <Badge variant="outline" className="text-lg px-3 py-1">
-            {tasks.length} Tasks
+            {tasks.length} TODO Tasks
           </Badge>
         </div>
       </div>
@@ -219,7 +220,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5" />
-            All Tasks & Rush Orders
+            TODO Tasks & Rush Orders
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -230,7 +231,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
               showRushOrderBadge={true}
             />
           ) : (
-            <p className="text-gray-500 text-center py-4">No tasks available</p>
+            <p className="text-gray-500 text-center py-4">No TODO tasks available</p>
           )}
         </CardContent>
       </Card>

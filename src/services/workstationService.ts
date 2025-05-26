@@ -52,10 +52,10 @@ export const workstationService = {
     return data;
   },
 
-  async create(name: string, description?: string): Promise<Workstation> {
+  async create(workstation: { name: string; description?: string }): Promise<Workstation> {
     const { data, error } = await supabase
       .from('workstations')
-      .insert({ name, description })
+      .insert({ name: workstation.name, description: workstation.description })
       .select()
       .single();
     
@@ -111,5 +111,58 @@ export const workstationService = {
     }
     
     return data?.map(item => item.workstations).filter(Boolean) as Workstation[] || [];
+  },
+
+  async getWorkstationsForStandardTask(standardTaskId: string): Promise<Workstation[]> {
+    const { data, error } = await supabase
+      .from('standard_task_workstation_links')
+      .select(`
+        workstations (
+          id,
+          name,
+          description,
+          created_at,
+          updated_at
+        )
+      `)
+      .eq('standard_task_id', standardTaskId);
+    
+    if (error) {
+      throw new Error(`Failed to fetch workstations for standard task: ${error.message}`);
+    }
+    
+    return data?.map(item => item.workstations).filter(Boolean) as Workstation[] || [];
+  },
+
+  async linkTaskToWorkstation(taskId: string, workstationId: string): Promise<void> {
+    const { error } = await supabase
+      .from('task_workstation_links')
+      .insert({ task_id: taskId, workstation_id: workstationId });
+    
+    if (error) {
+      throw new Error(`Failed to link task to workstation: ${error.message}`);
+    }
+  },
+
+  async linkEmployeeToWorkstation(employeeId: string, workstationId: string): Promise<void> {
+    const { error } = await supabase
+      .from('employee_workstation_links')
+      .insert({ employee_id: employeeId, workstation_id: workstationId });
+    
+    if (error) {
+      throw new Error(`Failed to link employee to workstation: ${error.message}`);
+    }
+  },
+
+  async unlinkEmployeeFromWorkstation(employeeId: string, workstationId: string): Promise<void> {
+    const { error } = await supabase
+      .from('employee_workstation_links')
+      .delete()
+      .eq('employee_id', employeeId)
+      .eq('workstation_id', workstationId);
+    
+    if (error) {
+      throw new Error(`Failed to unlink employee from workstation: ${error.message}`);
+    }
   }
 };

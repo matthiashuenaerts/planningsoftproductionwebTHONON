@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import { useAuth } from '@/context/AuthContext';
@@ -42,7 +43,7 @@ const PersonalTasks = () => {
             
           if (employeeData?.workstation) {
             // Try to find the workstation by name
-            const { data: workstationByName } = await workstationService.getByName(employeeData.workstation);
+            const workstationByName = await workstationService.getByName(employeeData.workstation);
             if (workstationByName) {
               setUserWorkstations([workstationByName]);
             }
@@ -99,11 +100,11 @@ const PersonalTasks = () => {
               const taskNumber = standardTask.task_number;
               const taskName = standardTask.task_name;
               
-              // Find tasks that match this standard task
+              // Find tasks that match this standard task and are TODO
               const { data: matchingTasks, error: tasksError } = await supabase
                 .from('tasks')
                 .select('*')
-                .not('status', 'eq', 'COMPLETED')
+                .eq('status', 'TODO')
                 .or(`title.ilike.%${taskNumber}%,title.ilike.%${taskName}%`);
                 
               if (tasksError) {
@@ -174,7 +175,7 @@ const PersonalTasks = () => {
             
             if (workstationTasks.data && workstationTasks.data.length > 0) {
               const filteredTasks = workstationTasks.data
-                .filter(item => item.tasks && item.tasks.status !== 'COMPLETED')
+                .filter(item => item.tasks && item.tasks.status === 'TODO')
                 .map(item => ({
                   ...item.tasks,
                   priority: item.tasks.priority as "Low" | "Medium" | "High" | "Urgent",
@@ -249,23 +250,28 @@ const PersonalTasks = () => {
         
       if (error) throw error;
       
-      // Update local state
-      setTasks(prevTasks => 
-        prevTasks.map(task => 
-          task.id === taskId ? { 
-            ...task, 
-            status, 
-            status_changed_at: updateData.status_changed_at,
-            ...(status === 'IN_PROGRESS' ? {
-              assignee_id: currentEmployee?.id
-            } : {}),
-            ...(status === 'COMPLETED' ? {
-              completed_at: updateData.completed_at,
-              completed_by: currentEmployee.id
-            } : {})
-          } : task
-        )
-      );
+      // Remove task from list if it's no longer TODO
+      if (status !== 'TODO') {
+        setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
+      } else {
+        // Update local state
+        setTasks(prevTasks => 
+          prevTasks.map(task => 
+            task.id === taskId ? { 
+              ...task, 
+              status, 
+              status_changed_at: updateData.status_changed_at,
+              ...(status === 'IN_PROGRESS' ? {
+                assignee_id: currentEmployee?.id
+              } : {}),
+              ...(status === 'COMPLETED' ? {
+                completed_at: updateData.completed_at,
+                completed_by: currentEmployee.id
+              } : {})
+            } : task
+          )
+        );
+      }
       
       toast({
         title: "Task Updated",
@@ -281,10 +287,6 @@ const PersonalTasks = () => {
     }
   };
 
-  const getTasksByStatus = (status: Task['status']) => {
-    return tasks.filter(task => task.status === status);
-  };
-
   return (
     <div className="flex min-h-screen">
       {!isMobile && (
@@ -298,7 +300,7 @@ const PersonalTasks = () => {
           <div className="mb-6">
             <h1 className="text-2xl font-bold">Personal Tasks</h1>
             <p className="text-gray-500">
-              Tasks assigned to you at your workstations
+              TODO tasks assigned to you at your workstations
             </p>
           </div>
           
@@ -318,30 +320,18 @@ const PersonalTasks = () => {
           ) : tasks.length === 0 ? (
             <Card>
               <CardHeader>
-                <CardTitle>No Tasks</CardTitle>
+                <CardTitle>No TODO Tasks</CardTitle>
               </CardHeader>
               <CardContent>
-                <p>There are no pending tasks assigned to your workstations or to you directly.</p>
+                <p>There are no pending TODO tasks assigned to your workstations or to you directly.</p>
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-8">
-              <TaskList 
-                tasks={getTasksByStatus('TODO')} 
-                title="To Do" 
-                onTaskStatusChange={handleTaskStatusChange}
-              />
-              <TaskList 
-                tasks={getTasksByStatus('IN_PROGRESS')} 
-                title="In Progress" 
-                onTaskStatusChange={handleTaskStatusChange}
-              />
-              <TaskList 
-                tasks={getTasksByStatus('COMPLETED')} 
-                title="Completed" 
-                onTaskStatusChange={handleTaskStatusChange}
-              />
-            </div>
+            <TaskList 
+              tasks={tasks} 
+              title="TODO Tasks" 
+              onTaskStatusChange={handleTaskStatusChange}
+            />
           )}
         </div>
       </div>
