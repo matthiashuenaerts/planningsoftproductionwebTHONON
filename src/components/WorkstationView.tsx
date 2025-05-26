@@ -2,192 +2,276 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import TaskList from './TaskList';
-import { taskService, Task } from '@/services/dataService';
+import { Task } from '@/services/dataService';
+import { taskService } from '@/services/dataService';
+import { rushOrderService } from '@/services/rushOrderService';
+import { workstationService } from '@/services/workstationService';
+import { supabase } from '@/integrations/supabase/client';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Package, LayoutGrid, Warehouse, Wrench, Scissors, Layers, Check, Monitor, Truck, Flag } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Clock, PlayCircle } from 'lucide-react';
 
 interface WorkstationViewProps {
-  workstationId: string;
-  onBack?: () => void; // Make onBack optional
+  workstationName?: string;
+  workstationId?: string;
+  onBack?: () => void;
 }
 
-const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack }) => {
-  const [workstation, setWorkstation] = useState<string>("");
+const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, workstationId, onBack }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actualWorkstationName, setActualWorkstationName] = useState<string>('');
   const { toast } = useToast();
 
+  // First, resolve the workstation name if we only have the ID
   useEffect(() => {
-    const fetchWorkstationData = async () => {
-      try {
-        setLoading(true);
-        
-        // First fetch the workstation name
+    const resolveWorkstationName = async () => {
+      if (workstationName) {
+        setActualWorkstationName(workstationName);
+        return;
+      }
+      
+      if (workstationId) {
+        try {
+          const workstation = await workstationService.getById(workstationId);
+          if (workstation) {
+            setActualWorkstationName(workstation.name);
+          } else {
+            setError('Workstation not found');
+          }
+        } catch (error) {
+          console.error('Error fetching workstation:', error);
+          setError('Failed to load workstation details');
+        }
+      }
+    };
+    
+    resolveWorkstationName();
+  }, [workstationName, workstationId]);
+
+  const loadTasks = async () => {
+    if (!actualWorkstationName) return;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log(`Loading tasks for workstation: ${actualWorkstationName}`);
+      
+      // Load regular tasks using the name - only TODO and IN_PROGRESS tasks
+      const regularTasks = await taskService.getByWorkstation(actualWorkstationName);
+      const activeTasks = regularTasks.filter(task => task.status === 'TODO' || task.status === 'IN_PROGRESS');
+      console.log(`Found ${activeTasks.length} active regular tasks`);
+      
+      // Load rush order tasks
+      let workstationDbId = workstationId;
+      if (!workstationDbId && actualWorkstationName) {
         const { data: workstationData, error: workstationError } = await supabase
           .from('workstations')
-          .select('name')
-          .eq('id', workstationId)
+          .select('id')
+          .eq('name', actualWorkstationName)
           .single();
         
         if (workstationError) throw workstationError;
-        setWorkstation(workstationData?.name || "");
-        
-        // Fetch tasks directly using workstation ID
-        const workstationTasks = await taskService.getByWorkstationId(workstationId);
-        
-        // Filter out completed tasks
-        const incompleteTasks = workstationTasks.filter(
-          task => task.status !== 'COMPLETED'
-        );
-        
-        setTasks(incompleteTasks);
-      } catch (error: any) {
-        console.error('Error fetching workstation data:', error);
-        toast({
-          title: "Error",
-          description: `Failed to load workstation tasks: ${error.message}`,
-          variant: "destructive"
-        });
-        // Setting empty tasks to prevent UI errors
-        setTasks([]);
-      } finally {
-        setLoading(false);
+        workstationDbId = workstationData.id;
       }
-    };
-
-    fetchWorkstationData();
-  }, [workstationId, toast]);
-
-  // Function to handle completing a task
-  const handleCompleteTask = async (taskId: string) => {
-    try {
-      await taskService.update(taskId, { status: 'COMPLETED' });
       
-      // Update local state to remove the completed task
-      setTasks(tasks.filter(task => task.id !== taskId));
+      let allTasks = [...activeTasks];
       
+      if (workstationDbId) {
+        const rushOrders = await rushOrderService.getRushOrdersForWorkstation(workstationDbId);
+        console.log(`Found ${rushOrders.length} rush orders for workstation`);
+        
+        // Process rush order tasks
+        if (rushOrders.length > 0) {
+          for (const rushOrder of rushOrders) {
+            if (rushOrder.tasks && rushOrder.tasks.length > 0) {
+              const tasksWithRushOrderInfo = await Promise.all(
+                rushOrder.tasks.map(async (taskLink: any) => {
+                  try {
+                    const { data: task, error: taskError } = await supabase
+                      .from('tasks')
+                      .select('*')
+                      .eq('id', taskLink.standard_task_id)
+                      .single();
+                    
+                    if (taskError) throw taskError;
+                    
+                    const { data: rushOrderInfo, error: rushOrderError } = await supabase
+                      .from('rush_orders')
+                      .select('title')
+                      .eq('id', taskLink.rush_order_id)
+                      .neq('status', 'completed')
+                      .single();
+                    
+                    if (rushOrderError) {
+                      return null;
+                    }
+                    
+                    const validateTaskStatus = (status: string): "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD" => {
+                      if (['TODO', 'IN_PROGRESS', 'COMPLETED', 'HOLD'].includes(status)) {
+                        return status as "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD";
+                      }
+                      return 'TODO';
+                    };
+                    
+                    const status = validateTaskStatus(task.status);
+                    
+                    // Only include TODO and IN_PROGRESS tasks from rush orders
+                    if (status !== 'TODO' && status !== 'IN_PROGRESS') {
+                      return null;
+                    }
+                    
+                    return {
+                      ...task,
+                      status,
+                      is_rush_order: true,
+                      rush_order_id: taskLink.rush_order_id,
+                      title: `${rushOrderInfo.title} - ${task.title}`,
+                      project_name: rushOrderInfo.title
+                    } as Task;
+                  } catch (error) {
+                    console.error('Error processing rush order task:', error);
+                    return null;
+                  }
+                })
+              );
+              
+              const validRushOrderTasks = tasksWithRushOrderInfo.filter(task => task !== null) as Task[];
+              allTasks = [...allTasks, ...validRushOrderTasks];
+            }
+          }
+        }
+      }
+      
+      console.log(`Total active tasks found: ${allTasks.length}`);
+      setTasks(allTasks);
+    } catch (error) {
+      console.error('Error loading tasks:', error);
+      setError('Failed to load tasks');
       toast({
-        title: "Task completed",
-        description: "Task has been marked as completed."
+        title: 'Error',
+        description: 'Failed to load tasks for this workstation',
+        variant: 'destructive'
       });
-    } catch (error: any) {
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (actualWorkstationName) {
+      loadTasks();
+    }
+  }, [actualWorkstationName]);
+
+  const handleTaskUpdate = async (updatedTask: Task) => {
+    try {
+      await taskService.update(updatedTask.id, updatedTask);
+      
+      // If task status is no longer active, remove it from the list
+      if (updatedTask.status !== 'TODO' && updatedTask.status !== 'IN_PROGRESS') {
+        setTasks(prevTasks => prevTasks.filter(task => task.id !== updatedTask.id));
+      } else {
+        setTasks(prevTasks => 
+          prevTasks.map(task => 
+            task.id === updatedTask.id ? updatedTask : task
+          )
+        );
+      }
+      
       toast({
-        title: "Error",
-        description: `Failed to complete task: ${error.message}`,
-        variant: "destructive"
+        title: 'Success',
+        description: 'Task updated successfully',
+      });
+    } catch (error) {
+      console.error('Error updating task:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update task',
+        variant: 'destructive'
       });
     }
   };
 
-  const getWorkstationIcon = (name: string) => {
-    // Return appropriate icon based on workstation name
-    const lowerCaseName = name.toLowerCase();
-    if (lowerCaseName.includes('productievoor')) return <Package size={24} />;
-    if (lowerCaseName.includes('productiestur')) return <LayoutGrid size={24} />;
-    if (lowerCaseName.includes('stock') || lowerCaseName.includes('logistiek')) return <Warehouse size={24} />;
-    if (lowerCaseName.includes('opdeelzaag 1')) return <Wrench size={24} />;
-    if (lowerCaseName.includes('opdeelzaag 2')) return <Scissors size={24} />;
-    if (lowerCaseName.includes('afplakken')) return <Layers size={24} />;
-    if (lowerCaseName.includes('cnc')) return <Wrench size={24} />;
-    if (lowerCaseName.includes('controle/opkuis')) return <Check size={24} />;
-    if (lowerCaseName.includes('montage')) return <Layers size={24} />;
-    if (lowerCaseName.includes('afwerking')) return <Wrench size={24} />;
-    if (lowerCaseName.includes('controle e+s')) return <Monitor size={24} />;
-    if (lowerCaseName.includes('eindcontrole')) return <Check size={24} />;
-    if (lowerCaseName.includes('bufferzone')) return <Warehouse size={24} />;
-    if (lowerCaseName.includes('laden') || lowerCaseName.includes('vrachtwagen')) return <Truck size={24} />;
-    if (lowerCaseName.includes('plaatsen')) return <Package size={24} />;
-    if (lowerCaseName.includes('afsluiten')) return <Flag size={24} />;
-    
-    // Default icon
-    return <Wrench size={24} />;
-  };
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
 
-  const getWorkstationColor = (name: string): string => {
-    // Create a consistent color mapping based on the workstation name
-    const colorClasses = [
-      'bg-blue-500',
-      'bg-green-500',
-      'bg-amber-500',
-      'bg-red-500',
-      'bg-purple-500',
-      'bg-pink-500',
-      'bg-indigo-500',
-      'bg-teal-500',
-    ];
-    
-    // Simple hash function to pick a consistent color for each workstation name
-    const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    return colorClasses[hash % colorClasses.length];
-  };
+  if (error) {
+    return (
+      <div className="text-center text-red-500 p-4">
+        <p>{error}</p>
+      </div>
+    );
+  }
+
+  const todoTasks = tasks.filter(task => task.status === 'TODO');
+  const inProgressTasks = tasks.filter(task => task.status === 'IN_PROGRESS');
 
   return (
-    <Card className="h-full">
-      <CardHeader className="pb-2">
-        <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-full ${getWorkstationColor(workstation)}`}>
-            {getWorkstationIcon(workstation)}
-          </div>
-          <CardTitle>{workstation}</CardTitle>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">{actualWorkstationName} Workstation</h1>
+        <div className="flex gap-2">
+          {onBack && (
+            <button onClick={onBack} className="text-blue-600 hover:underline">
+              ← Back
+            </button>
+          )}
+          <Badge variant="outline" className="text-lg px-3 py-1">
+            {tasks.length} Active Tasks
+          </Badge>
         </div>
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <div className="flex justify-center p-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-          </div>
-        ) : (
-          <>
-            {tasks.length === 0 ? (
-              <div className="text-center p-8">
-                <Check className="mx-auto h-12 w-12 text-green-500 mb-4" />
-                <h3 className="text-lg font-medium mb-2">All caught up!</h3>
-                <p className="text-muted-foreground">No pending tasks for this workstation.</p>
-              </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              TODO Tasks ({todoTasks.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {todoTasks.length > 0 ? (
+              <TaskList 
+                tasks={todoTasks} 
+                onTaskUpdate={handleTaskUpdate}
+                showRushOrderBadge={true}
+              />
             ) : (
-              <div className="space-y-4 mt-2">
-                {tasks.map((task) => (
-                  <Card key={task.id} className="overflow-hidden">
-                    <div className="border-l-4 border-l-blue-500 p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="font-medium text-lg">{task.title}</h4>
-                        <div className="flex items-center gap-2">
-                          <div className={`px-2 py-1 rounded text-xs font-medium ${
-                            task.priority === 'High' || task.priority === 'Urgent' 
-                              ? 'bg-red-100 text-red-800' 
-                              : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {task.priority}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {task.description && (
-                        <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
-                      )}
-                      
-                      <div className="flex justify-between items-center mt-4">
-                        <div className="text-sm text-muted-foreground">
-                          Due: {new Date(task.due_date).toLocaleDateString()}
-                        </div>
-                        <Button 
-                          onClick={() => handleCompleteTask(task.id)}
-                          className="bg-green-500 hover:bg-green-600"
-                          size="sm"
-                        >
-                          <Check className="mr-1 h-4 w-4" /> Complete Task
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
+              <p className="text-gray-500 text-center py-4">No TODO tasks available</p>
             )}
-          </>
-        )}
-      </CardContent>
-    </Card>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <PlayCircle className="h-5 w-5" />
+              In Progress Tasks ({inProgressTasks.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {inProgressTasks.length > 0 ? (
+              <TaskList 
+                tasks={inProgressTasks} 
+                onTaskUpdate={handleTaskUpdate}
+                showRushOrderBadge={true}
+              />
+            ) : (
+              <p className="text-gray-500 text-center py-4">No tasks in progress</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 };
 
