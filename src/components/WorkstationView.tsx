@@ -9,7 +9,7 @@ import { workstationService } from '@/services/workstationService';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Clock, PlayCircle } from 'lucide-react';
+import { PlayCircle, Clock } from 'lucide-react';
 
 interface WorkstationViewProps {
   workstationName?: string;
@@ -64,6 +64,42 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
       const activeTasks = regularTasks.filter(task => task.status === 'TODO' || task.status === 'IN_PROGRESS');
       console.log(`Found ${activeTasks.length} active regular tasks`);
       
+      // Get project info for each regular task
+      const tasksWithProjectInfo = await Promise.all(
+        activeTasks.map(async (task) => {
+          try {
+            // Get phase data to get project id
+            const { data: phaseData, error: phaseError } = await supabase
+              .from('phases')
+              .select('project_id, name')
+              .eq('id', task.phase_id)
+              .single();
+            
+            if (phaseError) throw phaseError;
+            
+            // Get project name
+            const { data: projectData, error: projectError } = await supabase
+              .from('projects')
+              .select('name')
+              .eq('id', phaseData.project_id)
+              .single();
+            
+            if (projectError) throw projectError;
+            
+            return {
+              ...task,
+              project_name: projectData.name
+            };
+          } catch (error) {
+            console.error('Error fetching project info for task:', error);
+            return {
+              ...task,
+              project_name: 'Unknown Project'
+            };
+          }
+        })
+      );
+      
       // Load rush order tasks
       let workstationDbId = workstationId;
       if (!workstationDbId && actualWorkstationName) {
@@ -77,7 +113,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
         workstationDbId = workstationData.id;
       }
       
-      let allTasks = [...activeTasks];
+      let allTasks = [...tasksWithProjectInfo];
       
       if (workstationDbId) {
         const rushOrders = await rushOrderService.getRushOrdersForWorkstation(workstationDbId);
@@ -211,8 +247,8 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
     );
   }
 
-  const todoTasks = tasks.filter(task => task.status === 'TODO');
   const inProgressTasks = tasks.filter(task => task.status === 'IN_PROGRESS');
+  const todoTasks = tasks.filter(task => task.status === 'TODO');
 
   return (
     <div className="space-y-6">
@@ -234,26 +270,6 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              TODO Tasks ({todoTasks.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {todoTasks.length > 0 ? (
-              <TaskList 
-                tasks={todoTasks} 
-                onTaskUpdate={handleTaskUpdate}
-                showRushOrderBadge={true}
-              />
-            ) : (
-              <p className="text-gray-500 text-center py-4">No TODO tasks available</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
               <PlayCircle className="h-5 w-5" />
               In Progress Tasks ({inProgressTasks.length})
             </CardTitle>
@@ -267,6 +283,26 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
               />
             ) : (
               <p className="text-gray-500 text-center py-4">No tasks in progress</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              TODO Tasks ({todoTasks.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {todoTasks.length > 0 ? (
+              <TaskList 
+                tasks={todoTasks} 
+                onTaskUpdate={handleTaskUpdate}
+                showRushOrderBadge={true}
+              />
+            ) : (
+              <p className="text-gray-500 text-center py-4">No TODO tasks available</p>
             )}
           </CardContent>
         </Card>

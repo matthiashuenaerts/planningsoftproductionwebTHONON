@@ -7,19 +7,7 @@ import NewProjectModal from '@/components/NewProjectModal';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
-
-interface Project {
-  id: string;
-  name: string;
-  description: string | null;
-  client: string;
-  status: string;
-  start_date: string;
-  installation_date: string;
-  progress: number;
-  created_at: string;
-  updated_at: string;
-}
+import { Project } from '@/services/dataService';
 
 const Projects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -41,7 +29,15 @@ const Projects = () => {
 
       if (error) throw error;
 
-      setProjects(data || []);
+      // Cast the data to Project type with proper status validation
+      const typedProjects = (data || []).map(project => ({
+        ...project,
+        status: ['planned', 'in_progress', 'completed', 'on_hold'].includes(project.status) 
+          ? project.status as "planned" | "in_progress" | "completed" | "on_hold"
+          : 'planned' as const
+      })) as Project[];
+
+      setProjects(typedProjects);
     } catch (error) {
       console.error('Error fetching projects:', error);
     } finally {
