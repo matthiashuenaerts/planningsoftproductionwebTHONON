@@ -376,7 +376,7 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
         setAssignments(updatedAssignments);
         
         toast({
-          title: "Team Updated",
+          title: "Team Assignment Updated",
           description: `Project has been assigned to ${team} team${newStartDate ? ` starting ${format(new Date(newStartDate), 'MMM d')}` : ''}`
         });
       } else {
@@ -385,7 +385,7 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
           project_id: projectId,
           team,
           start_date: newStartDate || format(weekStartDate, 'yyyy-MM-dd'),
-          duration: 1 // Default 1 day
+          duration: 3 // Default 3 days for installation
         };
         
         const { data, error } = await supabase
@@ -400,7 +400,7 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
         
         toast({
           title: "Team Assigned",
-          description: `Project has been assigned to ${team} team`
+          description: `Project has been assigned to ${team} team for installation planning`
         });
       }
     } catch (error) {
@@ -439,14 +439,14 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
       setAssignments(updatedAssignments);
       
       toast({
-        title: "Date Updated",
-        description: `Project moved to ${format(new Date(newStartDate), 'MMM d')}`
+        title: "Installation Date Updated",
+        description: `Project installation moved to ${format(new Date(newStartDate), 'MMM d')}`
       });
     } catch (error) {
       console.error('Error updating project date:', error);
       toast({
         title: "Error",
-        description: "Failed to update project date",
+        description: "Failed to update installation date",
         variant: "destructive"
       });
     }
@@ -464,13 +464,12 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
       let start_date = assignment.start_date;
       
       if (direction === 'end') {
-        // Extend the duration
+        // Extend the duration (add a day)
         duration += 1;
       } else if (direction === 'start') {
         if (duration > 1) {
-          // Shrink from the start (duration decreases)
+          // Shrink from the start (duration decreases, start date moves forward)
           duration -= 1;
-          // Move start date forward by one day
           const currentStart = new Date(start_date);
           currentStart.setDate(currentStart.getDate() + 1);
           start_date = format(currentStart, 'yyyy-MM-dd');
@@ -495,14 +494,14 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
       setAssignments(updatedAssignments);
       
       toast({
-        title: "Duration Updated",
-        description: `Project duration is now ${duration} day${duration > 1 ? 's' : ''}`
+        title: "Installation Duration Updated",
+        description: `Installation duration is now ${duration} day${duration > 1 ? 's' : ''}`
       });
     } catch (error) {
-      console.error('Error updating project duration:', error);
+      console.error('Error updating installation duration:', error);
       toast({
         title: "Error",
-        description: "Failed to update project duration",
+        description: "Failed to update installation duration",
         variant: "destructive"
       });
     }
@@ -519,12 +518,20 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
       <Card>
         <CardHeader className="pb-2">
           <div className="flex justify-between items-center">
-            <CardTitle>Installation Team Calendar</CardTitle>
+            <div>
+              <CardTitle className="flex items-center">
+                <CalendarDays className="mr-2 h-5 w-5" />
+                Installation Team Planner
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Drag and drop projects to assign teams and schedule installations
+              </p>
+            </div>
             <div className="flex items-center space-x-2">
               <Button variant="outline" size="icon" onClick={prevWeek}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="text-sm font-medium">
+              <span className="text-sm font-medium min-w-[200px] text-center">
                 {format(weekStartDate, 'MMM d')} - {format(addDays(weekStartDate, 6), 'MMM d, yyyy')}
               </span>
               <Button variant="outline" size="icon" onClick={nextWeek}>
@@ -562,6 +569,16 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
             handleDayClick={handleDayClick}
             handleExtendProject={handleExtendProject}
           />
+          
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <h4 className="font-medium mb-2">How to use the Installation Planner:</h4>
+            <ul className="text-sm text-gray-600 space-y-1">
+              <li>• Drag projects from "Unassigned" to team calendars to assign installation teams</li>
+              <li>• Drag projects within teams to change installation dates</li>
+              <li>• Use the arrow buttons on projects to extend or shorten installation duration</li>
+              <li>• Green, Blue, and Orange represent different installation teams</li>
+            </ul>
+          </div>
         </CardContent>
       </Card>
     </DndProvider>
