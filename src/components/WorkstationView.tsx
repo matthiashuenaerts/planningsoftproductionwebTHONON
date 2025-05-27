@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
+import CountdownTimer from './CountdownTimer';
 
 interface Task {
   project_name: string;
@@ -26,6 +26,7 @@ interface Task {
   completed_at?: string;
   completed_by?: string;
   standard_task_id?: string;
+  status_changed_at?: string;
 }
 
 interface RushOrder {
@@ -76,14 +77,13 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, workst
             description,
             status,
             priority,
-            estimated_hours,
-            actual_hours,
             due_date,
             created_at,
             updated_at,
             completed_at,
             completed_by,
-            standard_task_id
+            standard_task_id,
+            status_changed_at
           )
         `)
         .eq('workstation_id', workstationId);
@@ -127,11 +127,26 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, workst
                 .single();
               
               if (projectError) throw projectError;
+
+              // Get standard task info for estimated hours
+              let estimatedHours = undefined;
+              if (task.standard_task_id) {
+                const { data: standardTask } = await supabase
+                  .from('standard_tasks')
+                  .select('time_coefficient')
+                  .eq('id', task.standard_task_id)
+                  .single();
+                
+                if (standardTask) {
+                  estimatedHours = Number(standardTask.time_coefficient);
+                }
+              }
               
               return {
                 ...task,
                 project_name: projectData.name,
-                workstation: workstationName
+                workstation: workstationName,
+                estimated_hours: estimatedHours
               } as Task;
             } catch (error) {
               console.error('Error fetching project info for task:', error);
@@ -150,7 +165,15 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, workst
 
       setInProgressTasks(inProgress);
       setTodoTasks(todo);
-      setRushOrders(rushOrdersData || []);
+      
+      // Process rush orders with proper typing
+      const processedRushOrders = (rushOrdersData || []).map(ro => ({
+        ...ro,
+        priority: ro.priority as "Low" | "Medium" | "High" | "Urgent",
+        status: ro.status as "TODO" | "IN_PROGRESS" | "COMPLETED"
+      }));
+      
+      setRushOrders(processedRushOrders);
 
     } catch (error: any) {
       console.error('Error fetching workstation data:', error);
@@ -204,7 +227,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, workst
         const task = todoTasks.find(t => t.id === taskId);
         if (task) {
           setTodoTasks(prev => prev.filter(t => t.id !== taskId));
-          setInProgressTasks(prev => [...prev, { ...task, status: 'IN_PROGRESS', assignee_id: currentEmployee.id }]);
+          setInProgressTasks(prev => [...prev, { ...task, status: 'IN_PROGRESS', assignee_id: currentEmployee.id, status_changed_at: new Date().toISOString() }]);
         }
       } else if (newStatus === 'TODO') {
         const task = inProgressTasks.find(t => t.id === taskId);
@@ -351,6 +374,16 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, workst
             </div>
           )}
         </div>
+
+        {/* Countdown Timer for IN_PROGRESS tasks with estimated hours */}
+        {task.status === 'IN_PROGRESS' && task.estimated_hours && task.status_changed_at && (
+          <div className="mb-4">
+            <CountdownTimer 
+              estimatedHours={task.estimated_hours}
+              startTime={task.status_changed_at}
+            />
+          </div>
+        )}
         
         {showStatusControls && (
           <div className="flex gap-2">

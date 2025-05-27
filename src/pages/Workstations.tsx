@@ -30,6 +30,7 @@ interface WorkstationWithIcon {
 
 const Workstations: React.FC = () => {
   const [selectedWorkstation, setSelectedWorkstation] = useState<string | null>(null);
+  const [selectedWorkstationName, setSelectedWorkstationName] = useState<string>('');
   const [workstations, setWorkstations] = useState<WorkstationWithIcon[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -79,6 +80,11 @@ const Workstations: React.FC = () => {
     return <CalendarArrowDown className="h-8 w-8" />;
   };
 
+  const handleWorkstationSelect = (workstation: WorkstationWithIcon) => {
+    setSelectedWorkstation(workstation.id);
+    setSelectedWorkstationName(workstation.name);
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen">
@@ -110,7 +116,7 @@ const Workstations: React.FC = () => {
               </Button>
               <WorkstationView 
                 workstationId={selectedWorkstation} 
-                onBack={() => setSelectedWorkstation(null)}
+                workstationName={selectedWorkstationName}
               />
             </div>
           ) : (
@@ -121,7 +127,7 @@ const Workstations: React.FC = () => {
                   <Card 
                     key={workstation.id} 
                     className="hover:shadow-md transition-shadow cursor-pointer"
-                    onClick={() => setSelectedWorkstation(workstation.id)}
+                    onClick={() => handleWorkstationSelect(workstation)}
                   >
                     <CardContent className="p-6 flex flex-col items-center text-center">
                       <div className="bg-primary/10 p-4 rounded-full mb-4">
