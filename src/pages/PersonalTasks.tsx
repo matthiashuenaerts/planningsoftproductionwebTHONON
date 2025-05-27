@@ -151,6 +151,7 @@ const PersonalTasks = () => {
                       console.error('Error fetching project info for task:', error);
                       return {
                         ...task,
+                        project_name: 'Unknown Project',
                         priority: task.priority as "Low" | "Medium" | "High" | "Urgent",
                         status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD"
                       } as Task;
@@ -178,6 +179,7 @@ const PersonalTasks = () => {
                 .filter(item => item.tasks && item.tasks.status === 'TODO')
                 .map(item => ({
                   ...item.tasks,
+                  project_name: 'Unknown Project',
                   priority: item.tasks.priority as "Low" | "Medium" | "High" | "Urgent",
                   status: item.tasks.status as "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD"
                 })) as Task[];

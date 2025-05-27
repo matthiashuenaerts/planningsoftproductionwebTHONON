@@ -83,7 +83,16 @@ const TaskList: React.FC<TaskListProps> = ({
         >
           <CardHeader className={compact ? "pb-2" : "pb-3"}>
             <div className="flex justify-between items-start">
-              <CardTitle className={compact ? "text-base" : "text-lg"}>{task.title}</CardTitle>
+              <div className="flex-1">
+                {task.project_name && (
+                  <CardTitle className={`${compact ? "text-lg" : "text-xl"} text-primary font-bold mb-1`}>
+                    {task.project_name}
+                  </CardTitle>
+                )}
+                <h4 className={`${compact ? "text-sm" : "text-base"} font-medium text-gray-700`}>
+                  {task.title}
+                </h4>
+              </div>
               <div className="flex gap-2">
                 {task.is_rush_order && showRushOrderBadge && (
                   <Badge variant="destructive" className="flex items-center gap-1">
@@ -129,11 +138,6 @@ const TaskList: React.FC<TaskListProps> = ({
                   <div className="flex items-center gap-1">
                     <User className="h-4 w-4" />
                     <span>Assigned</span>
-                  </div>
-                )}
-                {task.project_name && (
-                  <div className="flex items-center gap-1">
-                    <span className="font-medium">Project: {task.project_name}</span>
                   </div>
                 )}
               </div>

@@ -128,7 +128,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
                       status,
                       is_rush_order: true,
                       rush_order_id: taskLink.rush_order_id,
-                      title: `${rushOrderInfo.title} - ${task.title}`,
+                      title: task.title,
                       project_name: rushOrderInfo.title
                     } as Task;
                   } catch (error) {
@@ -230,7 +230,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
