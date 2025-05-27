@@ -18,6 +18,8 @@ interface Task {
   workstation: string;
   status: "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD";
   priority: "Low" | "Medium" | "High" | "Urgent";
+  estimated_hours?: number;
+  actual_hours?: number;
   due_date?: string;
   created_at: string;
   updated_at: string;
@@ -43,15 +45,14 @@ interface RushOrder {
 
 interface WorkstationViewProps {
   workstationId: string;
-  onBack: () => void;
+  workstationName: string;
 }
 
-const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack }) => {
+const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, workstationName }) => {
   const [inProgressTasks, setInProgressTasks] = useState<Task[]>([]);
   const [todoTasks, setTodoTasks] = useState<Task[]>([]);
   const [rushOrders, setRushOrders] = useState<RushOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [workstationName, setWorkstationName] = useState<string>('');
   const { toast } = useToast();
   const { currentEmployee } = useAuth();
 
@@ -63,16 +64,6 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
     try {
       setLoading(true);
       
-      // First get the workstation name
-      const { data: workstation, error: workstationError } = await supabase
-        .from('workstations')
-        .select('name')
-        .eq('id', workstationId)
-        .single();
-
-      if (workstationError) throw workstationError;
-      setWorkstationName(workstation.name);
-
       // Fetch tasks linked to this workstation
       const { data: taskLinks, error: taskLinksError } = await supabase
         .from('task_workstation_links')
@@ -85,6 +76,8 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
             description,
             status,
             priority,
+            estimated_hours,
+            actual_hours,
             due_date,
             created_at,
             updated_at,
@@ -157,22 +150,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
 
       setInProgressTasks(inProgress);
       setTodoTasks(todo);
-      
-      // Process rush orders with proper typing
-      const processedRushOrders: RushOrder[] = (rushOrdersData || []).map(ro => ({
-        id: ro.id,
-        title: ro.title,
-        description: ro.description,
-        priority: ro.priority as "Low" | "Medium" | "High" | "Urgent",
-        workstation_id: ro.workstation_id,
-        status: ro.status as "TODO" | "IN_PROGRESS" | "COMPLETED",
-        created_at: ro.created_at,
-        due_date: ro.deadline,
-        assignee_id: ro.assignee_id,
-        assignee: ro.assignee ? { name: ro.assignee.name } : undefined
-      }));
-      
-      setRushOrders(processedRushOrders);
+      setRushOrders(rushOrdersData || []);
 
     } catch (error: any) {
       console.error('Error fetching workstation data:', error);
@@ -354,6 +332,12 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-4">
+          {task.estimated_hours && (
+            <div className="flex items-center">
+              <Clock className="mr-1 h-4 w-4" />
+              <span>{task.estimated_hours}h estimated</span>
+            </div>
+          )}
           {task.assignee_id && (
             <div className="flex items-center">
               <User className="mr-1 h-4 w-4" />
@@ -489,8 +473,6 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationId, onBack
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">{workstationName}</h2>
-      
       {/* Rush Orders Section */}
       {rushOrders.length > 0 && (
         <div>
