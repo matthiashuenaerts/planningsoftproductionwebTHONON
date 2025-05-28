@@ -4,14 +4,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Task } from '@/services/dataService';
-import { Calendar, User, AlertCircle, Zap, Clock, CheckCircle, Pause } from 'lucide-react';
+import { Calendar, User, AlertCircle, Zap, Clock, CheckCircle, Pause, Timer } from 'lucide-react';
+
+interface ExtendedTask extends Task {
+  timeRemaining?: string;
+  isOvertime?: boolean;
+  estimated_hours?: number;
+}
 
 interface TaskListProps {
-  tasks: Task[];
-  onTaskUpdate?: (task: Task) => void;
+  tasks: ExtendedTask[];
+  onTaskUpdate?: (task: ExtendedTask) => void;
   showRushOrderBadge?: boolean;
   title?: string;
   compact?: boolean;
+  showCountdownTimer?: boolean;
   onTaskStatusChange?: (taskId: string, status: "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD") => Promise<void>;
 }
 
@@ -21,6 +28,7 @@ const TaskList: React.FC<TaskListProps> = ({
   showRushOrderBadge = false, 
   title, 
   compact = false,
+  showCountdownTimer = false,
   onTaskStatusChange 
 }) => {
   const getPriorityColor = (priority: string) => {
@@ -53,7 +61,7 @@ const TaskList: React.FC<TaskListProps> = ({
     }
   };
 
-  const handleStatusChange = async (task: Task, newStatus: "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD") => {
+  const handleStatusChange = async (task: ExtendedTask, newStatus: "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD") => {
     if (onTaskStatusChange) {
       await onTaskStatusChange(task.id, newStatus);
     } else if (onTaskUpdate) {
@@ -92,6 +100,17 @@ const TaskList: React.FC<TaskListProps> = ({
                 <h4 className={`${compact ? "text-sm" : "text-base"} font-medium text-gray-700`}>
                   {task.title}
                 </h4>
+                
+                {/* Countdown Timer for IN_PROGRESS tasks */}
+                {showCountdownTimer && task.status === 'IN_PROGRESS' && task.timeRemaining && task.estimated_hours && (
+                  <div className={`mt-2 flex items-center gap-2 text-sm font-mono ${task.isOvertime ? 'text-red-600' : 'text-blue-600'}`}>
+                    <Timer className="h-4 w-4" />
+                    <span className={task.isOvertime ? 'font-bold' : ''}>
+                      {task.isOvertime ? 'OVERTIME: ' : 'Time remaining: '}
+                      {task.timeRemaining}
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="flex gap-2">
                 {task.is_rush_order && showRushOrderBadge && (
@@ -138,6 +157,12 @@ const TaskList: React.FC<TaskListProps> = ({
                   <div className="flex items-center gap-1">
                     <User className="h-4 w-4" />
                     <span>Assigned</span>
+                  </div>
+                )}
+                {task.estimated_hours && (
+                  <div className="flex items-center gap-1">
+                    <Clock className="h-4 w-4" />
+                    <span>Est: {task.estimated_hours}h</span>
                   </div>
                 )}
               </div>

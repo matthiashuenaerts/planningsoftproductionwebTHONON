@@ -17,12 +17,60 @@ interface WorkstationViewProps {
   onBack?: () => void;
 }
 
+// Custom Task interface that includes countdown timer properties
+interface ExtendedTask extends Task {
+  timeRemaining?: string;
+  isOvertime?: boolean;
+  estimated_hours?: number;
+}
+
 const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, workstationId, onBack }) => {
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<ExtendedTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actualWorkstationName, setActualWorkstationName] = useState<string>('');
   const { toast } = useToast();
+
+  // Timer for updating countdown
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTasks(prevTasks => prevTasks.map(task => {
+        if (task.status === 'IN_PROGRESS' && task.status_changed_at && task.estimated_hours) {
+          const startTime = new Date(task.status_changed_at);
+          const now = new Date();
+          const elapsedMs = now.getTime() - startTime.getTime();
+          const estimatedMs = task.estimated_hours * 60 * 60 * 1000; // Convert hours to milliseconds
+          const remainingMs = estimatedMs - elapsedMs;
+          
+          if (remainingMs > 0) {
+            const hours = Math.floor(remainingMs / (1000 * 60 * 60));
+            const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((remainingMs % (1000 * 60)) / 1000);
+            
+            return {
+              ...task,
+              timeRemaining: `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`,
+              isOvertime: false
+            };
+          } else {
+            const overtimeMs = Math.abs(remainingMs);
+            const hours = Math.floor(overtimeMs / (1000 * 60 * 60));
+            const minutes = Math.floor((overtimeMs % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((overtimeMs % (1000 * 60)) / 1000);
+            
+            return {
+              ...task,
+              timeRemaining: `+${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`,
+              isOvertime: true
+            };
+          }
+        }
+        return task;
+      }));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   // First, resolve the workstation name if we only have the ID
   useEffect(() => {
@@ -89,13 +137,13 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
             return {
               ...task,
               project_name: projectData.name
-            };
+            } as ExtendedTask;
           } catch (error) {
             console.error('Error fetching project info for task:', error);
             return {
               ...task,
               project_name: 'Unknown Project'
-            };
+            } as ExtendedTask;
           }
         })
       );
@@ -166,7 +214,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
                       rush_order_id: taskLink.rush_order_id,
                       title: task.title,
                       project_name: rushOrderInfo.title
-                    } as Task;
+                    } as ExtendedTask;
                   } catch (error) {
                     console.error('Error processing rush order task:', error);
                     return null;
@@ -174,7 +222,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
                 })
               );
               
-              const validRushOrderTasks = tasksWithRushOrderInfo.filter(task => task !== null) as Task[];
+              const validRushOrderTasks = tasksWithRushOrderInfo.filter(task => task !== null) as ExtendedTask[];
               allTasks = [...allTasks, ...validRushOrderTasks];
             }
           }
@@ -202,20 +250,44 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
     }
   }, [actualWorkstationName]);
 
-  const handleTaskUpdate = async (updatedTask: Task) => {
+  const handleTaskUpdate = async (taskId: string, newStatus: "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD") => {
     try {
-      await taskService.update(updatedTask.id, updatedTask);
+      const updateData: any = { 
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      };
       
-      // If task status is no longer active, remove it from the list
-      if (updatedTask.status !== 'TODO' && updatedTask.status !== 'IN_PROGRESS') {
-        setTasks(prevTasks => prevTasks.filter(task => task.id !== updatedTask.id));
-      } else {
-        setTasks(prevTasks => 
-          prevTasks.map(task => 
-            task.id === updatedTask.id ? updatedTask : task
-          )
-        );
+      // Set status_changed_at when changing status
+      if (newStatus === 'IN_PROGRESS') {
+        updateData.status_changed_at = new Date().toISOString();
       }
+      
+      // Add completion info if task is being marked as completed
+      if (newStatus === 'COMPLETED') {
+        updateData.completed_at = new Date().toISOString();
+      }
+      
+      const { error } = await supabase
+        .from('tasks')
+        .update(updateData)
+        .eq('id', taskId);
+        
+      if (error) throw error;
+      
+      // Update local state
+      setTasks(prevTasks => {
+        if (newStatus === 'COMPLETED') {
+          // Remove completed tasks from the list
+          return prevTasks.filter(task => task.id !== taskId);
+        } else {
+          // Update the task status
+          return prevTasks.map(task => 
+            task.id === taskId 
+              ? { ...task, status: newStatus, status_changed_at: updateData.status_changed_at || task.status_changed_at }
+              : task
+          );
+        }
+      });
       
       toast({
         title: 'Success',
@@ -278,8 +350,9 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
             {inProgressTasks.length > 0 ? (
               <TaskList 
                 tasks={inProgressTasks} 
-                onTaskUpdate={handleTaskUpdate}
+                onTaskStatusChange={handleTaskUpdate}
                 showRushOrderBadge={true}
+                showCountdownTimer={true}
               />
             ) : (
               <p className="text-gray-500 text-center py-4">No tasks in progress</p>
@@ -298,7 +371,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
             {todoTasks.length > 0 ? (
               <TaskList 
                 tasks={todoTasks} 
-                onTaskUpdate={handleTaskUpdate}
+                onTaskStatusChange={handleTaskUpdate}
                 showRushOrderBadge={true}
               />
             ) : (
