@@ -20,6 +20,7 @@ interface WorkstationViewProps {
 interface ExtendedTask extends Task {
   timeRemaining?: string;
   isOvertime?: boolean;
+  assignee_name?: string;
 }
 
 const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, workstationId, onBack }) => {
@@ -110,7 +111,7 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
       const activeTasks = regularTasks.filter(task => task.status === 'TODO' || task.status === 'IN_PROGRESS');
       console.log(`Found ${activeTasks.length} active regular tasks`);
       
-      // Get project info for each regular task
+      // Get project info and assignee name for each regular task
       const tasksWithProjectInfo = await Promise.all(
         activeTasks.map(async (task) => {
           try {
@@ -131,10 +132,25 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
               .single();
             
             if (projectError) throw projectError;
+
+            // Get assignee name if task is IN_PROGRESS and has assignee_id
+            let assigneeName = null;
+            if (task.status === 'IN_PROGRESS' && task.assignee_id) {
+              const { data: employeeData, error: employeeError } = await supabase
+                .from('employees')
+                .select('name')
+                .eq('id', task.assignee_id)
+                .single();
+              
+              if (!employeeError && employeeData) {
+                assigneeName = employeeData.name;
+              }
+            }
             
             return {
               ...task,
-              project_name: projectData.name
+              project_name: projectData.name,
+              assignee_name: assigneeName
             } as ExtendedTask;
           } catch (error) {
             console.error('Error fetching project info for task:', error);

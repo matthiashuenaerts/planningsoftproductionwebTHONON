@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import { Calendar, User, AlertCircle, Zap, Clock, CheckCircle, Pause, Timer } fr
 interface ExtendedTask extends Task {
   timeRemaining?: string;
   isOvertime?: boolean;
+  assignee_name?: string; // Add assignee name for display
 }
 
 interface TaskListProps {
@@ -100,7 +102,7 @@ const TaskList: React.FC<TaskListProps> = ({
                 </h4>
                 
                 {/* Countdown Timer for IN_PROGRESS tasks */}
-                {showCountdownTimer && task.status === 'IN_PROGRESS' && task.timeRemaining && task.duration && (
+                {task.status === 'IN_PROGRESS' && task.timeRemaining && task.duration && (
                   <div className={`mt-2 flex items-center gap-2 text-sm font-mono ${task.isOvertime ? 'text-red-600' : 'text-blue-600'}`}>
                     <Timer className="h-4 w-4" />
                     <span className={task.isOvertime ? 'font-bold' : ''}>
@@ -151,10 +153,10 @@ const TaskList: React.FC<TaskListProps> = ({
                   <Calendar className="h-4 w-4" />
                   <span>Due: {new Date(task.due_date).toLocaleDateString()}</span>
                 </div>
-                {task.assignee_id && (
+                {task.status === 'IN_PROGRESS' && task.assignee_name && (
                   <div className="flex items-center gap-1">
                     <User className="h-4 w-4" />
-                    <span>Assigned</span>
+                    <span>Started by: {task.assignee_name}</span>
                   </div>
                 )}
                 {task.duration && (

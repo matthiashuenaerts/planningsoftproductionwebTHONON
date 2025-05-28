@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import { useAuth } from '@/context/AuthContext';
@@ -11,14 +10,61 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Workstation } from '@/services/workstationService';
 import { useIsMobile } from '@/hooks/use-mobile';
 
+interface ExtendedTask extends Task {
+  timeRemaining?: string;
+  isOvertime?: boolean;
+  assignee_name?: string;
+}
+
 const PersonalTasks = () => {
-  const [todoTasks, setTodoTasks] = useState<Task[]>([]);
-  const [inProgressTasks, setInProgressTasks] = useState<Task[]>([]);
+  const [todoTasks, setTodoTasks] = useState<ExtendedTask[]>([]);
+  const [inProgressTasks, setInProgressTasks] = useState<ExtendedTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [userWorkstations, setUserWorkstations] = useState<Workstation[]>([]);
   const { currentEmployee } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+
+  // Timer for updating countdown
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setInProgressTasks(prevTasks => prevTasks.map(task => {
+        if (task.status === 'IN_PROGRESS' && task.status_changed_at && task.duration) {
+          const startTime = new Date(task.status_changed_at);
+          const now = new Date();
+          const elapsedMs = now.getTime() - startTime.getTime();
+          const durationMs = task.duration * 60 * 1000; // Convert minutes to milliseconds
+          const remainingMs = durationMs - elapsedMs;
+          
+          if (remainingMs > 0) {
+            const hours = Math.floor(remainingMs / (1000 * 60 * 60));
+            const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((remainingMs % (1000 * 60)) / 1000);
+            
+            return {
+              ...task,
+              timeRemaining: `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`,
+              isOvertime: false
+            };
+          } else {
+            const overtimeMs = Math.abs(remainingMs);
+            const hours = Math.floor(overtimeMs / (1000 * 60 * 60));
+            const minutes = Math.floor((overtimeMs % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((overtimeMs % (1000 * 60)) / 1000);
+            
+            return {
+              ...task,
+              timeRemaining: `+${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`,
+              isOvertime: true
+            };
+          }
+        }
+        return task;
+      }));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const fetchUserWorkstations = async () => {
@@ -66,7 +112,7 @@ const PersonalTasks = () => {
       }
 
       try {
-        const allTasks: Task[] = [];
+        const allTasks: ExtendedTask[] = [];
         
         // For each workstation, get the tasks
         for (const workstation of userWorkstations) {
@@ -119,7 +165,7 @@ const PersonalTasks = () => {
                   !task.assignee_id || task.assignee_id === currentEmployee.id
                 );
                 
-                // Get project info for each task
+                // Get project info and assignee name for each task
                 const tasksWithProjectInfo = await Promise.all(
                   relevantTasks.map(async (task) => {
                     try {
@@ -140,14 +186,29 @@ const PersonalTasks = () => {
                         .single();
                       
                       if (projectError) throw projectError;
+
+                      // Get assignee name if task is IN_PROGRESS and has assignee_id
+                      let assigneeName = null;
+                      if (task.status === 'IN_PROGRESS' && task.assignee_id) {
+                        const { data: employeeData, error: employeeError } = await supabase
+                          .from('employees')
+                          .select('name')
+                          .eq('id', task.assignee_id)
+                          .single();
+                        
+                        if (!employeeError && employeeData) {
+                          assigneeName = employeeData.name;
+                        }
+                      }
                       
                       // Cast task to the required Task type
                       return {
                         ...task,
                         project_name: projectData.name,
+                        assignee_name: assigneeName,
                         priority: task.priority as "Low" | "Medium" | "High" | "Urgent",
                         status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD"
-                      } as Task;
+                      } as ExtendedTask;
                     } catch (error) {
                       console.error('Error fetching project info for task:', error);
                       return {
@@ -155,7 +216,7 @@ const PersonalTasks = () => {
                         project_name: 'Unknown Project',
                         priority: task.priority as "Low" | "Medium" | "High" | "Urgent",
                         status: task.status as "TODO" | "IN_PROGRESS" | "COMPLETED" | "HOLD"
-                      } as Task;
+                      } as ExtendedTask;
                     }
                   })
                 );
@@ -329,6 +390,7 @@ const PersonalTasks = () => {
                   tasks={inProgressTasks} 
                   title="In Progress Tasks" 
                   onTaskStatusChange={handleTaskStatusChange}
+                  showCountdownTimer={true}
                 />
               )}
               
