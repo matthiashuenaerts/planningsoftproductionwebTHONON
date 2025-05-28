@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +8,6 @@ import { Calendar, User, AlertCircle, Zap, Clock, CheckCircle, Pause, Timer } fr
 interface ExtendedTask extends Task {
   timeRemaining?: string;
   isOvertime?: boolean;
-  estimated_hours?: number;
 }
 
 interface TaskListProps {
@@ -102,7 +100,7 @@ const TaskList: React.FC<TaskListProps> = ({
                 </h4>
                 
                 {/* Countdown Timer for IN_PROGRESS tasks */}
-                {showCountdownTimer && task.status === 'IN_PROGRESS' && task.timeRemaining && task.estimated_hours && (
+                {showCountdownTimer && task.status === 'IN_PROGRESS' && task.timeRemaining && task.duration && (
                   <div className={`mt-2 flex items-center gap-2 text-sm font-mono ${task.isOvertime ? 'text-red-600' : 'text-blue-600'}`}>
                     <Timer className="h-4 w-4" />
                     <span className={task.isOvertime ? 'font-bold' : ''}>
@@ -159,10 +157,10 @@ const TaskList: React.FC<TaskListProps> = ({
                     <span>Assigned</span>
                   </div>
                 )}
-                {task.estimated_hours && (
+                {task.duration && (
                   <div className="flex items-center gap-1">
                     <Clock className="h-4 w-4" />
-                    <span>Est: {task.estimated_hours}h</span>
+                    <span>Duration: {task.duration}min</span>
                   </div>
                 )}
               </div>

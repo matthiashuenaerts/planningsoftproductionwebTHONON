@@ -844,6 +844,7 @@ export type Database = {
           created_at: string
           description: string | null
           due_date: string
+          duration: number | null
           id: string
           phase_id: string
           priority: string
@@ -861,6 +862,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           due_date: string
+          duration?: number | null
           id?: string
           phase_id: string
           priority: string
@@ -878,6 +880,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           due_date?: string
+          duration?: number | null
           id?: string
           phase_id?: string
           priority?: string

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import TaskList from './TaskList';
@@ -21,7 +20,6 @@ interface WorkstationViewProps {
 interface ExtendedTask extends Task {
   timeRemaining?: string;
   isOvertime?: boolean;
-  estimated_hours?: number;
 }
 
 const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, workstationId, onBack }) => {
@@ -35,12 +33,12 @@ const WorkstationView: React.FC<WorkstationViewProps> = ({ workstationName, work
   useEffect(() => {
     const timer = setInterval(() => {
       setTasks(prevTasks => prevTasks.map(task => {
-        if (task.status === 'IN_PROGRESS' && task.status_changed_at && task.estimated_hours) {
+        if (task.status === 'IN_PROGRESS' && task.status_changed_at && task.duration) {
           const startTime = new Date(task.status_changed_at);
           const now = new Date();
           const elapsedMs = now.getTime() - startTime.getTime();
-          const estimatedMs = task.estimated_hours * 60 * 60 * 1000; // Convert hours to milliseconds
-          const remainingMs = estimatedMs - elapsedMs;
+          const durationMs = task.duration * 60 * 1000; // Convert minutes to milliseconds
+          const remainingMs = durationMs - elapsedMs;
           
           if (remainingMs > 0) {
             const hours = Math.floor(remainingMs / (1000 * 60 * 60));
