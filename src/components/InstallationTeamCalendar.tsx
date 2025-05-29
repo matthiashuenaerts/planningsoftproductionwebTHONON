@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { format, addDays, isWithinInterval, startOfDay, endOfDay, startOfWeek } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -358,7 +359,18 @@ const getStatusColor = (status) => {
 };
 
 // Define the unassigned projects component
-const UnassignedProjects = ({ projects, assignments, truckAssignments, onTruckAssign }) => {
+const UnassignedProjects = ({ projects, assignments, truckAssignments, onTruckAssign, onDropProject }) => {
+  const [{ isOver }, drop] = useDrop(() => ({
+    accept: 'PROJECT',
+    drop: (item: { id: string; team: string }) => {
+      // Move project back to unassigned by removing its team assignment
+      onDropProject(item.id, null, null);
+    },
+    collect: (monitor) => ({
+      isOver: !!monitor.isOver()
+    })
+  }));
+
   const unassignedProjects = projects.filter(project => 
     !assignments.some(a => a.project_id === project.id)
   );
@@ -369,7 +381,13 @@ const UnassignedProjects = ({ projects, assignments, truckAssignments, onTruckAs
         <h3 className="text-lg font-medium">Unassigned Projects</h3>
       </div>
       
-      <div className="p-2 rounded-b-lg border-b border-x border-gray-300 bg-white">
+      <div 
+        ref={drop}
+        className={cn(
+          "p-2 rounded-b-lg border-b border-x border-gray-300 bg-white min-h-[100px]",
+          isOver ? "bg-gray-100" : ""
+        )}
+      >
         {unassignedProjects.length === 0 ? (
           <p className="text-center text-gray-500 p-4">No unassigned projects</p>
         ) : (
@@ -463,66 +481,184 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
     setWeekStartDate(addDays(weekStartDate, 7));
   };
 
-  // Handle project drop on a team
-  const handleDropProject = async (projectId: string, team: string, newStartDate?: string) => {
+  // Handle project drop on a team or unassigned
+  const handleDropProject = async (projectId: string, team: string | null, newStartDate?: string) => {
     try {
       const existingAssignmentIndex = assignments.findIndex(a => a.project_id === projectId);
       
-      if (existingAssignmentIndex >= 0) {
-        const existingAssignment = assignments[existingAssignmentIndex];
-        const updateData: Partial<Assignment> = { team };
-        
-        if (newStartDate) {
-          updateData.start_date = newStartDate;
+      if (team === null) {
+        // Remove team assignment (move to unassigned)
+        if (existingAssignmentIndex >= 0) {
+          const existingAssignment = assignments[existingAssignmentIndex];
+          
+          const { error } = await supabase
+            .from('project_team_assignments')
+            .delete()
+            .eq('id', existingAssignment.id);
+            
+          if (error) throw error;
+          
+          // Remove from assignments array
+          const updatedAssignments = assignments.filter(a => a.project_id !== projectId);
+          setAssignments(updatedAssignments);
+          
+          // Update project installation_date to null
+          const { error: projectError } = await supabase
+            .from('projects')
+            .update({ installation_date: null })
+            .eq('id', projectId);
+            
+          if (projectError) throw projectError;
+          
+          // Remove truck assignment if exists
+          const truckAssignmentIndex = truckAssignments.findIndex(ta => ta.project_id === projectId);
+          if (truckAssignmentIndex >= 0) {
+            const truckAssignment = truckAssignments[truckAssignmentIndex];
+            
+            const { error: truckError } = await supabase
+              .from('project_truck_assignments')
+              .delete()
+              .eq('id', truckAssignment.id);
+              
+            if (truckError) throw truckError;
+            
+            const updatedTruckAssignments = truckAssignments.filter(ta => ta.project_id !== projectId);
+            setTruckAssignments(updatedTruckAssignments);
+          }
+          
+          toast({
+            title: "Project Unassigned",
+            description: "Project has been moved to unassigned"
+          });
         }
-        
-        const { error } = await supabase
-          .from('project_team_assignments')
-          .update(updateData)
-          .eq('id', existingAssignment.id);
-          
-        if (error) throw error;
-        
-        const updatedAssignments = [...assignments];
-        updatedAssignments[existingAssignmentIndex] = {
-          ...existingAssignment,
-          ...updateData
-        };
-        setAssignments(updatedAssignments);
-        
-        toast({
-          title: "Team Updated",
-          description: `Project has been assigned to ${team} team${newStartDate ? ` starting ${format(new Date(newStartDate), 'MMM d')}` : ''}`
-        });
       } else {
-        const newAssignment = {
-          project_id: projectId,
-          team,
-          start_date: newStartDate || format(weekStartDate, 'yyyy-MM-dd'),
-          duration: 1
-        };
-        
-        const { data, error } = await supabase
-          .from('project_team_assignments')
-          .insert([newAssignment])
-          .select();
+        // Assign to team
+        if (existingAssignmentIndex >= 0) {
+          const existingAssignment = assignments[existingAssignmentIndex];
+          const updateData: Partial<Assignment> = { team };
           
-        if (error) throw error;
-        
-        setAssignments([...assignments, data[0]]);
-        
-        toast({
-          title: "Team Assigned",
-          description: `Project has been assigned to ${team} team`
-        });
+          if (newStartDate) {
+            updateData.start_date = newStartDate;
+          }
+          
+          const { error } = await supabase
+            .from('project_team_assignments')
+            .update(updateData)
+            .eq('id', existingAssignment.id);
+            
+          if (error) throw error;
+          
+          const updatedAssignments = [...assignments];
+          updatedAssignments[existingAssignmentIndex] = {
+            ...existingAssignment,
+            ...updateData
+          };
+          setAssignments(updatedAssignments);
+          
+          // Calculate and update installation date
+          const installationDate = new Date(updateData.start_date || existingAssignment.start_date);
+          installationDate.setDate(installationDate.getDate() + (existingAssignment.duration - 1));
+          const installationDateStr = format(installationDate, 'yyyy-MM-dd');
+          
+          // Update project installation_date
+          const { error: projectError } = await supabase
+            .from('projects')
+            .update({ installation_date: installationDateStr })
+            .eq('id', projectId);
+            
+          if (projectError) throw projectError;
+          
+          // Update truck assignment loading date if exists
+          await updateTruckLoadingDate(projectId, installationDateStr);
+          
+          toast({
+            title: "Team Updated",
+            description: `Project has been assigned to ${team} team${newStartDate ? ` starting ${format(new Date(newStartDate), 'MMM d')}` : ''}`
+          });
+        } else {
+          const newAssignment = {
+            project_id: projectId,
+            team,
+            start_date: newStartDate || format(weekStartDate, 'yyyy-MM-dd'),
+            duration: 1
+          };
+          
+          const { data, error } = await supabase
+            .from('project_team_assignments')
+            .insert([newAssignment])
+            .select();
+            
+          if (error) throw error;
+          
+          setAssignments([...assignments, data[0]]);
+          
+          // Calculate and update installation date
+          const installationDate = new Date(newAssignment.start_date);
+          installationDate.setDate(installationDate.getDate() + (newAssignment.duration - 1));
+          const installationDateStr = format(installationDate, 'yyyy-MM-dd');
+          
+          // Update project installation_date
+          const { error: projectError } = await supabase
+            .from('projects')
+            .update({ installation_date: installationDateStr })
+            .eq('id', projectId);
+            
+          if (projectError) throw projectError;
+          
+          toast({
+            title: "Team Assigned",
+            description: `Project has been assigned to ${team} team`
+          });
+        }
       }
     } catch (error) {
-      console.error('Error assigning project to team:', error);
+      console.error('Error handling project assignment:', error);
       toast({
         title: "Error",
-        description: "Failed to assign project to team",
+        description: "Failed to handle project assignment",
         variant: "destructive"
       });
+    }
+  };
+
+  // Helper function to update truck loading date
+  const updateTruckLoadingDate = async (projectId: string, installationDateStr: string) => {
+    const truckAssignmentIndex = truckAssignments.findIndex(ta => ta.project_id === projectId);
+    if (truckAssignmentIndex >= 0) {
+      const truckAssignment = truckAssignments[truckAssignmentIndex];
+      
+      // Calculate new loading date
+      const installationDate = new Date(installationDateStr);
+      const loadingDate = new Date(installationDate);
+      loadingDate.setDate(loadingDate.getDate() - 1);
+      
+      // Weekend adjustment
+      if (loadingDate.getDay() === 0) { // Sunday
+        loadingDate.setDate(loadingDate.getDate() - 2); // Friday
+      } else if (loadingDate.getDay() === 6) { // Saturday
+        loadingDate.setDate(loadingDate.getDate() - 1); // Friday
+      }
+      
+      const loadingDateStr = format(loadingDate, 'yyyy-MM-dd');
+      
+      const { error } = await supabase
+        .from('project_truck_assignments')
+        .update({ 
+          installation_date: installationDateStr,
+          loading_date: loadingDateStr
+        })
+        .eq('id', truckAssignment.id);
+        
+      if (error) throw error;
+      
+      // Update local state
+      const updatedTruckAssignments = [...truckAssignments];
+      updatedTruckAssignments[truckAssignmentIndex] = {
+        ...truckAssignment,
+        installation_date: installationDateStr,
+        loading_date: loadingDateStr
+      };
+      setTruckAssignments(updatedTruckAssignments);
     }
   };
 
@@ -547,6 +683,22 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
         start_date: newStartDate
       };
       setAssignments(updatedAssignments);
+      
+      // Calculate and update installation date
+      const installationDate = new Date(newStartDate);
+      installationDate.setDate(installationDate.getDate() + (assignment.duration - 1));
+      const installationDateStr = format(installationDate, 'yyyy-MM-dd');
+      
+      // Update project installation_date
+      const { error: projectError } = await supabase
+        .from('projects')
+        .update({ installation_date: installationDateStr })
+        .eq('id', projectId);
+        
+      if (projectError) throw projectError;
+      
+      // Update truck assignment loading date if exists
+      await updateTruckLoadingDate(projectId, installationDateStr);
       
       toast({
         title: "Date Updated",
@@ -597,6 +749,22 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
         start_date
       };
       setAssignments(updatedAssignments);
+      
+      // Calculate and update installation date
+      const installationDate = new Date(start_date);
+      installationDate.setDate(installationDate.getDate() + (duration - 1));
+      const installationDateStr = format(installationDate, 'yyyy-MM-dd');
+      
+      // Update project installation_date
+      const { error: projectError } = await supabase
+        .from('projects')
+        .update({ installation_date: installationDateStr })
+        .eq('id', projectId);
+        
+      if (projectError) throw projectError;
+      
+      // Update truck assignment loading date if exists
+      await updateTruckLoadingDate(projectId, installationDateStr);
       
       toast({
         title: "Duration Updated",
@@ -779,6 +947,7 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
             assignments={assignments} 
             truckAssignments={truckAssignments}
             onTruckAssign={handleTruckAssign}
+            onDropProject={handleDropProject}
           />
           <TeamCalendar 
             team="green" 
