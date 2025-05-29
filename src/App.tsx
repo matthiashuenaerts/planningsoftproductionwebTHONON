@@ -23,6 +23,7 @@ import RushOrderDetails from "./pages/RushOrderDetails";
 import BrokenParts from "./pages/BrokenParts";
 import BrokenPartsSummary from "./pages/BrokenPartsSummary";
 import NewBrokenPart from "./pages/NewBrokenPart";
+import Logistics from "./pages/Logistics";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -110,6 +111,11 @@ const App = () => (
               <Route path="/broken-parts/new" element={
                 <ProtectedRoute>
                   <NewBrokenPart />
+                </ProtectedRoute>
+              } />
+              <Route path="/logistics" element={
+                <ProtectedRoute>
+                  <Logistics />
                 </ProtectedRoute>
               } />
               <Route path="*" element={<NotFound />} />
