@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { format, addDays, isWithinInterval, startOfDay, endOfDay, startOfWeek } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -201,7 +200,7 @@ const TruckSelector = ({ value, onValueChange, truckNumber }) => {
         <SelectTrigger className="h-6 text-xs flex-1">
           <SelectValue placeholder="Assign truck">
             {truckNumber ? (
-              <Badge className={getTruckColor(truckNumber)} size="sm">
+              <Badge className={getTruckColor(truckNumber)}>
                 T{truckNumber}
               </Badge>
             ) : (
@@ -210,11 +209,11 @@ const TruckSelector = ({ value, onValueChange, truckNumber }) => {
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">No truck assigned</SelectItem>
+          <SelectItem value="none">No truck assigned</SelectItem>
           {trucks.map(truck => (
             <SelectItem key={truck.id} value={truck.id}>
               <div className="flex items-center gap-2">
-                <Badge className={getTruckColor(truck.truck_number)} size="sm">
+                <Badge className={getTruckColor(truck.truck_number)}>
                   {truck.truck_number}
                 </Badge>
                 <span>{truck.description}</span>
@@ -635,7 +634,7 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
       
       const existingTruckAssignmentIndex = truckAssignments.findIndex(ta => ta.project_id === projectId);
       
-      if (truckId === '') {
+      if (truckId === 'none' || truckId === '') {
         // Remove truck assignment
         if (existingTruckAssignmentIndex >= 0) {
           const existingAssignment = truckAssignments[existingTruckAssignmentIndex];
@@ -656,6 +655,19 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
           });
         }
       } else {
+        // Calculate loading date (one workday before installation)
+        const loadingDate = new Date(installationDate);
+        loadingDate.setDate(loadingDate.getDate() - 1);
+        
+        // If installation is on Monday, loading should be on Friday
+        if (loadingDate.getDay() === 0) { // Sunday
+          loadingDate.setDate(loadingDate.getDate() - 2); // Friday
+        } else if (loadingDate.getDay() === 6) { // Saturday
+          loadingDate.setDate(loadingDate.getDate() - 1); // Friday
+        }
+        
+        const loadingDateStr = format(loadingDate, 'yyyy-MM-dd');
+        
         if (existingTruckAssignmentIndex >= 0) {
           // Update existing truck assignment
           const existingAssignment = truckAssignments[existingTruckAssignmentIndex];
@@ -664,7 +676,8 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
             .from('project_truck_assignments')
             .update({ 
               truck_id: truckId,
-              installation_date: installationDateStr
+              installation_date: installationDateStr,
+              loading_date: loadingDateStr
             })
             .eq('id', existingAssignment.id);
             
@@ -698,7 +711,8 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
           const newTruckAssignment = {
             project_id: projectId,
             truck_id: truckId,
-            installation_date: installationDateStr
+            installation_date: installationDateStr,
+            loading_date: loadingDateStr
           };
           
           const { data, error } = await supabase
