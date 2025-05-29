@@ -406,6 +406,57 @@ export type Database = {
           },
         ]
       }
+      project_truck_assignments: {
+        Row: {
+          assigned_by: string | null
+          created_at: string
+          id: string
+          installation_date: string
+          loading_date: string
+          notes: string | null
+          project_id: string
+          truck_id: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          created_at?: string
+          id?: string
+          installation_date: string
+          loading_date: string
+          notes?: string | null
+          project_id: string
+          truck_id: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_by?: string | null
+          created_at?: string
+          id?: string
+          installation_date?: string
+          loading_date?: string
+          notes?: string | null
+          project_id?: string
+          truck_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_project_truck_assignments_project"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_project_truck_assignments_truck"
+            columns: ["truck_id"]
+            isOneToOne: false
+            referencedRelation: "trucks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           client: string
@@ -922,6 +973,30 @@ export type Database = {
           },
         ]
       }
+      trucks: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          truck_number: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          truck_number: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          truck_number?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_preferences: {
         Row: {
           created_at: string
@@ -1005,6 +1080,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_loading_date: {
+        Args: { installation_date: string }
+        Returns: string
+      }
       create_storage_policy: {
         Args: {
           bucket_name: string

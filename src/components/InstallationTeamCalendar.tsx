@@ -1,10 +1,12 @@
+
 import React, { useState, useEffect } from 'react';
 import { format, addDays, isWithinInterval, startOfDay, endOfDay, startOfWeek } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ChevronLeft, ChevronRight, CalendarDays, Truck } from 'lucide-react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { cn } from '@/lib/utils';
@@ -30,6 +32,25 @@ interface Assignment {
   duration: number;
   created_at?: string;
   updated_at?: string;
+}
+
+// Define truck assignment type
+interface TruckAssignment {
+  id: string;
+  project_id: string;
+  truck_id: string;
+  loading_date: string;
+  installation_date: string;
+  truck?: {
+    truck_number: string;
+  };
+}
+
+// Define truck type
+interface Truck {
+  id: string;
+  truck_number: string;
+  description?: string;
 }
 
 // Define item type for drag and drop
@@ -67,8 +88,18 @@ const teamColors = {
   }
 };
 
+// Get truck color for visual distinction
+const getTruckColor = (truckNumber: string) => {
+  switch (truckNumber) {
+    case '01': return 'bg-blue-500 text-white';
+    case '02': return 'bg-green-500 text-white';
+    case '03': return 'bg-orange-500 text-white';
+    default: return 'bg-gray-500 text-white';
+  }
+};
+
 // Define the project item component
-const ProjectItem = ({ project, team, dateRange, onExtendProject }) => {
+const ProjectItem = ({ project, team, dateRange, onExtendProject, truckAssignment, onTruckAssign }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: 'PROJECT',
     item: { id: project.id, team: team },
@@ -84,6 +115,10 @@ const ProjectItem = ({ project, team, dateRange, onExtendProject }) => {
     onExtendProject(project.id, direction);
   };
 
+  const handleTruckChange = async (truckId: string) => {
+    await onTruckAssign(project.id, truckId);
+  };
+
   return (
     <div
       ref={drag}
@@ -95,17 +130,33 @@ const ProjectItem = ({ project, team, dateRange, onExtendProject }) => {
       )}
       style={{ opacity: isDragging ? 0.5 : 1 }}
     >
-      <div className="flex justify-between items-start">
-        <div>
+      <div className="flex justify-between items-start mb-2">
+        <div className="flex-1">
           <div className={cn("font-medium", teamColor.text)}>{project.name}</div>
           <div className="text-xs text-gray-600">{project.client}</div>
         </div>
         <Badge className={getStatusColor(project.status)}>{project.status}</Badge>
       </div>
       
+      {/* Truck Assignment */}
+      {team && (
+        <div className="mb-2">
+          <TruckSelector
+            value={truckAssignment?.truck_id || ''}
+            onValueChange={handleTruckChange}
+            truckNumber={truckAssignment?.truck?.truck_number}
+          />
+        </div>
+      )}
+      
       {dateRange && dateRange.length > 1 && (
         <div className="text-xs mt-1 text-gray-600">
           {format(dateRange[0], 'MMM d')} - {format(dateRange[dateRange.length - 1], 'MMM d')}
+          {truckAssignment && (
+            <div className="text-xs text-blue-600 mt-1">
+              Load: {format(new Date(truckAssignment.loading_date), 'MMM d')}
+            </div>
+          )}
         </div>
       )}
       
@@ -131,16 +182,59 @@ const ProjectItem = ({ project, team, dateRange, onExtendProject }) => {
   );
 };
 
+// Truck selector component
+const TruckSelector = ({ value, onValueChange, truckNumber }) => {
+  const [trucks, setTrucks] = useState<Truck[]>([]);
+
+  useEffect(() => {
+    const fetchTrucks = async () => {
+      const { data } = await supabase.from('trucks').select('*').order('truck_number');
+      setTrucks(data || []);
+    };
+    fetchTrucks();
+  }, []);
+
+  return (
+    <div className="flex items-center gap-2">
+      <Truck className="h-3 w-3" />
+      <Select value={value} onValueChange={onValueChange}>
+        <SelectTrigger className="h-6 text-xs flex-1">
+          <SelectValue placeholder="Assign truck">
+            {truckNumber ? (
+              <Badge className={getTruckColor(truckNumber)} size="sm">
+                T{truckNumber}
+              </Badge>
+            ) : (
+              "No truck"
+            )}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">No truck assigned</SelectItem>
+          {trucks.map(truck => (
+            <SelectItem key={truck.id} value={truck.id}>
+              <div className="flex items-center gap-2">
+                <Badge className={getTruckColor(truck.truck_number)} size="sm">
+                  {truck.truck_number}
+                </Badge>
+                <span>{truck.description}</span>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+};
+
 // Define the day cell component
-const DayCell = ({ date, team, projects, assignments, onDropProject, handleDayClick, handleExtendProject }) => {
+const DayCell = ({ date, team, projects, assignments, truckAssignments, onDropProject, handleDayClick, handleExtendProject, onTruckAssign }) => {
   const [{ isOver }, drop] = useDrop(() => ({
     accept: 'PROJECT',
     drop: (item: { id: string; team: string }) => {
-      // If dropping on the same team, it's a move to a different date
       if (item.team === team) {
         handleDayClick(item.id, format(date, 'yyyy-MM-dd'));
       } else {
-        // Otherwise, it's a team change
         onDropProject(item.id, team, format(date, 'yyyy-MM-dd'));
       }
     },
@@ -154,7 +248,6 @@ const DayCell = ({ date, team, projects, assignments, onDropProject, handleDayCl
     const assignment = assignments.find(a => a.project_id === project.id && a.team === team);
     if (!assignment) return false;
     
-    // Check if this date is within the assignment date range
     const startAssignmentDate = new Date(assignment.start_date);
     const endAssignmentDate = new Date(startAssignmentDate);
     endAssignmentDate.setDate(endAssignmentDate.getDate() + (assignment.duration - 1));
@@ -169,7 +262,7 @@ const DayCell = ({ date, team, projects, assignments, onDropProject, handleDayCl
     <div 
       ref={drop}
       className={cn(
-        "min-h-[120px] border rounded p-1 bg-white",
+        "min-h-[150px] border rounded p-1 bg-white",
         isOver ? "bg-gray-100" : ""
       )}
     >
@@ -182,7 +275,6 @@ const DayCell = ({ date, team, projects, assignments, onDropProject, handleDayCl
           const assignment = assignments.find(a => a.project_id === project.id && a.team === team);
           if (!assignment) return null;
           
-          // Calculate the date range for this project
           const startAssignmentDate = new Date(assignment.start_date);
           const endAssignmentDate = new Date(startAssignmentDate);
           endAssignmentDate.setDate(endAssignmentDate.getDate() + (assignment.duration - 1));
@@ -194,7 +286,8 @@ const DayCell = ({ date, team, projects, assignments, onDropProject, handleDayCl
             currentDate.setDate(currentDate.getDate() + 1);
           }
           
-          // Only show the project on the start date to avoid duplicates
+          const truckAssignment = truckAssignments.find(ta => ta.project_id === project.id);
+          
           if (format(date, 'yyyy-MM-dd') === format(startAssignmentDate, 'yyyy-MM-dd')) {
             return (
               <ProjectItem 
@@ -202,7 +295,9 @@ const DayCell = ({ date, team, projects, assignments, onDropProject, handleDayCl
                 project={project} 
                 team={team} 
                 dateRange={dateRange}
+                truckAssignment={truckAssignment}
                 onExtendProject={handleExtendProject}
+                onTruckAssign={onTruckAssign}
               />
             );
           }
@@ -214,7 +309,7 @@ const DayCell = ({ date, team, projects, assignments, onDropProject, handleDayCl
 };
 
 // Define the team calendar component
-const TeamCalendar = ({ team, startDate, projects, assignments, onDropProject, handleDayClick, handleExtendProject }) => {
+const TeamCalendar = ({ team, startDate, projects, assignments, truckAssignments, onDropProject, handleDayClick, handleExtendProject, onTruckAssign }) => {
   const teamColor = teamColors[team];
   const weekDates = Array.from({ length: 7 }, (_, i) => addDays(startDate, i));
 
@@ -235,9 +330,11 @@ const TeamCalendar = ({ team, startDate, projects, assignments, onDropProject, h
             team={team} 
             projects={projects} 
             assignments={assignments}
+            truckAssignments={truckAssignments}
             onDropProject={onDropProject}
             handleDayClick={handleDayClick}
             handleExtendProject={handleExtendProject}
+            onTruckAssign={onTruckAssign}
           />
         ))}
       </div>
@@ -262,8 +359,7 @@ const getStatusColor = (status) => {
 };
 
 // Define the unassigned projects component
-const UnassignedProjects = ({ projects, assignments }) => {
-  // Filter projects that don't have a team assignment
+const UnassignedProjects = ({ projects, assignments, truckAssignments, onTruckAssign }) => {
   const unassignedProjects = projects.filter(project => 
     !assignments.some(a => a.project_id === project.id)
   );
@@ -279,15 +375,20 @@ const UnassignedProjects = ({ projects, assignments }) => {
           <p className="text-center text-gray-500 p-4">No unassigned projects</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {unassignedProjects.map(project => (
-              <ProjectItem 
-                key={project.id} 
-                project={project} 
-                team={null}
-                dateRange={null}
-                onExtendProject={() => {}}
-              />
-            ))}
+            {unassignedProjects.map(project => {
+              const truckAssignment = truckAssignments.find(ta => ta.project_id === project.id);
+              return (
+                <ProjectItem 
+                  key={project.id} 
+                  project={project} 
+                  team={null}
+                  dateRange={null}
+                  truckAssignment={truckAssignment}
+                  onExtendProject={() => {}}
+                  onTruckAssign={onTruckAssign}
+                />
+              );
+            })}
           </div>
         )}
       </div>
@@ -297,33 +398,52 @@ const UnassignedProjects = ({ projects, assignments }) => {
 
 // Main installation team calendar component
 const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
-  // Start from Monday (1) instead of Sunday (0)
   const [weekStartDate, setWeekStartDate] = useState(() => {
     const today = new Date();
     return startOfWeek(today, { weekStartsOn: 1 });
   });
   
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [truckAssignments, setTruckAssignments] = useState<TruckAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  // Fetch team assignments
+  // Fetch team assignments and truck assignments
   useEffect(() => {
     const fetchAssignments = async () => {
       try {
         setLoading(true);
-        const { data, error } = await supabase
+        
+        // Fetch team assignments
+        const { data: teamData, error: teamError } = await supabase
           .from('project_team_assignments')
           .select('*')
           .order('start_date', { ascending: true });
           
-        if (error) throw error;
-        setAssignments(data || []);
+        if (teamError) throw teamError;
+        setAssignments(teamData || []);
+        
+        // Fetch truck assignments
+        const { data: truckData, error: truckError } = await supabase
+          .from('project_truck_assignments')
+          .select(`
+            *,
+            trucks!fk_project_truck_assignments_truck(truck_number)
+          `);
+          
+        if (truckError) throw truckError;
+        
+        const formattedTruckAssignments = truckData?.map(assignment => ({
+          ...assignment,
+          truck: assignment.trucks
+        })) || [];
+        
+        setTruckAssignments(formattedTruckAssignments);
       } catch (error) {
-        console.error('Error fetching team assignments:', error);
+        console.error('Error fetching assignments:', error);
         toast({
           title: "Error",
-          description: "Failed to load team assignments",
+          description: "Failed to load assignments",
           variant: "destructive"
         });
       } finally {
@@ -347,15 +467,12 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
   // Handle project drop on a team
   const handleDropProject = async (projectId: string, team: string, newStartDate?: string) => {
     try {
-      // Check if an assignment already exists
       const existingAssignmentIndex = assignments.findIndex(a => a.project_id === projectId);
       
       if (existingAssignmentIndex >= 0) {
-        // Update existing assignment
         const existingAssignment = assignments[existingAssignmentIndex];
         const updateData: Partial<Assignment> = { team };
         
-        // If a new date is specified, update the start date
         if (newStartDate) {
           updateData.start_date = newStartDate;
         }
@@ -367,7 +484,6 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
           
         if (error) throw error;
         
-        // Update local state
         const updatedAssignments = [...assignments];
         updatedAssignments[existingAssignmentIndex] = {
           ...existingAssignment,
@@ -380,12 +496,11 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
           description: `Project has been assigned to ${team} team${newStartDate ? ` starting ${format(new Date(newStartDate), 'MMM d')}` : ''}`
         });
       } else {
-        // Create new assignment
         const newAssignment = {
           project_id: projectId,
           team,
           start_date: newStartDate || format(weekStartDate, 'yyyy-MM-dd'),
-          duration: 1 // Default 1 day
+          duration: 1
         };
         
         const { data, error } = await supabase
@@ -395,7 +510,6 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
           
         if (error) throw error;
         
-        // Update local state
         setAssignments([...assignments, data[0]]);
         
         toast({
@@ -416,13 +530,11 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
   // Handle project date change
   const handleDayClick = async (projectId: string, newStartDate: string) => {
     try {
-      // Find the assignment
       const assignmentIndex = assignments.findIndex(a => a.project_id === projectId);
       if (assignmentIndex < 0) return;
       
       const assignment = assignments[assignmentIndex];
       
-      // Update assignment start date
       const { error } = await supabase
         .from('project_team_assignments')
         .update({ start_date: newStartDate })
@@ -430,7 +542,6 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
         
       if (error) throw error;
       
-      // Update local state
       const updatedAssignments = [...assignments];
       updatedAssignments[assignmentIndex] = {
         ...assignment,
@@ -455,7 +566,6 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
   // Handle project extension (duration change)
   const handleExtendProject = async (projectId: string, direction: string) => {
     try {
-      // Find the assignment
       const assignmentIndex = assignments.findIndex(a => a.project_id === projectId);
       if (assignmentIndex < 0) return;
       
@@ -464,20 +574,16 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
       let start_date = assignment.start_date;
       
       if (direction === 'end') {
-        // Extend the duration
         duration += 1;
       } else if (direction === 'start') {
         if (duration > 1) {
-          // Shrink from the start (duration decreases)
           duration -= 1;
-          // Move start date forward by one day
           const currentStart = new Date(start_date);
           currentStart.setDate(currentStart.getDate() + 1);
           start_date = format(currentStart, 'yyyy-MM-dd');
         }
       }
       
-      // Update assignment
       const { error } = await supabase
         .from('project_team_assignments')
         .update({ duration, start_date })
@@ -485,7 +591,6 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
         
       if (error) throw error;
       
-      // Update local state
       const updatedAssignments = [...assignments];
       updatedAssignments[assignmentIndex] = {
         ...assignment,
@@ -503,6 +608,127 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
       toast({
         title: "Error",
         description: "Failed to update project duration",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Handle truck assignment
+  const handleTruckAssign = async (projectId: string, truckId: string) => {
+    try {
+      // Find the team assignment to get installation date
+      const assignment = assignments.find(a => a.project_id === projectId);
+      if (!assignment) {
+        toast({
+          title: "Error",
+          description: "Project must be assigned to a team first",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Calculate installation date from team assignment
+      const startDate = new Date(assignment.start_date);
+      const installationDate = new Date(startDate);
+      installationDate.setDate(installationDate.getDate() + (assignment.duration - 1));
+      const installationDateStr = format(installationDate, 'yyyy-MM-dd');
+      
+      const existingTruckAssignmentIndex = truckAssignments.findIndex(ta => ta.project_id === projectId);
+      
+      if (truckId === '') {
+        // Remove truck assignment
+        if (existingTruckAssignmentIndex >= 0) {
+          const existingAssignment = truckAssignments[existingTruckAssignmentIndex];
+          
+          const { error } = await supabase
+            .from('project_truck_assignments')
+            .delete()
+            .eq('id', existingAssignment.id);
+            
+          if (error) throw error;
+          
+          const updatedTruckAssignments = truckAssignments.filter(ta => ta.project_id !== projectId);
+          setTruckAssignments(updatedTruckAssignments);
+          
+          toast({
+            title: "Truck Unassigned",
+            description: "Truck has been removed from project"
+          });
+        }
+      } else {
+        if (existingTruckAssignmentIndex >= 0) {
+          // Update existing truck assignment
+          const existingAssignment = truckAssignments[existingTruckAssignmentIndex];
+          
+          const { error } = await supabase
+            .from('project_truck_assignments')
+            .update({ 
+              truck_id: truckId,
+              installation_date: installationDateStr
+            })
+            .eq('id', existingAssignment.id);
+            
+          if (error) throw error;
+          
+          // Fetch updated assignment with truck info
+          const { data: updatedData, error: fetchError } = await supabase
+            .from('project_truck_assignments')
+            .select(`
+              *,
+              trucks!fk_project_truck_assignments_truck(truck_number)
+            `)
+            .eq('id', existingAssignment.id)
+            .single();
+            
+          if (fetchError) throw fetchError;
+          
+          const updatedTruckAssignments = [...truckAssignments];
+          updatedTruckAssignments[existingTruckAssignmentIndex] = {
+            ...updatedData,
+            truck: updatedData.trucks
+          };
+          setTruckAssignments(updatedTruckAssignments);
+          
+          toast({
+            title: "Truck Updated",
+            description: `Project assigned to truck ${updatedData.trucks.truck_number}`
+          });
+        } else {
+          // Create new truck assignment
+          const newTruckAssignment = {
+            project_id: projectId,
+            truck_id: truckId,
+            installation_date: installationDateStr
+          };
+          
+          const { data, error } = await supabase
+            .from('project_truck_assignments')
+            .insert([newTruckAssignment])
+            .select(`
+              *,
+              trucks!fk_project_truck_assignments_truck(truck_number)
+            `);
+            
+          if (error) throw error;
+          
+          const formattedAssignment = {
+            ...data[0],
+            truck: data[0].trucks
+          };
+          
+          setTruckAssignments([...truckAssignments, formattedAssignment]);
+          
+          toast({
+            title: "Truck Assigned",
+            description: `Project assigned to truck ${data[0].trucks.truck_number}`
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error assigning truck:', error);
+      toast({
+        title: "Error",
+        description: "Failed to assign truck",
         variant: "destructive"
       });
     }
@@ -534,33 +760,44 @@ const InstallationTeamCalendar = ({ projects }: { projects: Project[] }) => {
           </div>
         </CardHeader>
         <CardContent>
-          <UnassignedProjects projects={projects} assignments={assignments} />
+          <UnassignedProjects 
+            projects={projects} 
+            assignments={assignments} 
+            truckAssignments={truckAssignments}
+            onTruckAssign={handleTruckAssign}
+          />
           <TeamCalendar 
             team="green" 
             startDate={weekStartDate} 
             projects={projects} 
             assignments={assignments} 
+            truckAssignments={truckAssignments}
             onDropProject={handleDropProject} 
             handleDayClick={handleDayClick}
             handleExtendProject={handleExtendProject}
+            onTruckAssign={handleTruckAssign}
           />
           <TeamCalendar 
             team="blue" 
             startDate={weekStartDate} 
             projects={projects} 
             assignments={assignments} 
+            truckAssignments={truckAssignments}
             onDropProject={handleDropProject} 
             handleDayClick={handleDayClick}
             handleExtendProject={handleExtendProject}
+            onTruckAssign={handleTruckAssign}
           />
           <TeamCalendar 
             team="orange" 
             startDate={weekStartDate} 
             projects={projects} 
             assignments={assignments} 
+            truckAssignments={truckAssignments}
             onDropProject={handleDropProject} 
             handleDayClick={handleDayClick}
             handleExtendProject={handleExtendProject}
+            onTruckAssign={handleTruckAssign}
           />
         </CardContent>
       </Card>
